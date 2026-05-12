@@ -971,15 +971,34 @@
             }
 
             // 1. Configure Marked with Highlight.js
-            marked.setOptions({
-                highlight: function (code, lang) {
-                    if (lang && hljs.getLanguage(lang)) {
-                        return hljs.highlight(code, { language: lang }).value;
-                    }
-                    return hljs.highlightAuto(code).value;
-                },
+            marked.use({
                 breaks: true, // Allow line breaks
-                gfm: true // GitHub Flavored Markdown
+                gfm: true, // GitHub Flavored Markdown
+                renderer: {
+                    code(token) {
+                        const { text, lang } = token;
+                        // Mermaid blocks should not be processed by highlight.js
+                        if (lang === 'mermaid') {
+                            return `<pre><code class="language-mermaid">${text}</code></pre>`;
+                        }
+                        
+                        let highlighted = text;
+                        let languageClass = '';
+                        
+                        try {
+                            if (lang && hljs.getLanguage(lang)) {
+                                highlighted = hljs.highlight(text, { language: lang }).value;
+                                languageClass = `language-${lang}`;
+                            } else {
+                                highlighted = hljs.highlightAuto(text).value;
+                            }
+                        } catch (e) {
+                            console.error('Highlight error:', e);
+                        }
+                        
+                        return `<pre><code class="hljs ${languageClass}">${highlighted}</code></pre>`;
+                    }
+                }
             });
 
             // 2. Initialize CodeMirror Editor
