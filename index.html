@@ -1,0 +1,1658 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Markdown Editor (Ver.5.0.1)</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fira+Code:wght@400;500&display=swap"
+        rel="stylesheet">
+
+    <!-- CodeMirror (Editor) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/markdown/markdown.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/addon/mode/overlay.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/xml/xml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/gfm/gfm.min.js"></script>
+
+    <!-- Marked (Markdown Parser) -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <!-- DOMPurify (Sanitizer) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+
+    <!-- Mermaid.js (Diagrams) -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+
+    <!-- Highlight.js (Preview Syntax Highlighting) -->
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+
+    <!-- Icons (Lucide) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- app files (inlined) -->
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --pane-bg: #161b22;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent-color: #58a6ff;
+            --accent-hover: #3182ce;
+            --border-color: #30363d;
+            --header-bg: rgba(22, 27, 34, 0.7);
+            --btn-primary-bg: #238636;
+            --btn-primary-hover: #2ea043;
+            --btn-secondary-bg: #1f6feb;
+            --btn-secondary-hover: #388bfd;
+
+            --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --font-mono: 'Fira Code', ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-ui);
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            overflow: hidden;
+            /* App-like feel */
+        }
+
+        /* Scrollbars */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 5px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-secondary);
+        }
+
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* --- Header / Glassmorphism --- */
+        .glass-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1.5rem;
+            background: var(--header-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-color);
+            z-index: 10;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        .logo i {
+            color: var(--accent-color);
+            width: 24px;
+            height: 24px;
+        }
+
+        .logo h1 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            letter-spacing: -0.025em;
+            background: linear-gradient(135deg, #58a6ff 0%, #a371f7 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Save Status Indicator */
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            padding: 4px 8px;
+            border-radius: 12px;
+            background: rgba(48, 54, 61, 0.4);
+            transition: all 0.3s ease;
+        }
+
+        .status-indicator.saved .status-dot {
+            background-color: var(--btn-primary-bg);
+            box-shadow: 0 0 8px var(--btn-primary-bg);
+        }
+
+        .status-indicator.saving .status-dot {
+            background-color: #d29922;
+            animation: blink 1s infinite alternate;
+        }
+
+        .status-indicator.error .status-dot {
+            background-color: #f85149;
+            box-shadow: 0 0 8px #f85149;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--text-secondary);
+            transition: background-color 0.3s ease;
+        }
+
+        @keyframes blink {
+            from {
+                opacity: 0.4;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        /* Buttons */
+        .header-right {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .btn {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            font-family: var(--font-ui);
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            border: none;
+            outline: none;
+        }
+
+        .btn i {
+            width: 16px;
+            height: 16px;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-outline:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: var(--text-secondary);
+        }
+
+        .btn-primary {
+            background: var(--btn-primary-bg);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-primary:hover {
+            background: var(--btn-primary-hover);
+        }
+
+        .btn-secondary {
+            background: var(--btn-secondary-bg);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-secondary:hover {
+            background: var(--btn-secondary-hover);
+        }
+
+        /* --- Modal (Help / Cheat Sheet) --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            background-color: var(--pane-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            transform: translateY(20px);
+            transition: transform 0.3s ease;
+        }
+
+        .modal-overlay.active .modal-content {
+            transform: translateY(0);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .modal-header h2 {
+            font-size: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        .btn-close {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 0.2rem;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-close:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+        }
+
+        .modal-body {
+            padding: 1.5rem;
+            overflow-y: auto;
+            color: var(--text-primary);
+        }
+
+        /* Cheat sheet table styles */
+        .cheat-sheet-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .cheat-sheet-table th,
+        .cheat-sheet-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+            text-align: left;
+        }
+
+        .cheat-sheet-table th {
+            font-weight: 600;
+            color: var(--text-secondary);
+            background-color: rgba(255, 255, 255, 0.02);
+        }
+
+        .cheat-sheet-table td code {
+            background-color: rgba(110, 118, 129, 0.4);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 0.9em;
+            color: #58a6ff;
+        }
+
+        /* --- Split View --- */
+        .split-view {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            background: var(--bg-color);
+        }
+
+        .pane {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            /* Important for flex children with content */
+            border-right: 1px solid var(--border-color);
+        }
+
+        .pane:last-child {
+            border-right: none;
+        }
+
+        .pane-header {
+            padding: 0.5rem 1rem;
+            background: var(--pane-bg);
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        /* Editor Specific */
+        .editor-container {
+            flex: 1;
+            overflow: hidden;
+            /* CodeMirror integration */
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Dark mode override for CodeMirror */
+        .CodeMirror {
+            flex: 1;
+            height: 100% !important;
+            font-family: var(--font-mono) !important;
+            font-size: 14px;
+            line-height: 1.6;
+            background-color: var(--bg-color) !important;
+            color: var(--text-primary) !important;
+        }
+
+        .CodeMirror-gutters {
+            background-color: var(--pane-bg) !important;
+            border-right: 1px solid var(--border-color) !important;
+        }
+
+        .CodeMirror-linenumber {
+            color: var(--text-secondary) !important;
+        }
+
+        .CodeMirror-cursor {
+            border-left: 2px solid var(--text-primary) !important;
+        }
+
+        /* Markdown Syntax Highlighting in Editor (Dark variations) */
+        .cm-s-default .cm-header {
+            color: #79c0ff;
+            font-weight: bold;
+        }
+
+        .cm-s-default .cm-quote {
+            color: #8b949e;
+            font-style: italic;
+        }
+
+        .cm-s-default .cm-strong {
+            color: #c9d1d9;
+            font-weight: bold;
+        }
+
+        .cm-s-default .cm-em {
+            color: #d2a8ff;
+            font-style: italic;
+        }
+
+        .cm-s-default .cm-link {
+            color: #58a6ff;
+            text-decoration: underline;
+        }
+
+        .cm-s-default .cm-url {
+            color: #a5d6ff;
+        }
+
+        .cm-s-default .cm-variable-2,
+        .cm-s-default .cm-variable-3 {
+            color: #ff7b72;
+        }
+
+        .cm-s-default .cm-comment {
+            color: #8b949e;
+        }
+
+        .cm-s-default .cm-string,
+        .cm-s-default .cm-string-2 {
+            color: #a5d6ff;
+        }
+
+        /* Preview Specific */
+        .preview-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 2rem;
+            background-color: #ffffff;
+            /* Light theme */
+        }
+
+        /* Better typography for the preview (Markdown styles) */
+        .markdown-body {
+            color: #24292f;
+            font-family: var(--font-ui);
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .markdown-body h1,
+        .markdown-body h2,
+        .markdown-body h3,
+        .markdown-body h4 {
+            margin-top: 24px;
+            margin-bottom: 16px;
+            font-weight: 600;
+            line-height: 1.25;
+            color: #000000;
+        }
+
+        .markdown-body h1 {
+            font-size: 2em;
+            border-bottom: 1px solid #d0d7de;
+            padding-bottom: .3em;
+        }
+
+        .markdown-body h2 {
+            font-size: 1.5em;
+            border-bottom: 1px solid #d0d7de;
+            padding-bottom: .3em;
+        }
+
+        .markdown-body p,
+        .markdown-body blockquote,
+        .markdown-body ul,
+        .markdown-body ol,
+        .markdown-body dl,
+        .markdown-body table,
+        .markdown-body pre,
+        .markdown-body details {
+            margin-top: 0;
+            margin-bottom: 16px;
+        }
+
+        .markdown-body a {
+            color: #0969da;
+            text-decoration: none;
+        }
+
+        .markdown-body a:hover {
+            text-decoration: underline;
+        }
+
+        .markdown-body pre {
+            padding: 16px;
+            overflow: auto;
+            font-size: 85%;
+            line-height: 1.45;
+            background-color: #f6f8fa;
+            border-radius: 6px;
+        }
+
+        .markdown-body code {
+            font-family: var(--font-mono);
+            padding: .2em .4em;
+            margin: 0;
+            font-size: 85%;
+            background-color: rgba(175, 184, 193, 0.2);
+            color: #24292f;
+            border-radius: 6px;
+        }
+
+        .markdown-body pre code {
+            padding: 0;
+            margin: 0;
+            font-size: 100%;
+            background-color: transparent;
+            border: 0;
+        }
+
+        .markdown-body blockquote {
+            padding: 0 1em;
+            color: #57606a;
+            border-left: .25em solid #d0d7de;
+        }
+
+        .markdown-body img {
+            max-width: 100%;
+            box-sizing: content-box;
+            background-color: #ffffff;
+        }
+
+        .markdown-body table {
+            display: block;
+            width: 100%;
+            width: max-content;
+            max-width: 100%;
+            overflow: auto;
+        }
+
+        .markdown-body table th,
+        .markdown-body table td {
+            padding: 6px 13px;
+            border: 1px solid #d0d7de;
+        }
+
+        .markdown-body table tr {
+            background-color: #ffffff;
+            border-top: 1px solid #d0d7de;
+        }
+
+        .markdown-body table tr:nth-child(2n) {
+            background-color: #f6f8fa;
+        }
+        /* ── Document Title Input ── */
+        .doc-title-wrap {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            margin-left: 1rem;
+            border-left: 1px solid var(--border-color);
+            padding-left: 1rem;
+        }
+        .doc-title-wrap label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+        #doc-title-input {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-family: var(--font-ui);
+            font-size: 0.85rem;
+            padding: 0.3rem 0.6rem;
+            width: 200px;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        #doc-title-input:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            background: rgba(88,166,255,0.07);
+        }
+        #doc-title-input::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.6;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="glass-header">
+            <div class="header-left">
+                <div class="logo">
+                    <i data-lucide="pen-tool"></i>
+                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.0.1)</span></h1>
+                </div>
+                <div class="status-indicator" id="save-status">
+                    <span class="status-dot"></span>
+                    <span class="status-text" id="status-text">準備完了</span>
+                </div>
+                <div class="doc-title-wrap">
+                    <label for="doc-title-input">📄 ドキュメント名</label>
+                    <input type="text" id="doc-title-input" placeholder="例: 会議資料" maxlength="100">
+                </div>
+            </div>
+            <div class="header-right">
+                <button class="btn btn-outline" id="btn-help" title="Markdownの書き方">
+                    <i data-lucide="help-circle"></i>
+                    <span>ヘルプ</span>
+                </button>
+                <div style="width: 1px; background-color: var(--border-color); margin: 0 0.5rem;"></div>
+                <button class="btn btn-outline" id="btn-new">
+                    <i data-lucide="file-plus"></i>
+                    <span>新規作成</span>
+                </button>
+                <button class="btn btn-outline" id="btn-open">
+                    <i data-lucide="folder-open"></i>
+                    <span>開く</span>
+                </button>
+                <button class="btn btn-primary" id="btn-save-md">
+                    <i data-lucide="save"></i>
+                    <span>Markdown保存</span>
+                </button>
+                <button class="btn btn-secondary" id="btn-export-word">
+                    <i data-lucide="file-text"></i>
+                    <span>Word出力</span>
+                </button>
+                <button class="btn btn-secondary" id="btn-export-pdf"
+                    style="background: #da3633; border-color: rgba(255, 255, 255, 0.1);">
+                    <i data-lucide="file-down"></i>
+                    <span>PDF出力</span>
+                </button>
+                <button class="btn btn-secondary" id="btn-export-html"
+                    style="background: #e36209; border-color: rgba(255, 255, 255, 0.1);">
+                    <i data-lucide="globe"></i>
+                    <span>HTML出力</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content (Split View) -->
+        <main class="split-view">
+            <!-- Editor Pane -->
+            <section class="pane editor-pane">
+                <div class="pane-header">
+                    <span>Editor</span>
+                </div>
+                <div class="editor-container" id="editor-container">
+                    <!-- CodeMirror will attach here -->
+                    <textarea id="markdown-editor"></textarea>
+                </div>
+            </section>
+
+            <!-- Preview Pane -->
+            <section class="pane preview-pane">
+                <div class="pane-header">
+                    <span>Preview</span>
+                </div>
+                <div class="preview-container markdown-body" id="preview-content">
+                    <!-- HTML Preview will be rendered here -->
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- 隠しファイル入力とスクリプト -->
+    <input type="file" id="file-input" accept=".md" style="display: none;">
+
+    <script src="https://unpkg.com/html-docx-js/dist/html-docx.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <!-- html2pdf.js (PDF Export) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <!-- Help Modal -->
+    <div class="modal-overlay" id="help-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i data-lucide="help-circle"></i> Markdownの使い方</h2>
+                <button class="btn-close" id="btn-close-help">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="modal-body markdown-body" style="padding: 0;">
+                <table class="cheat-sheet-table">
+                    <thead>
+                        <tr>
+                            <th>やりたいこと</th>
+                            <th>書き方 (Markdown)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>見出し (特大)</td>
+                            <td><code># 見出しテキスト</code></td>
+                        </tr>
+                        <tr>
+                            <td>見出し (大)</td>
+                            <td><code>## 見出しテキスト</code></td>
+                        </tr>
+                        <tr>
+                            <td>見出し (中)</td>
+                            <td><code>### 見出しテキスト</code></td>
+                        </tr>
+                        <tr>
+                            <td>太字</td>
+                            <td><code>**太字**</code></td>
+                        </tr>
+                        <tr>
+                            <td>斜体</td>
+                            <td><code>*斜体*</code></td>
+                        </tr>
+                        <tr>
+                            <td>打ち消し線</td>
+                            <td><code>~~打ち消し線~~</code></td>
+                        </tr>
+                        <tr>
+                            <td>箇条書きリスト</td>
+                            <td><code>- リスト項目</code> または <code>* リスト項目</code></td>
+                        </tr>
+                        <tr>
+                            <td>番号付きリスト</td>
+                            <td><code>1. リスト項目</code></td>
+                        </tr>
+                        <tr>
+                            <td>リンク</td>
+                            <td><code>[リンクのテキスト](URL)</code></td>
+                        </tr>
+                        <tr>
+                            <td>画像</td>
+                            <td><code>![代替テキスト](画像URL)</code></td>
+                        </tr>
+                        <tr>
+                            <td>引用</td>
+                            <td><code>> 引用文</code></td>
+                        </tr>
+                        <tr>
+                            <td>短いコード</td>
+                            <td><code>`code`</code> （バッククォートで囲む）</td>
+                        </tr>
+                        <tr>
+                            <td>コードブロック<br>(複数行)</td>
+                            <td><code>```javascript<br>console.log("hello");<br>```</code></td>
+                        </tr>
+                        <tr>
+                            <td>表 (テーブル)</td>
+                            <td><code>| 見出し | 見出し |<br>| ------ | ------ |<br>| セル   | セル   |</code></td>
+                        </tr>
+                        <tr>
+                            <td>図やグラフ<br>(Mermaid)</td>
+                            <td><code>```mermaid<br>graph TD;<br>A-->B;<br>```</code></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3 style="margin: 1.5rem 0.75rem 0.5rem; font-size: 1.1em; color: var(--text-primary);">Mermaid
+                    グラフの方向（flowchart / graph）</h3>
+                <table class="cheat-sheet-table">
+                    <thead>
+                        <tr>
+                            <th>コード (xx部分)</th>
+                            <th>方向</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>TB</code> または <code>TD</code></td>
+                            <td>上から下 (Top to Bottom / Down)</td>
+                        </tr>
+                        <tr>
+                            <td><code>BT</code></td>
+                            <td>下から上 (Bottom to Top)</td>
+                        </tr>
+                        <tr>
+                            <td><code>LR</code></td>
+                            <td>左から右 (Left to Right)</td>
+                        </tr>
+                        <tr>
+                            <td><code>RL</code></td>
+                            <td>右から左 (Right to Left)</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3 style="margin: 1.5rem 0.75rem 0.5rem; font-size: 1.1em; color: var(--text-primary);">Mermaid
+                    記号一覧（フローチャート）</h3>
+                <table class="cheat-sheet-table">
+                    <thead>
+                        <tr>
+                            <th>コード</th>
+                            <th>種類</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>A--&gt;B</code></td>
+                            <td>実線 矢印</td>
+                        </tr>
+                        <tr>
+                            <td><code>A==&gt;B</code></td>
+                            <td>太線 矢印</td>
+                        </tr>
+                        <tr>
+                            <td><code>A-.-&gt;B</code></td>
+                            <td>点線 矢印</td>
+                        </tr>
+                        <tr>
+                            <td><code>A---B</code></td>
+                            <td>実線</td>
+                        </tr>
+                        <tr>
+                            <td><code>A===B</code></td>
+                            <td>太線</td>
+                        </tr>
+                        <tr>
+                            <td><code>A[]</code></td>
+                            <td>長方形</td>
+                        </tr>
+                        <tr>
+                            <td><code>A{}</code></td>
+                            <td>ひし形</td>
+                        </tr>
+                        <tr>
+                            <td><code>A()</code></td>
+                            <td>長方形(角が丸い)</td>
+                        </tr>
+                        <tr>
+                            <td><code>A([])</code></td>
+                            <td>楕円</td>
+                        </tr>
+                        <tr>
+                            <td><code>A(())</code></td>
+                            <td>円</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const editorTextarea = document.getElementById('markdown-editor');
+        const previewContainer = document.getElementById('preview-content');
+        const statusIndicator = document.getElementById('save-status');
+        const statusText = document.getElementById('status-text');
+
+        let editor; // CodeMirror instance
+        let saveTimeout = null;
+        let previewTimeout = null;
+
+        // ウィジェット作成関数（非表示になったBase64データの代わりに見せるUI）
+        function createHiddenWidget(isInline = false) {
+            const widget = document.createElement('span');
+            widget.innerHTML = `<i data-lucide="image" style="width:14px;height:14px;margin-right:4px;vertical-align:middle;"></i><span style="vertical-align:middle;">画像データ</span>`;
+            widget.style.backgroundColor = 'rgba(48, 54, 61, 0.4)';
+            widget.style.color = 'var(--text-secondary)';
+            widget.style.padding = isInline ? '0 4px' : '2px 8px';
+            widget.style.borderRadius = '4px';
+            widget.style.fontSize = '0.85em';
+            widget.style.fontFamily = 'var(--font-ui)';
+            widget.style.cursor = 'default';
+            widget.style.display = 'inline-flex';
+            widget.style.alignItems = 'center';
+            widget.style.userSelect = 'none';
+            if (isInline) widget.style.verticalAlign = 'middle';
+
+            // Lucideアイコンをウィジェット内に描画
+            setTimeout(() => {
+                if (window.lucide) window.lucide.createIcons({ root: widget });
+            }, 0);
+            return widget;
+        }
+
+        // 行内のBase64文字列を検知してCodeMirror上で折りたたむ（非表示にする）
+        function hideBase64Widget(doc, lineNum, lineText) {
+            // 1. 参照リンク型: [img-xxx]: data:image/...
+            const refMatch = lineText.match(/^\[[^\]]+\]:\s*data:image\/[^\s]+/);
+            if (refMatch) {
+                const marks = doc.findMarks({ line: lineNum, ch: 0 }, { line: lineNum, ch: refMatch[0].length });
+                if (!marks.some(m => m.collapsed)) {
+                    doc.markText({ line: lineNum, ch: 0 }, { line: lineNum, ch: refMatch[0].length }, {
+                        collapsed: true,
+                        replacedWith: createHiddenWidget(false),
+                        atomic: true // カーソル移動時に一つの文字として扱う（BackSpaceで一括削除できる）
+                    });
+                }
+            }
+
+            // 2. インライン型: ![alt](data:image/...)
+            const inlineRegex = /!\[[^\]]*\]\((data:image\/[^\)]+)\)/g;
+            let match;
+            while ((match = inlineRegex.exec(lineText)) !== null) {
+                const startCh = match.index + match[0].indexOf('(') + 1; // data:image... の開始位置
+                const endCh = startCh + match[1].length; // base64部分の終了位置
+
+                const marks = doc.findMarks({ line: lineNum, ch: startCh }, { line: lineNum, ch: endCh });
+                if (!marks.some(m => m.collapsed)) {
+                    doc.markText({ line: lineNum, ch: startCh }, { line: lineNum, ch: endCh }, {
+                        collapsed: true,
+                        replacedWith: createHiddenWidget(true),
+                        atomic: true
+                    });
+                }
+            }
+        }
+
+        // Initial setup
+        function init() {
+            if (window.mermaid) {
+                mermaid.initialize({
+                    startOnLoad: false,
+                    theme: 'base',
+                    securityLevel: 'loose',
+                    flowchart: {
+                        htmlLabels: true,
+                        useMaxWidth: true
+                    },
+                    themeVariables: {
+                        primaryColor: '#f8f9fa',
+                        primaryBorderColor: '#888888',
+                        primaryTextColor: '#333333',
+                        lineColor: '#666666',
+                        fontFamily: 'var(--font-ui)'
+                    }
+                });
+            }
+
+            // 1. Configure Marked with Highlight.js
+            marked.setOptions({
+                highlight: function (code, lang) {
+                    if (lang && hljs.getLanguage(lang)) {
+                        return hljs.highlight(code, { language: lang }).value;
+                    }
+                    return hljs.highlightAuto(code).value;
+                },
+                breaks: true, // Allow line breaks
+                gfm: true // GitHub Flavored Markdown
+            });
+
+            // 2. Initialize CodeMirror Editor
+            editor = CodeMirror.fromTextArea(editorTextarea, {
+                mode: "gfm", // GitHub Flavored Markdown
+                lineNumbers: true,
+                lineWrapping: true,
+                extraKeys: { "Enter": "newlineAndIndentContinueMarkdownList" },
+                viewportMargin: Infinity
+            });
+
+            // Load initial content from LocalStorage (Resume function)
+            const savedContent = localStorage.getItem('lumina_autosave');
+            if (savedContent) {
+                editor.setValue(savedContent);
+                updatePreview(savedContent);
+                updateStatus('saved', '復元完了');
+            } else {
+                const defaultText = `# Markdown Editorへようこそ\n\nここに入力し始めると、**リアルタイム**で右側にプレビューが表示されます。`;
+                editor.setValue(defaultText);
+                updatePreview(defaultText);
+            }
+
+            // 3. Set Event Listeners
+            editor.on('change', (cm, changeObj) => {
+                // Base64画像データの行を検知して非表示ウィジェットに置き換える
+                if (changeObj && changeObj.text) {
+                    const doc = cm.getDoc();
+                    const fromLine = changeObj.from.line;
+                    const toLine = fromLine + changeObj.text.length;
+                    for (let i = fromLine; i < toLine; i++) {
+                        const lineText = doc.getLine(i);
+                        if (lineText && lineText.includes('data:image/')) {
+                            hideBase64Widget(doc, i, lineText);
+                        }
+                    }
+                }
+
+                const content = editor.getValue();
+
+                // プレビューの更新をデバウンス（重いパース処理を遅延させてタイピングを軽くする）
+                if (previewTimeout) clearTimeout(previewTimeout);
+                previewTimeout = setTimeout(() => {
+                    updatePreview(content);
+                }, 300);
+
+                // Trigger Auto-save debounce
+                triggerAutoSave(content);
+            });
+
+            // Handle Image Pasting
+            editor.on('paste', (cm, event) => {
+                const items = (event.clipboardData || event.originalEvent?.clipboardData).items;
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    if (item.type.indexOf('image') !== -1) {
+                        event.preventDefault();
+                        const file = item.getAsFile();
+                        if (!file) continue;
+
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            const img = new Image();
+                            img.onload = () => {
+                                const canvas = document.createElement('canvas');
+                                let width = img.width;
+                                let height = img.height;
+
+                                // 画像が大きすぎる場合はリサイズ（最大1200px）
+                                const MAX_SIZE = 1200;
+                                if (width > MAX_SIZE || height > MAX_SIZE) {
+                                    if (width > height) {
+                                        height = Math.round((height * MAX_SIZE) / width);
+                                        width = MAX_SIZE;
+                                    } else {
+                                        width = Math.round((width * MAX_SIZE) / height);
+                                        height = MAX_SIZE;
+                                    }
+                                }
+
+                                canvas.width = width;
+                                canvas.height = height;
+                                const ctx = canvas.getContext('2d');
+                                ctx.drawImage(img, 0, 0, width, height);
+
+                                // JPEGとして圧縮し、データサイズを劇的に減らす (品質0.85)
+                                // ※GIFなどアニメーションが重要な場合は元のデータを使うべきですが、今回は軽量化優先
+                                const compressedBase64 = canvas.toDataURL('image/jpeg', 0.85);
+
+                                const doc = cm.getDoc();
+                                const cursor = doc.getCursor();
+                                const fileName = file.name && file.name !== 'image.png' ? file.name : 'ペースト画像';
+
+                                // カーソル位置に直接Base64データを含んだMarkdownを挿入
+                                doc.replaceRange(`![${fileName}](${compressedBase64})`, cursor);
+                            };
+                            img.src = e.target.result;
+                        };
+                        reader.readAsDataURL(file);
+                        break; // 一度のペーストで複数処理しないようにする
+                    }
+                }
+            });
+
+            // Button functionalities
+            document.getElementById('btn-new').addEventListener('click', handleNewFile);
+            document.getElementById('btn-open').addEventListener('click', handleOpenFile);
+            document.getElementById('btn-save-md').addEventListener('click', handleSaveMd);
+            document.getElementById('btn-export-word').addEventListener('click', handleExportWord);
+            document.getElementById('btn-export-pdf').addEventListener('click', handleExportPdf);
+            document.getElementById('btn-export-html').addEventListener('click', handleExportHtml);
+
+            // Help Modal functionalities
+            const helpModal = document.getElementById('help-modal');
+            document.getElementById('btn-help').addEventListener('click', () => {
+                helpModal.classList.add('active');
+            });
+            document.getElementById('btn-close-help').addEventListener('click', () => {
+                helpModal.classList.remove('active');
+            });
+            // Close modal when clicking outside
+            helpModal.addEventListener('click', (e) => {
+                if (e.target === helpModal) {
+                    helpModal.classList.remove('active');
+                }
+            });
+
+            // 4. Scroll Synchronization
+            let syncTimer = null;
+            let lastScrollSource = null;
+
+            // Sync Editor -> Preview
+            editor.on('scroll', () => {
+                if (lastScrollSource === 'preview') return;
+                lastScrollSource = 'editor';
+
+                clearTimeout(syncTimer);
+                syncTimer = setTimeout(() => { lastScrollSource = null; }, 50);
+
+                const editorInfo = editor.getScrollInfo();
+
+                // Base64画像などの非常に長い折り返し行による高さのズレを防ぐため、行数ベースで割合を計算
+                const topVisibleLine = editor.lineAtHeight(editorInfo.top, "local");
+                const bottomVisibleLine = editor.lineAtHeight(editorInfo.top + editorInfo.clientHeight, "local");
+                const visibleLinesCount = Math.max(1, bottomVisibleLine - topVisibleLine);
+                const totalLines = editor.lineCount();
+
+                let percentage;
+                if (editorInfo.top >= editorInfo.height - editorInfo.clientHeight - 10) {
+                    percentage = 1.0;
+                } else if (editorInfo.top <= 10) {
+                    percentage = 0.0;
+                } else {
+                    percentage = topVisibleLine / Math.max(1, totalLines - visibleLinesCount);
+                    percentage = Math.max(0, Math.min(1, percentage));
+                }
+
+                const targetScrollTop = percentage * (previewContainer.scrollHeight - previewContainer.clientHeight);
+                previewContainer.scrollTop = targetScrollTop;
+            });
+
+            // Sync Preview -> Editor
+            previewContainer.addEventListener('scroll', () => {
+                if (lastScrollSource === 'editor') return;
+                lastScrollSource = 'preview';
+
+                clearTimeout(syncTimer);
+                syncTimer = setTimeout(() => { lastScrollSource = null; }, 50);
+
+                const scrollableHeight = previewContainer.scrollHeight - previewContainer.clientHeight;
+                if (scrollableHeight <= 0) return;
+
+                let percentage = previewContainer.scrollTop / scrollableHeight;
+                percentage = Math.max(0, Math.min(1, percentage));
+
+                const editorInfo = editor.getScrollInfo();
+
+                // ピクセルベースではなく、行数ベースでのターゲット位置を計算
+                const topVisibleLine = editor.lineAtHeight(editorInfo.top, "local");
+                const bottomVisibleLine = editor.lineAtHeight(editorInfo.top + editorInfo.clientHeight, "local");
+                const visibleLinesCount = Math.max(1, bottomVisibleLine - topVisibleLine);
+                const totalLines = editor.lineCount();
+
+                const targetLine = Math.floor(percentage * Math.max(0, totalLines - visibleLinesCount));
+                const targetHeight = editor.heightAtLine(targetLine, "local");
+
+                editor.scrollTo(editorInfo.left, targetHeight);
+            });
+        }
+
+        // Update Preview Panel
+        async function updatePreview(markdownText) {
+            try {
+                // Parse markdown to HTML
+                const rawHtml = marked.parse(markdownText);
+                // Sanitize to prevent XSS (iframeなどの埋め込みタグを許可)
+                const cleanHtml = DOMPurify.sanitize(rawHtml, {
+                    ADD_TAGS: ['iframe'],
+                    ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'target']
+                });
+                // Render
+                previewContainer.innerHTML = cleanHtml;
+
+                // Render Mermaid Diagrams
+                if (window.mermaid) {
+                    const mermaidBlocks = previewContainer.querySelectorAll('code.language-mermaid');
+                    for (let i = 0; i < mermaidBlocks.length; i++) {
+                        const block = mermaidBlocks[i];
+                        try {
+                            const code = block.textContent;
+                            const id = 'mermaid-diagram-' + Math.random().toString(36).substr(2, 9);
+                            const { svg } = await mermaid.render(id, code);
+                            const container = document.createElement('div');
+                            container.className = 'mermaid-container';
+                            container.style.display = 'flex';
+                            container.style.justifyContent = 'center';
+                            container.style.margin = '1.5rem 0';
+                            container.innerHTML = svg;
+                            block.parentNode.replaceWith(container);
+                        } catch (err) {
+                            console.error('Mermaid render error:', err);
+                            // Provide visual feedback for the error in preview
+                            block.style.color = '#ff6b6b';
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("Preview rendering error:", e);
+            }
+        }
+
+        // Auto Save Logic
+        function triggerAutoSave(content) {
+            updateStatus('saving', '保存中...');
+
+            // Clear previous timeout
+            if (saveTimeout) clearTimeout(saveTimeout);
+
+            // Set 2 seconds debounce
+            saveTimeout = setTimeout(() => {
+                try {
+                    localStorage.setItem('lumina_autosave', content);
+                    updateStatus('saved', '保存済み');
+
+                    // Revert to normal state after a while
+                    setTimeout(() => {
+                        if (statusIndicator.className.includes('saved')) {
+                            updateStatus('normal', '変更なし');
+                        }
+                    }, 3000);
+                } catch (e) {
+                    console.error("Auto-save failed:", e);
+                    // LocalStorageの容量制限（約5MB）に引っかかった場合
+                    if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+                        updateStatus('error', '容量超過エラー');
+                        alert("ブラウザの保存容量（約5MB）を超えました。画像が多すぎます。\\n不要な画像を削除するか、ファイルをMDとして保存してから新規作成してください。");
+                    } else {
+                        updateStatus('error', '保存エラー');
+                    }
+                }
+            }, 2000);
+        }
+
+        // Update Header Status UI
+        function updateStatus(state, text) {
+            statusIndicator.className = 'status-indicator ' + state;
+            statusText.innerText = text;
+        }
+
+        // --- File System Access API Integrations ---
+
+        // Create New File (Clear everything)
+        function handleNewFile() {
+            if (editor.getValue().trim() !== '') {
+                const confirmClear = confirm("編集中の内容は破棄されます。新規作成しますか？\n（必要であれば先に保存してください）");
+                if (!confirmClear) return;
+            }
+
+            editor.setValue('');
+            updatePreview('');
+            localStorage.removeItem('lumina_autosave');
+            updateStatus('normal', '新規作成しました');
+        }
+
+        // Load .md file
+        function handleOpenFile() {
+            const fileInput = document.getElementById('file-input');
+
+            // Reset any previous selection
+            fileInput.value = '';
+
+            fileInput.onchange = e => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const content = event.target.result;
+                    editor.setValue(content);
+                    updatePreview(content);
+                    // Instantly save to local storage as well
+                    localStorage.setItem('lumina_autosave', content);
+                    updateStatus('saved', 'ファイルを開きました');
+                };
+                reader.readAsText(file);
+            };
+
+            // Trigger the file browser dialog
+            fileInput.click();
+        }
+
+        // Custom Helper for File Downloading
+        function triggerDownload(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // ── App Version ──
+        const APP_VERSION = '5.0.1';
+
+        // ── Helper: Get sanitized document title for use in filenames ──
+        function getDocTitle() {
+            const raw = (document.getElementById('doc-title-input').value || '').trim();
+            if (!raw) return 'document';
+            // Remove characters not safe for filenames
+            return raw.replace(/[\\/:*?"<>|]/g, '_');
+        }
+
+        // Save as .md file
+        function handleSaveMd() {
+            const content = editor.getValue();
+            const blob = new Blob([content], { type: 'text/markdown' });
+
+            try {
+                triggerDownload(blob, getDocTitle() + '.md');
+                updateStatus('saved', 'mdとして保存完了');
+            } catch (e) {
+                console.error(e);
+                alert("保存中にエラーが発生しました。");
+            }
+        }
+
+        // Helper: Convert SVG to PNG Base64
+        function convertSvgToPng(svgElement) {
+            return new Promise((resolve, reject) => {
+                const rect = svgElement.getBoundingClientRect();
+                let width = rect.width || parseFloat(svgElement.getAttribute('width')) || 600;
+                let height = rect.height || parseFloat(svgElement.getAttribute('height')) || 400;
+
+                svgElement.setAttribute('width', width);
+                svgElement.setAttribute('height', height);
+
+                const serializer = new XMLSerializer();
+                let svgString = serializer.serializeToString(svgElement);
+                if (!svgString.includes('xmlns="http://www.w3.org/2000/svg"')) {
+                    svgString = svgString.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+                }
+
+                const imgSrc = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgString)));
+                const img = new Image();
+                img.crossOrigin = "Anonymous";
+                img.onload = function () {
+                    const canvas = document.createElement('canvas');
+                    const scale = 2; // high resolution
+                    canvas.width = width * scale;
+                    canvas.height = height * scale;
+                    const ctx = canvas.getContext('2d');
+                    ctx.scale(scale, scale);
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, width, height);
+                    ctx.drawImage(img, 0, 0, width, height);
+                    resolve({
+                        src: canvas.toDataURL('image/png'),
+                        width: width,
+                        height: height
+                    });
+                };
+                img.onerror = reject;
+                img.src = imgSrc;
+            });
+        }
+
+        // Export as .docx
+        async function handleExportWord() {
+            try {
+                updateStatus('saving', 'Word出力生成中...');
+
+                const exportContainer = document.createElement('div');
+                exportContainer.innerHTML = previewContainer.innerHTML;
+
+                const wrapper = document.createElement('div');
+                wrapper.style.position = 'absolute';
+                wrapper.style.left = '-9999px';
+                wrapper.style.width = '640px'; // Word A4 width estimate
+                wrapper.appendChild(exportContainer);
+
+                // 強制的にスタイルを適用してレイアウトを計算させる
+                const tempStyle = document.createElement('style');
+                tempStyle.textContent = `
+                    img, iframe, svg { max-width: 100% !important; height: auto !important; }
+                    table { max-width: 100% !important; table-layout: fixed !important; word-wrap: break-word !important; }
+                    a, p, span, div { overflow-wrap: break-word !important; word-break: break-word !important; }
+                `;
+                wrapper.appendChild(tempStyle);
+                document.body.appendChild(wrapper);
+
+                const svgs = Array.from(exportContainer.querySelectorAll('svg'));
+                for (const svg of svgs) {
+                    try {
+                        const pngData = await convertSvgToPng(svg);
+                        const img = document.createElement('img');
+                        img.src = pngData.src;
+                        img.style.width = pngData.width + 'px';
+                        img.style.height = pngData.height + 'px';
+                        svg.parentNode.replaceChild(img, svg);
+                    } catch (err) {
+                        console.error('SVG conversion failed', err);
+                    }
+                }
+
+                // WordはCSSのmax-widthを無視するため、計算されたレイアウト幅をHTML属性としてハードコードする
+                const mediaElements = Array.from(exportContainer.querySelectorAll('img, iframe'));
+                for (const el of mediaElements) {
+                    const rect = el.getBoundingClientRect();
+                    if (rect.width > 0) {
+                        el.setAttribute('width', Math.round(rect.width));
+                        el.setAttribute('height', Math.round(rect.height));
+                    }
+                }
+
+                wrapper.removeChild(tempStyle); // 実際の出力HTMLには不要なので削除
+
+                const title = (document.getElementById('doc-title-input').value || '').trim() || 'Document';
+                // Inline css for Word Document styles
+                const content = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <title>${title}</title>
+            <style>
+                body { font-family: "Meiryo", "Yu Gothic", sans-serif; font-size: 14px; }
+                h1, h2, h3, h4 { color: #333333; margin-top: 24px; margin-bottom: 16px; font-weight: bold; }
+                h1 { font-size: 24px; border-bottom: 1px solid #cccccc; padding-bottom: 4px; }
+                h2 { font-size: 20px; border-bottom: 1px solid #cccccc; padding-bottom: 4px; }
+                p { line-height: 1.6; margin-bottom: 16px; }
+                code { background-color: #f6f8fa; padding: 2px 4px; border-radius: 4px; font-family: "Consolas", monospace; }
+                pre { background-color: #f6f8fa; padding: 16px; border-radius: 6px; font-family: "Consolas", monospace; font-size: 12px; white-space: pre-wrap; word-wrap: break-word; word-break: break-all; }
+                table { border-collapse: collapse; width: 100%; margin-bottom: 16px; table-layout: fixed; word-wrap: break-word; }
+                th, td { border: 1px solid #d0d7de; padding: 8px 12px; word-wrap: break-word; }
+                th { background-color: #f6f8fa; }
+                blockquote { border-left: 4px solid #d0d7de; padding-left: 16px; color: #57606a; margin-bottom: 16px; }
+                a { color: #0969da; text-decoration: none; word-break: break-all; overflow-wrap: break-word; }
+                p, span, div { overflow-wrap: break-word; word-break: break-word; }
+                ul, ol { margin-bottom: 16px; padding-left: 24px; }
+                img, iframe, svg { max-width: 100%; height: auto; }
+            </style>
+        </head>
+        <body>
+            ${exportContainer.innerHTML}
+        </body>
+        </html>
+        `;
+                document.body.removeChild(wrapper);
+
+                // Convert to docx blob using html-docx-js
+                const converted = htmlDocx.asBlob(content);
+
+                // Download Word Document
+                triggerDownload(converted, getDocTitle() + '.docx');
+                updateStatus('saved', 'Word出力完了');
+
+            } catch (err) {
+                console.error("Word export failed:", err);
+                updateStatus('normal', '出力失敗');
+                alert("Wordエクスポート機能の実行中にエラーが発生しました。\\n※ブラウザによっては未対応のライブラリ可能性があります。");
+            }
+        }
+
+        // Export as .pdf
+        async function handleExportPdf() {
+            try {
+                updateStatus('saving', 'PDF生成中...');
+
+                const printContainer = document.createElement('div');
+                printContainer.innerHTML = previewContainer.innerHTML;
+
+                const style = document.createElement('style');
+                style.textContent = `
+                    .pdf-export-wrapper {
+                        background-color: #ffffff !important;
+                        color: #333333 !important;
+                        padding: 20px;
+                        width: 710px !important;
+                        box-sizing: border-box !important;
+                        word-break: break-word !important;
+                        overflow-wrap: break-word !important;
+                        font-family: 'Inter', "Meiryo", "Yu Gothic", sans-serif !important;
+                        line-height: 1.6 !important;
+                        letter-spacing: 0.03em !important;
+                    }
+                    .pdf-export-wrapper h1, .pdf-export-wrapper h2, .pdf-export-wrapper h3, .pdf-export-wrapper h4 {
+                        color: #000000 !important;
+                        border-bottom-color: #cccccc !important;
+                        word-break: break-word !important;
+                    }
+                    .pdf-export-wrapper a {
+                        color: #0969da !important;
+                        word-break: break-all !important;
+                        overflow-wrap: break-word !important;
+                    }
+                    .pdf-export-wrapper code, .pdf-export-wrapper pre {
+                        background-color: #f6f8fa !important;
+                        color: #24292f !important;
+                        border: 1px solid #d0d7de !important;
+                    }
+                    .pdf-export-wrapper table, .pdf-export-wrapper th, .pdf-export-wrapper td {
+                        border-color: #d0d7de !important;
+                    }
+                    .pdf-export-wrapper th {
+                        background-color: #f6f8fa !important;
+                    }
+                    .pdf-export-wrapper tr:nth-child(2n) {
+                        background-color: #f6f8fa !important;
+                    }
+                    .pdf-export-wrapper tr {
+                        background-color: #ffffff !important;
+                    }
+                    .pdf-export-wrapper img, .pdf-export-wrapper svg, .pdf-export-wrapper iframe {
+                        max-width: 100% !important;
+                        height: auto !important;
+                    }
+                    .pdf-export-wrapper pre, .pdf-export-wrapper code {
+                        white-space: pre-wrap !important;
+                        word-break: break-all !important;
+                        word-wrap: break-word !important;
+                    }
+                    .pdf-export-wrapper table {
+                        width: 100% !important;
+                        table-layout: fixed !important;
+                        word-wrap: break-word !important;
+                    }
+                `;
+
+                const wrapper = document.createElement('div');
+                wrapper.className = 'markdown-body pdf-export-wrapper';
+                wrapper.appendChild(style);
+                wrapper.appendChild(printContainer);
+
+                // 画面外に一時配置してSVGのサイズ計算と変換を行う
+                const hiddenHider = document.createElement('div');
+                hiddenHider.style.position = 'absolute';
+                hiddenHider.style.left = '-9999px';
+                hiddenHider.appendChild(wrapper);
+                document.body.appendChild(hiddenHider);
+
+                const svgs = Array.from(printContainer.querySelectorAll('svg'));
+                for (const svg of svgs) {
+                    try {
+                        const pngData = await convertSvgToPng(svg);
+                        const img = document.createElement('img');
+                        img.src = pngData.src;
+                        img.style.width = pngData.width + 'px';
+                        img.style.height = pngData.height + 'px';
+                        svg.parentNode.replaceChild(img, svg);
+                    } catch (err) {
+                        console.error('SVG conversion failed', err);
+                    }
+                }
+
+                // 変換が完了したらDOMから削除する
+                document.body.removeChild(hiddenHider);
+
+                const opt = {
+                    margin: 10,
+                    filename: getDocTitle() + '.pdf',
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', letterRendering: true },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                };
+
+                // wrapper自体には位置調整のスタイルが含まれていない状態でhtml2pdfに渡す
+                html2pdf().set(opt).from(wrapper).save().then(() => {
+                    updateStatus('saved', 'PDF出力完了');
+                }).catch(err => {
+                    console.error("PDF generation failed:", err);
+                    updateStatus('normal', 'PDF出力失敗');
+                    alert("PDF出力中にエラーが発生しました。");
+                });
+
+            } catch (err) {
+                console.error("PDF export failed:", err);
+                updateStatus('normal', 'エラー');
+                alert("PDFエクスポート機能の実行中にエラーが発生しました。");
+            }
+        }
+
+        // Export as .html
+        function handleExportHtml() {
+            try {
+                updateStatus('saving', 'HTML出力生成中...');
+
+                const title = (document.getElementById('doc-title-input').value || '').trim() || 'Document';
+                const content = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${title}</title>
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #24292f;
+            background-color: #ffffff;
+            line-height: 1.6;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        h1, h2, h3, h4 { color: #000000; margin-top: 24px; margin-bottom: 16px; font-weight: 600; line-height: 1.25; }
+        h1 { font-size: 2em; border-bottom: 1px solid #d0d7de; padding-bottom: .3em; }
+        h2 { font-size: 1.5em; border-bottom: 1px solid #d0d7de; padding-bottom: .3em; }
+        p, blockquote, ul, ol, dl, table, pre, details { margin-top: 0; margin-bottom: 16px; }
+        a { color: #0969da; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        code { background-color: rgba(175, 184, 193, 0.2); padding: .2em .4em; border-radius: 6px; font-family: monospace; font-size: 85%; }
+        pre { background-color: #f6f8fa; padding: 16px; border-radius: 6px; overflow: auto; }
+        pre code { background-color: transparent; padding: 0; font-size: 100%; }
+        blockquote { border-left: .25em solid #d0d7de; padding: 0 1em; color: #57606a; }
+        img, svg { 
+            display: block;
+            max-width: 100%; /* 古いブラウザ用フォールバック */
+            max-width: min(1000px, 100%); 
+            height: auto; 
+            margin: 0 auto; 
+        }
+        table { border-collapse: collapse; width: 100%; max-width: 100%; overflow: auto; display: block; }
+        th, td { border: 1px solid #d0d7de; padding: 6px 13px; }
+        th { background-color: #ffffff; font-weight: 600; }
+        tr { background-color: #ffffff; border-top: 1px solid #d0d7de; }
+        tr:nth-child(2n) { background-color: #f6f8fa; }
+    </style>
+</head>
+<body>
+    <div class="markdown-body">
+        ${previewContainer.innerHTML}
+    </div>
+</body>
+</html>`;
+
+                const blob = new Blob([content], { type: 'text/html;charset=utf-8' });
+                triggerDownload(blob, getDocTitle() + '.html');
+                updateStatus('saved', 'HTML出力完了');
+
+            } catch (err) {
+                console.error("HTML export failed:", err);
+                updateStatus('normal', '出力失敗');
+                alert("HTMLエクスポート機能の実行中にエラーが発生しました。");
+            }
+        }
+
+        // Initialize application
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+
+</html>
