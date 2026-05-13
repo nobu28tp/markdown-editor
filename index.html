@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Markdown Editor (Ver.5.0.2)</title>
+    <title>Markdown Editor (Ver.5.1.0)</title>
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -477,6 +477,82 @@
             padding: 2rem;
             background-color: #ffffff;
             /* Light theme */
+            transition: background-color 0.3s ease;
+        }
+
+        /* --- Marp Slide Styles --- */
+        .preview-container.marp-mode {
+            background-color: #2b2b2b !important;
+            padding: 1rem !important;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        /* Hide default markdown body styles in marp mode */
+        .preview-container.marp-mode.markdown-body {
+            max-width: none;
+            line-height: normal;
+        }
+
+        /* --- Marp Slide Preview Layout --- */
+        .preview-container.marp-mode {
+            background-color: #1a1a2e !important;
+            padding: 2rem !important;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .marp-slide-wrapper {
+            position: relative;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+            border-radius: 4px;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .marp-slide-wrapper section {
+            display: block !important;
+            position: relative !important;
+        }
+
+        .marp-page-number {
+            text-align: center;
+            font-size: 0.7rem;
+            color: rgba(255,255,255,0.4);
+            margin-top: -0.8rem;
+            letter-spacing: 0.1em;
+        }
+
+        /* Mode Switcher Styles */
+        .mode-switcher {
+            display: flex;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 2px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            margin-right: 1rem;
+        }
+
+        .mode-btn {
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            background: transparent;
+        }
+
+        .mode-btn.active {
+            background: var(--accent-color);
+            color: white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
 
         /* Better typography for the preview (Markdown styles) */
@@ -484,8 +560,8 @@
             color: #24292f;
             font-family: var(--font-ui);
             line-height: 1.6;
-            max-width: 800px;
-            margin: 0 auto;
+            width: 100%;
+            max-width: 100%;
         }
 
         .markdown-body h1,
@@ -593,6 +669,7 @@
         .markdown-body table tr:nth-child(2n) {
             background-color: #f6f8fa;
         }
+
         /* ── Document Title Input ── */
         .doc-title-wrap {
             display: flex;
@@ -602,13 +679,15 @@
             border-left: 1px solid var(--border-color);
             padding-left: 1rem;
         }
+
         .doc-title-wrap label {
             font-size: 0.75rem;
             color: var(--text-secondary);
             white-space: nowrap;
         }
+
         #doc-title-input {
-            background: rgba(255,255,255,0.05);
+            background: rgba(255, 255, 255, 0.05);
             border: 1px solid var(--border-color);
             border-radius: 6px;
             color: var(--text-primary);
@@ -618,11 +697,13 @@
             width: 200px;
             transition: border-color 0.2s, background 0.2s;
         }
+
         #doc-title-input:focus {
             outline: none;
             border-color: var(--accent-color);
-            background: rgba(88,166,255,0.07);
+            background: rgba(88, 166, 255, 0.07);
         }
+
         #doc-title-input::placeholder {
             color: var(--text-secondary);
             opacity: 0.6;
@@ -637,7 +718,8 @@
             <div class="header-left">
                 <div class="logo">
                     <i data-lucide="pen-tool"></i>
-                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.0.2)</span></h1>
+                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.1.0)</span>
+                    </h1>
                 </div>
                 <div class="status-indicator" id="save-status">
                     <span class="status-dot"></span>
@@ -646,6 +728,10 @@
                 <div class="doc-title-wrap">
                     <label for="doc-title-input">📄 ドキュメント名</label>
                     <input type="text" id="doc-title-input" placeholder="例: 会議資料" maxlength="100">
+                </div>
+                <div class="mode-switcher" id="mode-switcher">
+                    <button class="mode-btn active" data-mode="doc">Doc</button>
+                    <button class="mode-btn" data-mode="slide">Slide</button>
                 </div>
             </div>
             <div class="header-right">
@@ -704,6 +790,7 @@
                 <div class="preview-container markdown-body" id="preview-content">
                     <!-- HTML Preview will be rendered here -->
                 </div>
+                <style id="marp-style"></style>
             </section>
         </main>
     </div>
@@ -794,6 +881,10 @@
                             <td>図やグラフ<br>(Mermaid)</td>
                             <td><code>```mermaid<br>graph TD;<br>A-->B;<br>```</code></td>
                         </tr>
+                        <tr>
+                            <td>スライド作成<br>(Marp)</td>
+                            <td>先頭に以下を記述:<br><code>---<br>marp: true<br>---</code><br>区切りは <code>---</code></td>
+                        </tr>
                     </tbody>
                 </table>
 
@@ -878,9 +969,89 @@
                         </tr>
                     </tbody>
                 </table>
+
+                <h3 style="margin: 1.5rem 0.75rem 0.5rem; font-size: 1.1em; color: var(--text-primary);">🖼️ Marp スライド記法</h3>
+                <table class="cheat-sheet-table">
+                    <thead>
+                        <tr>
+                            <th>機能</th>
+                            <th>記法 / 説明</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Marp有効化</td>
+                            <td>ファイル先頭に:<br><code>---<br>marp: true<br>---</code></td>
+                        </tr>
+                        <tr>
+                            <td>スライド区切り</td>
+                            <td><code>---</code>（単独行）</td>
+                        </tr>
+                        <tr>
+                            <td>テーマ: 白背景</td>
+                            <td><code>theme: default</code></td>
+                        </tr>
+                        <tr>
+                            <td>テーマ: ダーク</td>
+                            <td><code>theme: gaia</code></td>
+                        </tr>
+                        <tr>
+                            <td>テーマ: ブルー</td>
+                            <td><code>theme: uncover</code></td>
+                        </tr>
+                        <tr>
+                            <td>ページ番号表示</td>
+                            <td><code>paginate: true</code></td>
+                        </tr>
+                        <tr>
+                            <td>ヘッダー追加</td>
+                            <td><code>header: ヘッダー文字</code></td>
+                        </tr>
+                        <tr>
+                            <td>フッター追加</td>
+                            <td><code>footer: フッター文字</code></td>
+                        </tr>
+                        <tr>
+                            <td>スライドサイズ</td>
+                            <td><code>size: 16:9</code> または <code>size: 4:3</code></td>
+                        </tr>
+                        <tr>
+                            <td>中央揃えスライド</td>
+                            <td>スライド内に:<br><code>&lt;!-- _class: lead --&gt;</code></td>
+                        </tr>
+                        <tr>
+                            <td>背景色変更<br>(個別スライド)</td>
+                            <td><code>&lt;!-- _backgroundColor: #1a1a2e --&gt;</code></td>
+                        </tr>
+                        <tr>
+                            <td>文字色変更<br>(個別スライド)</td>
+                            <td><code>&lt;!-- _color: #ffffff --&gt;</code></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div style="margin: 1rem 0.75rem; padding: 0.75rem 1rem; background: rgba(88,166,255,0.1); border-left: 3px solid #58a6ff; border-radius: 4px; font-size: 0.85em; color: var(--text-secondary);">
+                    <strong style="color: var(--text-primary);">📝 Marpサンプル</strong><br>
+                    <pre style="margin-top: 0.5rem; background: rgba(0,0,0,0.3); padding: 0.75rem; border-radius: 4px; font-size: 0.8em; color: #a5d6ff;">---
+marp: true
+theme: gaia
+paginate: true
+---
+
+# タイトル
+サブタイトル
+
+---
+
+## スライド2
+- 項目1
+- **太字**
+- *斜体*</pre>
+                </div>
             </div>
         </div>
     </div>
+
 
     <script>
         // DOM Elements
@@ -892,6 +1063,203 @@
         let editor; // CodeMirror instance
         let saveTimeout = null;
         let previewTimeout = null;
+        let previewMode = 'doc'; // 'doc' or 'slide'
+
+        // ============================================================
+        // Built-in Marp-compatible Slide Engine (No CDN required)
+        // ============================================================
+        const MARP_THEMES = {
+            default: `
+                section {
+                    width: 1280px; height: 720px; padding: 70px 80px;
+                    background: #fff; color: #333;
+                    font-family: 'Inter', 'Meiryo', sans-serif;
+                    font-size: 32px; line-height: 1.5;
+                    display: flex; flex-direction: column;
+                    justify-content: flex-start; align-items: flex-start;
+                    box-sizing: border-box; overflow: hidden;
+                    position: relative;
+                }
+                section.lead { justify-content: center; align-items: center; text-align: center; }
+                h1 { font-size: 1.6em; color: #1a1a2e; border-bottom: 3px solid #58a6ff; padding-bottom: 0.3em; margin: 0 0 0.5em; width: 100%; }
+                h2 { font-size: 1.3em; color: #1a1a2e; margin: 0 0 0.4em; }
+                h3 { font-size: 1.1em; color: #555; margin: 0 0 0.3em; }
+                p { margin: 0.3em 0; font-size: 0.85em; }
+                ul, ol { margin: 0.3em 0 0.3em 1.2em; padding: 0; }
+                li { margin: 0.2em 0; font-size: 0.82em; }
+                strong { color: #0969da; }
+                em { color: #6f42c1; }
+                code { background: #f0f4f8; border: 1px solid #d0d7de; border-radius: 4px; padding: 1px 6px; font-family: 'Fira Code', monospace; font-size: 0.78em; color: #c9105a; }
+                pre { background: #1a1a2e; border-radius: 8px; padding: 1em 1.2em; width: 100%; box-sizing: border-box; overflow: hidden; margin: 0.5em 0; }
+                pre code { background: transparent; border: none; color: #a5d6ff; font-size: 0.72em; padding: 0; }
+                blockquote { border-left: 4px solid #58a6ff; margin: 0.5em 0; padding: 0.3em 0 0.3em 1em; color: #555; font-style: italic; }
+                table { border-collapse: collapse; width: 100%; font-size: 0.75em; margin: 0.5em 0; }
+                th { background: #1a1a2e; color: #fff; padding: 8px 12px; }
+                td { border: 1px solid #d0d7de; padding: 6px 12px; }
+                tr:nth-child(even) td { background: #f6f8fa; }
+                img { max-width: 100%; max-height: 60%; object-fit: contain; }
+                .page-number { position: absolute; bottom: 20px; right: 30px; font-size: 0.55em; color: #aaa; }
+                .header-bar { position: absolute; top: 0; left: 0; right: 0; height: 6px; background: linear-gradient(90deg, #58a6ff, #a371f7); }
+            `,
+            gaia: `
+                section {
+                    width: 1280px; height: 720px; padding: 70px 80px;
+                    background: #1a1a2e; color: #e6edf3;
+                    font-family: 'Inter', 'Meiryo', sans-serif;
+                    font-size: 32px; line-height: 1.5;
+                    display: flex; flex-direction: column;
+                    justify-content: flex-start; align-items: flex-start;
+                    box-sizing: border-box; overflow: hidden;
+                    position: relative;
+                }
+                section.lead { justify-content: center; align-items: center; text-align: center; }
+                h1 { font-size: 1.6em; color: #58a6ff; border-bottom: 3px solid #a371f7; padding-bottom: 0.3em; margin: 0 0 0.5em; width: 100%; }
+                h2 { font-size: 1.3em; color: #79c0ff; margin: 0 0 0.4em; }
+                h3 { font-size: 1.1em; color: #a5d6ff; margin: 0 0 0.3em; }
+                p { margin: 0.3em 0; font-size: 0.85em; color: #c9d1d9; }
+                ul, ol { margin: 0.3em 0 0.3em 1.2em; padding: 0; }
+                li { margin: 0.2em 0; font-size: 0.82em; color: #c9d1d9; }
+                strong { color: #ffa657; }
+                em { color: #d2a8ff; }
+                code { background: rgba(255,255,255,0.1); border-radius: 4px; padding: 1px 6px; font-family: 'Fira Code', monospace; font-size: 0.78em; color: #79c0ff; }
+                pre { background: #0d1117; border-radius: 8px; padding: 1em 1.2em; width: 100%; box-sizing: border-box; overflow: hidden; margin: 0.5em 0; border: 1px solid #30363d; }
+                pre code { background: transparent; color: #e6edf3; font-size: 0.72em; padding: 0; }
+                blockquote { border-left: 4px solid #58a6ff; margin: 0.5em 0; padding: 0.3em 0 0.3em 1em; color: #8b949e; font-style: italic; }
+                table { border-collapse: collapse; width: 100%; font-size: 0.75em; margin: 0.5em 0; }
+                th { background: #0d1117; color: #58a6ff; padding: 8px 12px; border-bottom: 2px solid #30363d; }
+                td { border: 1px solid #30363d; padding: 6px 12px; color: #c9d1d9; }
+                tr:nth-child(even) td { background: rgba(255,255,255,0.03); }
+                img { max-width: 100%; max-height: 60%; object-fit: contain; }
+                .page-number { position: absolute; bottom: 20px; right: 30px; font-size: 0.55em; color: #555; }
+                .header-bar { position: absolute; top: 0; left: 0; right: 0; height: 6px; background: linear-gradient(90deg, #1f6feb, #a371f7); }
+            `,
+            uncover: `
+                section {
+                    width: 1280px; height: 720px; padding: 70px 80px;
+                    background: #f8fafc; color: #1e293b;
+                    font-family: 'Inter', 'Meiryo', sans-serif;
+                    font-size: 32px; line-height: 1.5;
+                    display: flex; flex-direction: column;
+                    justify-content: flex-start; align-items: flex-start;
+                    box-sizing: border-box; overflow: hidden;
+                    position: relative;
+                    border-left: 8px solid #3b82f6;
+                }
+                section.lead { justify-content: center; align-items: center; text-align: center; border-left: none; border-top: 8px solid #3b82f6; }
+                h1 { font-size: 1.6em; color: #1e293b; font-weight: 800; margin: 0 0 0.5em; letter-spacing: -0.02em; }
+                h2 { font-size: 1.3em; color: #334155; font-weight: 700; margin: 0 0 0.4em; }
+                h3 { font-size: 1.1em; color: #475569; margin: 0 0 0.3em; }
+                p { margin: 0.3em 0; font-size: 0.85em; color: #475569; }
+                ul, ol { margin: 0.3em 0 0.3em 1.2em; padding: 0; }
+                li { margin: 0.2em 0; font-size: 0.82em; color: #475569; }
+                strong { color: #3b82f6; font-weight: 700; }
+                em { color: #8b5cf6; }
+                code { background: #e2e8f0; border-radius: 4px; padding: 1px 6px; font-family: 'Fira Code', monospace; font-size: 0.78em; color: #be185d; }
+                pre { background: #1e293b; border-radius: 8px; padding: 1em 1.2em; width: 100%; box-sizing: border-box; overflow: hidden; margin: 0.5em 0; }
+                pre code { background: transparent; color: #e2e8f0; font-size: 0.72em; padding: 0; }
+                blockquote { border-left: 4px solid #3b82f6; margin: 0.5em 0; padding: 0.3em 0 0.3em 1em; color: #64748b; font-style: italic; background: #f1f5f9; }
+                table { border-collapse: collapse; width: 100%; font-size: 0.75em; margin: 0.5em 0; }
+                th { background: #3b82f6; color: #fff; padding: 8px 12px; }
+                td { border: 1px solid #e2e8f0; padding: 6px 12px; }
+                tr:nth-child(even) td { background: #f8fafc; }
+                img { max-width: 100%; max-height: 60%; object-fit: contain; }
+                .page-number { position: absolute; bottom: 20px; right: 30px; font-size: 0.55em; color: #94a3b8; }
+            `
+        };
+
+        class MarpEngine {
+            parseFrontmatter(markdown) {
+                const fm = { marp: false, theme: 'default', size: '16:9', paginate: false, header: '', footer: '' };
+                const match = markdown.match(/^---\s*\n([\s\S]*?)\n---\s*\n/);
+                if (!match) return { frontmatter: fm, body: markdown };
+                const body = markdown.slice(match[0].length);
+                const lines = match[1].split('\n');
+                for (const line of lines) {
+                    const [key, ...vals] = line.split(':');
+                    const val = vals.join(':').trim();
+                    if (!key) continue;
+                    const k = key.trim().toLowerCase();
+                    if (k === 'marp') fm.marp = val === 'true';
+                    else if (k === 'theme') fm.theme = val;
+                    else if (k === 'size') fm.size = val;
+                    else if (k === 'paginate') fm.paginate = val === 'true';
+                    else if (k === 'header') fm.header = val;
+                    else if (k === 'footer') fm.footer = val;
+                }
+                return { frontmatter: fm, body };
+            }
+
+            splitSlides(body) {
+                // Split on '---' that appears on its own line, not inside code blocks
+                const lines = body.split('\n');
+                const slides = [];
+                let current = [];
+                let inCode = false;
+                for (const line of lines) {
+                    if (line.startsWith('```')) inCode = !inCode;
+                    if (!inCode && /^---\s*$/.test(line)) {
+                        slides.push(current.join('\n'));
+                        current = [];
+                    } else {
+                        current.push(line);
+                    }
+                }
+                if (current.length > 0) slides.push(current.join('\n'));
+                return slides.filter(s => s.trim().length > 0);
+            }
+
+            // Parse per-slide directives from HTML comments like <!-- _class: lead -->
+            parseSlideDirectives(content) {
+                const directives = { class: '', backgroundColor: '', color: '' };
+                const matches = content.matchAll(/<!--\s*_([\w]+):\s*([^>]+?)\s*-->/g);
+                for (const m of matches) {
+                    const k = m[1].trim();
+                    const v = m[2].trim();
+                    if (k === 'class') directives.class = v;
+                    else if (k === 'backgroundColor' || k === 'background-color') directives.backgroundColor = v;
+                    else if (k === 'color') directives.color = v;
+                }
+                // Remove the comment tags from content
+                const cleanContent = content.replace(/<!--\s*_[\w]+:\s*[^>]+?\s*-->/g, '');
+                return { directives, content: cleanContent };
+            }
+
+            renderSlide(rawContent, index, total, fm) {
+                const { directives, content } = this.parseSlideDirectives(rawContent);
+                const htmlContent = marked.parse(content);
+                const classes = ['marp-slide-inner', directives.class].filter(Boolean).join(' ');
+                let inlineStyle = '';
+                if (directives.backgroundColor) inlineStyle += `background-color:${directives.backgroundColor};`;
+                if (directives.color) inlineStyle += `color:${directives.color};`;
+
+                let extras = '';
+                if (index === 0 && MARP_THEMES[fm.theme] !== MARP_THEMES.gaia) {
+                    extras += '<div class="header-bar"></div>';
+                }
+                if (fm.paginate) {
+                    extras += `<div class="page-number">${index + 1} / ${total}</div>`;
+                }
+                if (fm.header) {
+                    extras += `<div style="position:absolute;top:16px;left:80px;right:80px;font-size:0.55em;color:#888;">${fm.header}</div>`;
+                }
+                if (fm.footer) {
+                    extras += `<div style="position:absolute;bottom:16px;left:80px;right:80px;font-size:0.55em;color:#888;">${fm.footer}</div>`;
+                }
+
+                return `<section class="${classes}" style="${inlineStyle}">${extras}${htmlContent}</section>`;
+            }
+
+            render(markdown) {
+                const { frontmatter: fm, body } = this.parseFrontmatter(markdown);
+                const rawSlides = this.splitSlides(body);
+                const total = rawSlides.length;
+                const theme = MARP_THEMES[fm.theme] || MARP_THEMES.default;
+                const slides = rawSlides.map((s, i) => this.renderSlide(s, i, total, fm));
+                return { slides, css: theme, fm };
+            }
+        }
+
+        const marpEngine = new MarpEngine();
 
         // ウィジェット作成関数（非表示になったBase64データの代わりに見せるUI）
         function createHiddenWidget(isInline = false) {
@@ -970,6 +1338,17 @@
                 });
             }
 
+            // Mode Switcher Logic
+            const modeBtns = document.querySelectorAll('.mode-btn');
+            modeBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    modeBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    previewMode = btn.dataset.mode;
+                    updatePreview(editor.getValue());
+                });
+            });
+
             // 1. Configure Marked with Highlight.js
             marked.use({
                 breaks: true, // Allow line breaks
@@ -981,10 +1360,10 @@
                         if (lang === 'mermaid') {
                             return `<pre><code class="language-mermaid">${text}</code></pre>`;
                         }
-                        
+
                         let highlighted = text;
                         let languageClass = '';
-                        
+
                         try {
                             if (lang && hljs.getLanguage(lang)) {
                                 highlighted = hljs.highlight(text, { language: lang }).value;
@@ -995,7 +1374,7 @@
                         } catch (e) {
                             console.error('Highlight error:', e);
                         }
-                        
+
                         return `<pre><code class="hljs ${languageClass}">${highlighted}</code></pre>`;
                     }
                 }
@@ -1189,18 +1568,66 @@
             });
         }
 
+
         // Update Preview Panel
         async function updatePreview(markdownText) {
             try {
-                // Parse markdown to HTML
-                const rawHtml = marked.parse(markdownText);
-                // Sanitize to prevent XSS (iframeなどの埋め込みタグを許可)
-                const cleanHtml = DOMPurify.sanitize(rawHtml, {
-                    ADD_TAGS: ['iframe'],
-                    ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'target']
-                });
-                // Render
-                previewContainer.innerHTML = cleanHtml;
+                const isMarpDetected = /^---\s*\n[\s\S]*?marp:\s*true[\s\S]*?\n---/.test(markdownText);
+
+                const slideBtn = document.querySelector('.mode-btn[data-mode="slide"]');
+                const docBtn = document.querySelector('.mode-btn[data-mode="doc"]');
+
+                // Sync UI buttons if auto-detected
+                if (isMarpDetected && previewMode === 'doc') {
+                    slideBtn.classList.add('active');
+                    docBtn.classList.remove('active');
+                    previewMode = 'slide';
+                } else if (!isMarpDetected && previewMode === 'slide') {
+                    // If user manually forced slide but no marp:true, still keep slide mode
+                }
+
+                const shouldRenderSlide = previewMode === 'slide' || isMarpDetected;
+                const marpStyleTag = document.getElementById('marp-style');
+
+                if (shouldRenderSlide) {
+                    const { slides, css, fm } = marpEngine.render(markdownText);
+
+                    // Apply theme CSS: replace 'section' selector with scoped '.marp-slide-wrapper section'
+                    const scopedCss = css.replace(/\bsection\b/g, '.marp-slide-wrapper section');
+                    marpStyleTag.textContent = scopedCss;
+
+                    // Build slide wrappers
+                    let slidesHtml = '';
+                    slides.forEach((slideHtml, i) => {
+                        slidesHtml += `
+                            <div class="marp-slide-wrapper">
+                                ${slideHtml}
+                            </div>
+                            <div class="marp-page-number">SLIDE ${i + 1} / ${slides.length}</div>
+                        `;
+                    });
+
+                    previewContainer.innerHTML = DOMPurify.sanitize(slidesHtml, {
+                        ADD_TAGS: ['section', 'style'],
+                        ADD_ATTR: ['style', 'class'],
+                        FORBID_TAGS: ['script'],
+                        FORBID_ATTR: ['onerror', 'onclick', 'onload']
+                    });
+
+                    previewContainer.classList.add('marp-mode');
+                    previewContainer.classList.remove('markdown-body');
+                } else {
+                    // Document Mode
+                    const rawHtml = marked.parse(markdownText);
+                    const cleanHtml = DOMPurify.sanitize(rawHtml, {
+                        ADD_TAGS: ['iframe'],
+                        ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'target']
+                    });
+                    previewContainer.innerHTML = cleanHtml;
+                    marpStyleTag.textContent = '';
+                    previewContainer.classList.remove('marp-mode');
+                    previewContainer.classList.add('markdown-body');
+                }
 
                 // Render Mermaid Diagrams
                 if (window.mermaid) {
@@ -1323,7 +1750,7 @@
         }
 
         // ── App Version ──
-        const APP_VERSION = '5.0.1';
+        const APP_VERSION = '5.1.0';
 
         // ── Helper: Get sanitized document title for use in filenames ──
         function getDocTitle() {
@@ -1438,8 +1865,10 @@
                 wrapper.removeChild(tempStyle); // 実際の出力HTMLには不要なので削除
 
                 const title = (document.getElementById('doc-title-input').value || '').trim() || 'Document';
+                const isSlideMode = previewContainer.classList.contains('marp-mode');
+                
                 // Inline css for Word Document styles
-                const content = `
+                let content = `
         <!DOCTYPE html>
         <html>
         <head>
@@ -1461,6 +1890,13 @@
                 p, span, div { overflow-wrap: break-word; word-break: break-word; }
                 ul, ol { margin-bottom: 16px; padding-left: 24px; }
                 img, iframe, svg { max-width: 100%; height: auto; }
+                ${isSlideMode ? (() => {
+                    const { css } = marpEngine.render(editor.getValue());
+                    return css.replace(/\bsection\b/g, 'section') + `
+                    .marp-slide-wrapper { page-break-after: always; }
+                    .marp-page-number { display: none; }
+                    .header-bar, .page-number { display: none !important; }`;
+                })() : ''}
             </style>
         </head>
         <body>
@@ -1489,78 +1925,64 @@
             try {
                 updateStatus('saving', 'PDF生成中...');
 
+                const isSlideMode = previewContainer.classList.contains('marp-mode');
                 const printContainer = document.createElement('div');
                 printContainer.innerHTML = previewContainer.innerHTML;
 
-                const style = document.createElement('style');
-                style.textContent = `
-                    .pdf-export-wrapper {
-                        background-color: #ffffff !important;
-                        color: #333333 !important;
-                        padding: 20px;
-                        width: 710px !important;
-                        box-sizing: border-box !important;
-                        word-break: break-word !important;
-                        overflow-wrap: break-word !important;
-                        font-family: 'Inter', "Meiryo", "Yu Gothic", sans-serif !important;
-                        line-height: 1.6 !important;
-                        letter-spacing: 0.03em !important;
-                    }
-                    .pdf-export-wrapper h1, .pdf-export-wrapper h2, .pdf-export-wrapper h3, .pdf-export-wrapper h4 {
-                        color: #000000 !important;
-                        border-bottom-color: #cccccc !important;
-                        word-break: break-word !important;
-                    }
-                    .pdf-export-wrapper a {
-                        color: #0969da !important;
-                        word-break: break-all !important;
-                        overflow-wrap: break-word !important;
-                    }
-                    .pdf-export-wrapper code, .pdf-export-wrapper pre {
-                        background-color: #f6f8fa !important;
-                        color: #24292f !important;
-                        border: 1px solid #d0d7de !important;
-                    }
-                    .pdf-export-wrapper table, .pdf-export-wrapper th, .pdf-export-wrapper td {
-                        border-color: #d0d7de !important;
-                    }
-                    .pdf-export-wrapper th {
-                        background-color: #f6f8fa !important;
-                    }
-                    .pdf-export-wrapper tr:nth-child(2n) {
-                        background-color: #f6f8fa !important;
-                    }
-                    .pdf-export-wrapper tr {
-                        background-color: #ffffff !important;
-                    }
-                    .pdf-export-wrapper img, .pdf-export-wrapper svg, .pdf-export-wrapper iframe {
-                        max-width: 100% !important;
-                        height: auto !important;
-                    }
-                    .pdf-export-wrapper pre, .pdf-export-wrapper code {
-                        white-space: pre-wrap !important;
-                        word-break: break-all !important;
-                        word-wrap: break-word !important;
-                    }
-                    .pdf-export-wrapper table {
-                        width: 100% !important;
-                        table-layout: fixed !important;
-                        word-wrap: break-word !important;
-                    }
-                `;
+                let style;
+                let wrapper;
 
-                const wrapper = document.createElement('div');
-                wrapper.className = 'markdown-body pdf-export-wrapper';
-                wrapper.appendChild(style);
-                wrapper.appendChild(printContainer);
+                if (isSlideMode) {
+                    // Slide mode: use MarpEngine theme CSS for accurate reproduction
+                    const markdown = editor.getValue();
+                    const { css } = marpEngine.render(markdown);
 
-                // 画面外に一時配置してSVGのサイズ計算と変換を行う
-                const hiddenHider = document.createElement('div');
-                hiddenHider.style.position = 'absolute';
-                hiddenHider.style.left = '-9999px';
-                hiddenHider.appendChild(wrapper);
-                document.body.appendChild(hiddenHider);
+                    style = document.createElement('style');
+                    const scopedCss = css.replace(/\bsection\b/g, '.marp-slide-wrapper section');
+                    style.textContent = `
+                        .marp-slide-wrapper { page-break-after: always; }
+                        ${scopedCss}
+                        .marp-page-number { display: none; }
+                        .header-bar, .page-number { display: none !important; }
+                    `;
+                    wrapper = document.createElement('div');
+                    wrapper.appendChild(style);
+                    wrapper.appendChild(printContainer);
+                } else {
+                    // Document mode
+                    style = document.createElement('style');
+                    style.textContent = `
+                        .pdf-export-wrapper {
+                            background-color: #ffffff !important; color: #333333 !important;
+                            padding: 20px; width: 710px !important; box-sizing: border-box !important;
+                            word-break: break-word !important; overflow-wrap: break-word !important;
+                            font-family: 'Inter', "Meiryo", "Yu Gothic", sans-serif !important;
+                            line-height: 1.6 !important;
+                        }
+                        .pdf-export-wrapper h1, .pdf-export-wrapper h2, .pdf-export-wrapper h3 {
+                            color: #000 !important; word-break: break-word !important;
+                        }
+                        .pdf-export-wrapper code, .pdf-export-wrapper pre {
+                            background-color: #f6f8fa !important; color: #24292f !important;
+                            white-space: pre-wrap !important; word-break: break-all !important;
+                        }
+                        .pdf-export-wrapper table { width: 100% !important; table-layout: fixed !important; border-collapse: collapse; }
+                        .pdf-export-wrapper th, .pdf-export-wrapper td { border: 1px solid #d0d7de !important; padding: 6px 12px; }
+                        .pdf-export-wrapper img, .pdf-export-wrapper svg { max-width: 100% !important; height: auto !important; }
+                    `;
+                    wrapper = document.createElement('div');
+                    wrapper.className = 'markdown-body pdf-export-wrapper';
+                    wrapper.appendChild(style);
+                    wrapper.appendChild(printContainer);
+                }
 
+                // Temporarily place off-screen for SVG size calculation
+                const offscreen = document.createElement('div');
+                offscreen.style.cssText = 'position:absolute;left:-9999px;top:0';
+                offscreen.appendChild(wrapper);
+                document.body.appendChild(offscreen);
+
+                // Convert SVGs to PNG
                 const svgs = Array.from(printContainer.querySelectorAll('svg'));
                 for (const svg of svgs) {
                     try {
@@ -1575,30 +1997,28 @@
                     }
                 }
 
-                // 変換が完了したらDOMから削除する
-                document.body.removeChild(hiddenHider);
+                document.body.removeChild(offscreen);
 
                 const opt = {
-                    margin: 10,
+                    margin: isSlideMode ? 0 : 10,
                     filename: getDocTitle() + '.pdf',
                     image: { type: 'jpeg', quality: 0.98 },
                     html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', letterRendering: true },
-                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: isSlideMode ? 'landscape' : 'portrait' }
                 };
 
-                // wrapper自体には位置調整のスタイルが含まれていない状態でhtml2pdfに渡す
                 html2pdf().set(opt).from(wrapper).save().then(() => {
                     updateStatus('saved', 'PDF出力完了');
                 }).catch(err => {
-                    console.error("PDF generation failed:", err);
+                    console.error('PDF generation failed:', err);
                     updateStatus('normal', 'PDF出力失敗');
-                    alert("PDF出力中にエラーが発生しました。");
+                    alert('PDF出力中にエラーが発生しました。');
                 });
 
             } catch (err) {
-                console.error("PDF export failed:", err);
+                console.error('PDF export failed:', err);
                 updateStatus('normal', 'エラー');
-                alert("PDFエクスポート機能の実行中にエラーが発生しました。");
+                alert('PDFエクスポート機能の実行中にエラーが発生しました。');
             }
         }
 
@@ -1608,61 +2028,93 @@
                 updateStatus('saving', 'HTML出力生成中...');
 
                 const title = (document.getElementById('doc-title-input').value || '').trim() || 'Document';
-                const content = `<!DOCTYPE html>
+                const isSlideMode = previewContainer.classList.contains('marp-mode');
+                let content;
+
+                if (isSlideMode) {
+                    // Slide mode: generate a standalone presentation HTML with embedded theme
+                    const markdown = editor.getValue();
+                    const { slides, css, fm } = marpEngine.render(markdown);
+                    const slidesHtml = slides.map((s, i) =>
+                        `<div class="slide-wrapper">${s}</div>`
+                    ).join('\n');
+
+                    content = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${title}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: #1a1a2e;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2rem;
+            padding: 2rem;
+            font-family: 'Inter', sans-serif;
+        }
+        .slide-wrapper {
+            box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+            border-radius: 4px;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+        ${css.replace(/\bsection\b/g, '.slide-wrapper section')}
+        @media print {
+            body { background: #fff; gap: 0; padding: 0; }
+            .slide-wrapper { box-shadow: none; border-radius: 0; page-break-after: always; }
+        }
+    </style>
+</head>
+<body>
+${slidesHtml}
+</body>
+</html>`;
+                } else {
+                    // Document mode
+                    content = `<!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${title}</title>
     <style>
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            color: #24292f;
-            background-color: #ffffff;
-            line-height: 1.6;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 2rem;
-        }
-        h1, h2, h3, h4 { color: #000000; margin-top: 24px; margin-bottom: 16px; font-weight: 600; line-height: 1.25; }
+        body { font-family: 'Inter', -apple-system, sans-serif; color: #24292f; background: #fff; line-height: 1.6; max-width: 1200px; margin: 0 auto; padding: 2rem; }
+        h1, h2, h3, h4 { color: #000; margin-top: 24px; margin-bottom: 16px; font-weight: 600; }
         h1 { font-size: 2em; border-bottom: 1px solid #d0d7de; padding-bottom: .3em; }
         h2 { font-size: 1.5em; border-bottom: 1px solid #d0d7de; padding-bottom: .3em; }
-        p, blockquote, ul, ol, dl, table, pre, details { margin-top: 0; margin-bottom: 16px; }
+        p, blockquote, ul, ol, dl, table, pre { margin-top: 0; margin-bottom: 16px; }
         a { color: #0969da; text-decoration: none; }
         a:hover { text-decoration: underline; }
-        code { background-color: rgba(175, 184, 193, 0.2); padding: .2em .4em; border-radius: 6px; font-family: monospace; font-size: 85%; }
-        pre { background-color: #f6f8fa; padding: 16px; border-radius: 6px; overflow: auto; }
-        pre code { background-color: transparent; padding: 0; font-size: 100%; }
+        code { background: rgba(175,184,193,0.2); padding: .2em .4em; border-radius: 6px; font-family: monospace; font-size: 85%; }
+        pre { background: #f6f8fa; padding: 16px; border-radius: 6px; overflow: auto; }
+        pre code { background: transparent; padding: 0; font-size: 100%; }
         blockquote { border-left: .25em solid #d0d7de; padding: 0 1em; color: #57606a; }
-        img, svg { 
-            display: block;
-            max-width: 100%; /* 古いブラウザ用フォールバック */
-            max-width: min(1000px, 100%); 
-            height: auto; 
-            margin: 0 auto; 
-        }
-        table { border-collapse: collapse; width: 100%; max-width: 100%; overflow: auto; display: block; }
+        img, svg { display: block; max-width: min(1000px, 100%); height: auto; margin: 0 auto; }
+        table { border-collapse: collapse; width: 100%; display: block; overflow: auto; }
         th, td { border: 1px solid #d0d7de; padding: 6px 13px; }
-        th { background-color: #ffffff; font-weight: 600; }
-        tr { background-color: #ffffff; border-top: 1px solid #d0d7de; }
-        tr:nth-child(2n) { background-color: #f6f8fa; }
+        th { background: #fff; font-weight: 600; }
+        tr:nth-child(2n) { background: #f6f8fa; }
     </style>
 </head>
 <body>
-    <div class="markdown-body">
-        ${previewContainer.innerHTML}
-    </div>
+    <div class="markdown-body">${previewContainer.innerHTML}</div>
 </body>
 </html>`;
+                }
 
                 const blob = new Blob([content], { type: 'text/html;charset=utf-8' });
                 triggerDownload(blob, getDocTitle() + '.html');
                 updateStatus('saved', 'HTML出力完了');
 
             } catch (err) {
-                console.error("HTML export failed:", err);
+                console.error('HTML export failed:', err);
                 updateStatus('normal', '出力失敗');
-                alert("HTMLエクスポート機能の実行中にエラーが発生しました。");
+                alert('HTMLエクスポート機能の実行中にエラーが発生しました。');
             }
         }
 
