@@ -63,12 +63,25 @@
             padding: 0;
         }
 
+        html {
+            height: 100%;
+            overflow: hidden;
+        }
+
         body {
+            height: 100%;
+            width: 100%;
             font-family: var(--font-ui);
             background-color: var(--bg-color);
             color: var(--text-primary);
             overflow: hidden;
-            /* App-like feel */
+        }
+
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
         }
 
         /* Scrollbars */
@@ -88,13 +101,6 @@
 
         ::-webkit-scrollbar-thumb:hover {
             background: var(--text-secondary);
-        }
-
-        .app-container {
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            width: 100vw;
         }
 
         /* --- Header / Glassmorphism --- */
@@ -405,6 +411,7 @@
         /* Dark mode override for CodeMirror */
         .CodeMirror {
             flex: 1;
+            width: 100% !important;
             height: 100% !important;
             font-family: var(--font-mono) !important;
             font-size: 14px;
@@ -480,22 +487,6 @@
             transition: background-color 0.3s ease;
         }
 
-        /* --- Marp Slide Styles --- */
-        .preview-container.marp-mode {
-            background-color: #2b2b2b !important;
-            padding: 1rem !important;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 2rem;
-        }
-
-        /* Hide default markdown body styles in marp mode */
-        .preview-container.marp-mode.markdown-body {
-            max-width: none;
-            line-height: normal;
-        }
-
         /* --- Marp Slide Preview Layout --- */
         .preview-container.marp-mode {
             background-color: #1a1a2e !important;
@@ -504,6 +495,12 @@
             flex-direction: column;
             align-items: center;
             gap: 1.5rem;
+        }
+
+        /* Hide default markdown body styles in marp mode */
+        .preview-container.marp-mode.markdown-body {
+            max-width: none;
+            line-height: normal;
         }
 
         .marp-slide-wrapper {
@@ -560,8 +557,6 @@
             color: #24292f;
             font-family: var(--font-ui);
             line-height: 1.6;
-            width: 100%;
-            max-width: 100%;
         }
 
         .markdown-body h1,
@@ -787,7 +782,7 @@
                 <div class="pane-header">
                     <span>Preview</span>
                 </div>
-                <div class="preview-container markdown-body" id="preview-content">
+                <div class="preview-container" id="preview-content">
                     <!-- HTML Preview will be rendered here -->
                 </div>
                 <style id="marp-style"></style>
@@ -1385,9 +1380,11 @@ paginate: true
                 mode: "gfm", // GitHub Flavored Markdown
                 lineNumbers: true,
                 lineWrapping: true,
-                extraKeys: { "Enter": "newlineAndIndentContinueMarkdownList" },
-                viewportMargin: Infinity
+                extraKeys: { "Enter": "newlineAndIndentContinueMarkdownList" }
             });
+
+            // Set initial state of preview container
+            previewContainer.classList.add('markdown-body');
 
             // Load initial content from LocalStorage (Resume function)
             const savedContent = localStorage.getItem('lumina_autosave');
@@ -2032,12 +2029,18 @@ paginate: true
                 let content;
 
                 if (isSlideMode) {
-                    // Slide mode: generate a standalone presentation HTML with embedded theme
+                    // Slide mode: generate a full-featured slideshow HTML
                     const markdown = editor.getValue();
                     const { slides, css, fm } = marpEngine.render(markdown);
+                    const totalSlides = slides.length;
+
+                    // Build individual slide divs (hidden by default except first)
                     const slidesHtml = slides.map((s, i) =>
-                        `<div class="slide-wrapper">${s}</div>`
+                        `<div class="slide" data-index="${i}" style="display:${i === 0 ? 'flex' : 'none'}">${s}</div>`
                     ).join('\n');
+
+                    // Scope the theme CSS to .slide section
+                    const scopedCss = css.replace(/\bsection\b/g, '.slide section');
 
                     content = `<!DOCTYPE html>
 <html lang="ja">
@@ -2048,30 +2051,219 @@ paginate: true
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
-            background-color: #1a1a2e;
+            background: #0d0d1a;
+            width: 100vw;
+            height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 2rem;
-            padding: 2rem;
-            font-family: 'Inter', sans-serif;
-        }
-        .slide-wrapper {
-            box-shadow: 0 20px 60px rgba(0,0,0,0.6);
-            border-radius: 4px;
+            justify-content: center;
             overflow: hidden;
-            flex-shrink: 0;
+            font-family: 'Inter', sans-serif;
+            user-select: none;
         }
-        ${css.replace(/\bsection\b/g, '.slide-wrapper section')}
+
+        /* Progress bar */
+        #progress-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #58a6ff, #a371f7);
+            transition: width 0.3s ease;
+            z-index: 100;
+        }
+
+        /* Slide container */
+        #slideshow {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Individual slide */
+        .slide {
+            position: absolute;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+        }
+
+        /* Scale slide section to fill viewport */
+        .slide section {
+            transform-origin: center center !important;
+            transform: scale(var(--slide-scale, 1)) !important;
+        }
+
+        /* Scoped theme CSS */
+        ${scopedCss}
+
+        /* Navigation controls */
+        #controls {
+            position: fixed;
+            bottom: 1.5rem;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            background: rgba(255,255,255,0.08);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 40px;
+            padding: 0.5rem 1.2rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 200;
+        }
+
+        body:hover #controls { opacity: 1; }
+
+        .ctrl-btn {
+            background: transparent;
+            border: none;
+            color: rgba(255,255,255,0.8);
+            font-size: 1.2rem;
+            cursor: pointer;
+            padding: 0.3rem 0.6rem;
+            border-radius: 6px;
+            transition: background 0.2s, color 0.2s;
+            line-height: 1;
+        }
+        .ctrl-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+        .ctrl-btn:disabled { opacity: 0.3; cursor: default; }
+
+        #slide-counter {
+            font-size: 0.85rem;
+            color: rgba(255,255,255,0.7);
+            min-width: 4em;
+            text-align: center;
+            font-variant-numeric: tabular-nums;
+        }
+
+        #btn-fullscreen {
+            font-size: 1rem;
+        }
+
+        /* Click zones */
+        #zone-prev, #zone-next {
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            width: 20%;
+            cursor: pointer;
+            z-index: 50;
+        }
+        #zone-prev { left: 0; }
+        #zone-next { right: 0; }
+
+        /* Slide number (paginate) */
+        .slide section .page-number { display: block; }
+
+        /* Print: show all slides */
         @media print {
-            body { background: #fff; gap: 0; padding: 0; }
-            .slide-wrapper { box-shadow: none; border-radius: 0; page-break-after: always; }
+            body { background: #fff; height: auto; overflow: visible; }
+            #controls, #progress-bar, #zone-prev, #zone-next { display: none !important; }
+            .slide { position: static; display: flex !important; page-break-after: always; }
         }
     </style>
 </head>
 <body>
+    <div id="progress-bar"></div>
+
+    <div id="zone-prev" onclick="changeSlide(-1)"></div>
+    <div id="zone-next" onclick="changeSlide(1)"></div>
+
+    <div id="slideshow">
 ${slidesHtml}
+    </div>
+
+    <div id="controls">
+        <button class="ctrl-btn" id="btn-prev" onclick="changeSlide(-1)" title="前のスライド (←)">&#8592;</button>
+        <span id="slide-counter">1 / ${totalSlides}</span>
+        <button class="ctrl-btn" id="btn-next" onclick="changeSlide(1)" title="次のスライド (→)">&#8594;</button>
+        <button class="ctrl-btn" id="btn-fullscreen" onclick="toggleFullscreen()" title="フルスクリーン (F)">&#x26F6;</button>
+    </div>
+
+    <script>
+        let current = 0;
+        const total = ${totalSlides};
+        const slides = document.querySelectorAll('.slide');
+
+        function goTo(n) {
+            if (n < 0 || n >= total) return;
+            slides[current].style.display = 'none';
+            current = n;
+            slides[current].style.display = 'flex';
+            document.getElementById('slide-counter').textContent = (current + 1) + ' / ' + total;
+            document.getElementById('progress-bar').style.width = ((current + 1) / total * 100) + '%';
+            document.getElementById('btn-prev').disabled = current === 0;
+            document.getElementById('btn-next').disabled = current === total - 1;
+        }
+
+        function changeSlide(dir) { goTo(current + dir); }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', e => {
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') { e.preventDefault(); changeSlide(1); }
+            if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   { e.preventDefault(); changeSlide(-1); }
+            if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+            if (e.key === 'Home') goTo(0);
+            if (e.key === 'End')  goTo(total - 1);
+        });
+
+        // Touch swipe
+        let touchStartX = 0;
+        document.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; }, { passive: true });
+        document.addEventListener('touchend', e => {
+            const dx = e.changedTouches[0].clientX - touchStartX;
+            if (Math.abs(dx) > 50) changeSlide(dx < 0 ? 1 : -1);
+        }, { passive: true });
+
+        // Fit slide to viewport
+        function updateScale() {
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+            // Read actual section size (fallback to 1280x720)
+            const sec = document.querySelector('.slide section');
+            const slideW = sec ? sec.offsetWidth  || 1280 : 1280;
+            const slideH = sec ? sec.offsetHeight || 720  : 720;
+            const scale = Math.min(vw / slideW, vh / slideH);
+            document.documentElement.style.setProperty('--slide-scale', scale);
+            // Also size each .slide wrapper to match scaled dimensions
+            const scaledW = slideW * scale;
+            const scaledH = slideH * scale;
+            document.querySelectorAll('.slide').forEach(el => {
+                el.style.width  = scaledW + 'px';
+                el.style.height = scaledH + 'px';
+            });
+        }
+        window.addEventListener('resize', updateScale);
+
+        // Init
+        goTo(0);
+        // Delay scale calc until section is rendered
+        setTimeout(updateScale, 50);
+    <\/script>
 </body>
 </html>`;
                 } else {
