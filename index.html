@@ -1878,7 +1878,7 @@ paginate: true
                     marpStyleTag.textContent = scopedCss;
 
                     // Build slide wrappers
-                    let slidesHtml = '<div class="marpit">';
+                    let slidesHtml = '<div class="marpit" style="color-scheme: light;">';
                     slides.forEach((slideHtml, i) => {
                         slidesHtml += '<div class="marp-slide-wrapper">' + slideHtml + '</div>';
                         slidesHtml += '<div class="marp-page-number">SLIDE ' + (i + 1) + ' / ' + slides.length + '</div>';
@@ -1887,7 +1887,7 @@ paginate: true
 
                     previewContainer.innerHTML = DOMPurify.sanitize(slidesHtml, {
                         ADD_TAGS: ['section', 'style', 'svg', 'foreignObject', 'path', 'g', 'figure', 'figcaption'],
-                        ADD_ATTR: ['style', 'class', 'viewBox', 'data-marpit-svg', 'data-marpit-pagination', 'data-marpit-pagination-total', 'data-marpit-advanced-background', 'data-marpit-advanced-background-container', 'data-marpit-advanced-background-direction', 'data-marpit-advanced-background-split', 'data-bg-image', 'data-color', 'width', 'height', 'd', 'fill', 'xmlns'],
+                        ADD_ATTR: ['id', 'data-theme', 'style', 'class', 'viewBox', 'data-marpit-svg', 'data-marpit-pagination', 'data-marpit-pagination-total', 'data-marpit-advanced-background', 'data-marpit-advanced-background-container', 'data-marpit-advanced-background-direction', 'data-marpit-advanced-background-split', 'data-bg-image', 'data-color', 'width', 'height', 'd', 'fill', 'xmlns'],
                         FORBID_TAGS: ['script'],
                         FORBID_ATTR: ['onerror', 'onclick', 'onload']
                     });
@@ -2101,6 +2101,7 @@ paginate: true
                 updateStatus('saving', 'Word出力生成中...');
 
                 const exportContainer = document.createElement('div');
+                exportContainer.style.colorScheme = 'light';
                 exportContainer.innerHTML = previewContainer.innerHTML;
 
                 const wrapper = document.createElement('div');
@@ -2215,6 +2216,7 @@ paginate: true
 
                 const isSlideMode = previewContainer.classList.contains('marp-mode');
                 const printContainer = document.createElement('div');
+                printContainer.style.colorScheme = 'light';
                 printContainer.innerHTML = previewContainer.innerHTML;
 
                 let style;
@@ -2403,11 +2405,18 @@ paginate: true
             to   { opacity: 1; }
         }
 
-        /* Scale slide content to fill viewport */
+        /* Scale slide content to fill viewport for built-in engine */
+        ${marpResultH.source !== 'marp-core' ? `
         .slide > * {
             transform-origin: center center !important;
             transform: scale(var(--slide-scale, 1)) !important;
         }
+        ` : `
+        .slide > svg {
+            width: 100vw !important;
+            height: 100vh !important;
+        }
+        `}
 
         /* Scoped theme CSS */
         ${scopedCss}
@@ -2488,7 +2497,7 @@ paginate: true
     <div id="zone-prev" onclick="changeSlide(-1)"></div>
     <div id="zone-next" onclick="changeSlide(1)"></div>
 
-    <div id="slideshow" class="marpit">
+    <div id="slideshow" class="marpit" style="color-scheme: light;">
 ${slidesHtml}
     </div>
 
