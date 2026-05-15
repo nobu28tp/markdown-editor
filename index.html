@@ -373,6 +373,7 @@
             flex: 1;
             overflow: hidden;
             background: var(--bg-color);
+            min-height: 0;
         }
 
         .pane {
@@ -380,7 +381,8 @@
             display: flex;
             flex-direction: column;
             min-width: 0;
-            /* Important for flex children with content */
+            min-height: 0;
+            overflow: hidden;
             border-right: 1px solid var(--border-color);
         }
 
@@ -481,11 +483,13 @@
         .preview-container {
             flex: 1;
             min-width: 0;
+            min-height: 0;
+            overflow-x: auto;
             overflow-y: auto;
-            overflow-x: hidden;
             padding: 1.5rem 2rem;
             background-color: #ffffff;
             transition: background-color 0.3s ease;
+            contain: content;
         }
 
         /* --- Marp Slide Preview Layout --- */
@@ -611,11 +615,16 @@
 
         .markdown-body pre {
             padding: 16px;
-            overflow: auto;
+            overflow-x: auto;
+            overflow-y: visible;
+            max-width: 100%;
+            white-space: pre;
+            word-wrap: normal;
             font-size: 85%;
             line-height: 1.45;
             background-color: #f6f8fa;
             border-radius: 6px;
+            box-sizing: border-box;
         }
 
         .markdown-body code {
@@ -672,6 +681,27 @@
 
         .markdown-body table tr:nth-child(2n) {
             background-color: #f6f8fa;
+        }
+
+        /* Prevent all media from overflowing */
+        .markdown-body iframe,
+        .markdown-body video,
+        .markdown-body embed,
+        .markdown-body object {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .markdown-body svg {
+            max-width: 100%;
+            height: auto;
+        }
+
+        /* Ensure any direct block child doesn't overflow */
+        .markdown-body > * {
+            max-width: 100%;
+            box-sizing: border-box;
         }
 
         /* ── Document Title Input ── */
