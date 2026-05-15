@@ -1161,17 +1161,42 @@ paginate: true
 
         function loadMarp() {
             if (marpLoadPromise) return marpLoadPromise;
-            marpLoadPromise = import('https://cdn.jsdelivr.net/npm/@marp-team/marp-core/+esm')
-                .then(mod => {
-                    MarpClass = mod.Marp || mod.default;
-                    console.log('Marp Core loaded successfully (official library)');
-                    return MarpClass;
-                })
-                .catch(err => {
-                    console.warn('Marp Core CDN unavailable, using built-in engine:', err.message || err);
-                    MarpClass = null;
-                    return null;
-                });
+            marpLoadPromise = new Promise((resolve, reject) => {
+                if (window.Marp) {
+                    MarpClass = window.Marp;
+                    resolve(MarpClass);
+                    return;
+                }
+                const script = document.createElement('script');
+                script.src = 'marp-bundle.js';
+                script.onload = () => {
+                    if (window.Marp) {
+                        MarpClass = window.Marp;
+                        console.log('Marp Core loaded successfully from local bundle');
+                        
+                        // バッジの色も青（公式ローカル版）に更新できるようにする準備
+                        const engineIndicator = document.getElementById('engine-indicator');
+                        if (engineIndicator && previewMode === 'slide') {
+                            engineIndicator.textContent = '公式 Marp Core (Local)';
+                            engineIndicator.style.color = '#58a6ff';
+                            engineIndicator.style.background = 'rgba(88, 166, 255, 0.1)';
+                        }
+                        
+                        resolve(MarpClass);
+                    } else {
+                        reject(new Error('Marp class not found in bundle'));
+                    }
+                };
+                script.onerror = () => {
+                    console.warn('Failed to load local marp-bundle.js, using built-in engine.');
+                    reject(new Error('Failed to load local bundle'));
+                };
+                document.head.appendChild(script);
+            }).catch(err => {
+                console.warn('Marp Core unavailable:', err.message || err);
+                MarpClass = null;
+                return null;
+            });
             return marpLoadPromise;
         }
 
