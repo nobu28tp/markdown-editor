@@ -805,6 +805,11 @@
                 </div>
             </div>
             <div class="header-right">
+                <button class="btn btn-outline" id="btn-toggle-preview" title="プレビューの表示/非表示">
+                    <i data-lucide="layout-panel-left"></i>
+                    <span>プレビュー切替</span>
+                </button>
+                <div style="width: 1px; background-color: var(--border-color); margin: 0 0.5rem;"></div>
                 <button class="btn btn-outline" id="btn-help" title="Markdownの書き方">
                     <i data-lucide="help-circle"></i>
                     <span>ヘルプ</span>
@@ -845,11 +850,6 @@
             <section class="pane editor-pane" id="editor-pane">
                 <div class="pane-header">
                     <span>Editor</span>
-                    <div class="pane-header-actions">
-                        <button id="btn-toggle-preview" class="btn-pane-icon" title="プレビューの表示/非表示">
-                            <i data-lucide="layout-panel-left"></i>
-                        </button>
-                    </div>
                 </div>
                 <div class="editor-container" id="editor-container">
                     <!-- CodeMirror will attach here -->
@@ -1575,16 +1575,18 @@ paginate: true
             // Pane toggles
             document.getElementById('btn-toggle-preview').addEventListener('click', () => {
                 const previewPane = document.getElementById('preview-pane');
-                const btn = document.getElementById('btn-toggle-preview');
+                const btnIcon = document.querySelector('#btn-toggle-preview i');
                 
                 if (previewPane.style.display === 'none') {
                     previewPane.style.display = 'flex';
-                    btn.innerHTML = '<i data-lucide="layout-panel-left"></i>';
+                    btnIcon.setAttribute('data-lucide', 'layout-panel-left');
                 } else {
                     previewPane.style.display = 'none';
-                    btn.innerHTML = '<i data-lucide="layout-panel-split"></i>';
+                    btnIcon.setAttribute('data-lucide', 'layout-panel-split');
                 }
-                lucide.createIcons({ root: btn });
+                lucide.createIcons({ root: document.getElementById('btn-toggle-preview') });
+                // エディタのサイズが変化したため再描画
+                setTimeout(() => editor.refresh(), 10);
             });
 
             document.getElementById('btn-popout-preview').addEventListener('click', () => {
