@@ -500,6 +500,7 @@
             flex-direction: column;
             align-items: center;
             gap: 1.5rem;
+            container-type: inline-size;
         }
 
         /* Hide default markdown body styles in marp mode */
@@ -514,11 +515,22 @@
             border-radius: 4px;
             overflow: hidden;
             flex-shrink: 0;
+
+            /* Auto-scaling based on container width */
+            --slide-w: 1280;
+            --slide-h: 720;
+            --preview-scale: min(1, calc((100cqw - 4rem) / var(--slide-w)));
+            width: calc(var(--slide-w) * 1px * var(--preview-scale));
+            height: calc(var(--slide-h) * 1px * var(--preview-scale));
         }
 
         .marp-slide-wrapper section {
             display: block !important;
-            position: relative !important;
+            position: absolute !important;
+            top: 0;
+            left: 0;
+            transform-origin: top left !important;
+            transform: scale(var(--preview-scale)) !important;
         }
 
         .marp-page-number {
