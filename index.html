@@ -1602,15 +1602,15 @@ paginate: true
                 let extraStyles = '';
                 if (isSlideMode) {
                     const marpStyle = document.getElementById('marp-style').textContent;
-                    extraStyles = \`
-                        \${marpStyle}
+                    extraStyles = `
+                        ${marpStyle}
                         body { background-color: #1a1a2e; margin: 0; padding: 2rem; display: flex; flex-direction: column; align-items: center; gap: 1.5rem; }
                         .marp-slide-wrapper { position: relative; box-shadow: 0 20px 60px rgba(0,0,0,0.6); border-radius: 4px; overflow: hidden; width: 1280px; height: 720px; flex-shrink: 0; }
                         .marp-slide-wrapper section { transform-origin: top left !important; transform: scale(1) !important; position: absolute; top:0; left:0; width:100%; height:100%; display:block; }
                         .marp-page-number { text-align: center; font-size: 0.8rem; color: rgba(255,255,255,0.5); font-family: sans-serif; letter-spacing: 0.1em; }
-                    \`;
+                    `;
                 } else {
-                    extraStyles = \`
+                    extraStyles = `
                         body { font-family: "Inter", "Meiryo", sans-serif; color: #24292f; background: #fff; line-height: 1.6; max-width: 1000px; margin: 0 auto; padding: 2rem; }
                         h1, h2, h3, h4 { border-bottom: 1px solid #d0d7de; padding-bottom: 0.3em; }
                         pre { background: #f6f8fa; padding: 16px; border-radius: 6px; overflow: auto; }
@@ -1620,21 +1620,21 @@ paginate: true
                         th { background: #f6f8fa; }
                         blockquote { border-left: 0.25em solid #d0d7de; padding: 0 1em; color: #57606a; }
                         img, svg { max-width: 100%; height: auto; }
-                    \`;
+                    `;
                 }
 
-                newWin.document.write(\`<!DOCTYPE html>
+                newWin.document.write(`<!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="utf-8">
-    <title>\${title}</title>
+    <title>${title}</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/atom-one-dark.min.css">
-    <style>\${extraStyles}</style>
+    <style>${extraStyles}</style>
 </head>
-<body class="\${isSlideMode ? '' : 'markdown-body'}">
-    \${previewContainer.innerHTML}
+<body class="${isSlideMode ? '' : 'markdown-body'}">
+    ${previewContainer.innerHTML}
 </body>
-</html>\`);
+</html>`);
                 newWin.document.close();
             });
 
