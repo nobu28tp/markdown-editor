@@ -106,8 +106,10 @@
         /* --- Header / Glassmorphism --- */
         .glass-header {
             display: flex;
+            flex-wrap: wrap;
             justify-content: space-between;
             align-items: center;
+            gap: 1rem;
             padding: 0.75rem 1.5rem;
             background: var(--header-bg);
             backdrop-filter: blur(12px);
@@ -120,6 +122,7 @@
         .header-left {
             display: flex;
             align-items: center;
+            flex-wrap: wrap;
             gap: 1.5rem;
         }
 
@@ -196,6 +199,8 @@
         /* Buttons */
         .header-right {
             display: flex;
+            align-items: center;
+            flex-wrap: wrap;
             gap: 0.75rem;
         }
 
