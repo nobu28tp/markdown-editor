@@ -553,13 +553,19 @@
             height: calc(var(--slide-h) * 1px * var(--preview-scale, 1));
         }
 
-        .marp-slide-wrapper section {
+        .marp-slide-wrapper > section {
             display: block !important;
             position: absolute !important;
             top: 0;
             left: 0;
             transform-origin: top left !important;
             transform: scale(var(--preview-scale, 1)) !important;
+        }
+
+        .marp-slide-wrapper > svg {
+            width: 100% !important;
+            height: 100% !important;
+            display: block !important;
         }
 
         .marp-page-number {
@@ -1871,6 +1877,7 @@ paginate: true
                     if (source === 'marp-core') {
                         // 公式MarpのCSSは "div.marpit > svg" のように指定されているため、中間のwrapperを許容するように ">" の直前にセレクタを挿入する
                         scopedCss = css.replace(/div\.marpit\s*>\s*svg/g, 'div.marpit .marp-slide-wrapper > svg');
+                        scopedCss += '\ndiv.marpit { color-scheme: light; }';
                     } else {
                         // 内蔵エンジンのCSSは "section" に直接当たっているため、wrapperのsectionにスコープする
                         scopedCss = css.replace(/\bsection\b/g, '.marp-slide-wrapper section');
