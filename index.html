@@ -2137,6 +2137,18 @@ paginate: true
                 wrapper.appendChild(tempStyle);
                 document.body.appendChild(wrapper);
 
+                // Unwrap Marp Core SVGs so Word imports them as normal text blocks (same as built-in engine)
+                const marpSvgs = Array.from(exportContainer.querySelectorAll('svg[data-marpit-svg]'));
+                marpSvgs.forEach(svg => {
+                    const foreignObject = svg.querySelector('foreignObject');
+                    if (foreignObject) {
+                        while (foreignObject.firstChild) {
+                            svg.parentNode.insertBefore(foreignObject.firstChild, svg);
+                        }
+                    }
+                    svg.parentNode.removeChild(svg);
+                });
+
                 const svgs = Array.from(exportContainer.querySelectorAll('svg'));
                 for (const svg of svgs) {
                     try {
@@ -2248,17 +2260,31 @@ paginate: true
                     style = document.createElement('style');
                     let scopedCss = '';
                     if (marpResultP && marpResultP.source === 'marp-core') {
-                        scopedCss = css.replace(/div\.marpit\s*>\s*svg/g, 'div.marpit .marp-slide-wrapper > svg');
+                        // html2canvas(html2pdf)はSVGのforeignObjectを描画できないため、スライド出力時はSVGのラッパーを外す
+                        const marpSvgs = Array.from(printContainer.querySelectorAll('svg[data-marpit-svg]'));
+                        marpSvgs.forEach(svg => {
+                            const foreignObject = svg.querySelector('foreignObject');
+                            if (foreignObject) {
+                                while (foreignObject.firstChild) {
+                                    svg.parentNode.insertBefore(foreignObject.firstChild, svg);
+                                }
+                            }
+                            svg.parentNode.removeChild(svg);
+                        });
+                        scopedCss = css.replace(/div\.marpit\s*>\s*svg\s*>\s*foreignObject/g, 'div.marpit .marp-slide-wrapper');
+                        scopedCss = scopedCss.replace(/div\.marpit\s*>\s*svg/g, 'div.marpit .marp-slide-wrapper');
+                        scopedCss += '\ndiv.marpit { color-scheme: light; }';
                     } else {
                         scopedCss = css.replace(/\bsection\b/g, '.marp-slide-wrapper section');
                     }
                     style.textContent = `
-                        .marp-slide-wrapper { page-break-after: always; }
+                        .marp-slide-wrapper { page-break-after: always; width: 1280px; height: 720px; overflow: hidden; position: relative; }
                         ${scopedCss}
                         .marp-page-number { display: none; }
                         .header-bar, .page-number { display: none !important; }
                     `;
                     wrapper = document.createElement('div');
+                    wrapper.className = 'marp-mode';
                     wrapper.appendChild(style);
                     wrapper.appendChild(printContainer);
                 } else {
@@ -2295,7 +2321,7 @@ paginate: true
                 offscreen.appendChild(wrapper);
                 document.body.appendChild(offscreen);
 
-                // Convert SVGs to PNG
+                // Convert remaining SVGs (like mermaid or user SVGs) to PNG
                 const svgs = Array.from(printContainer.querySelectorAll('svg'));
                 for (const svg of svgs) {
                     try {
