@@ -1892,16 +1892,20 @@ paginate: true
                     });
                     slidesHtml += '</div>';
 
-                    let cleanHtml = DOMPurify.sanitize(slidesHtml, {
-                        USE_PROFILES: { html: true, svg: true },
-                        ADD_TAGS: ['section', 'style', 'svg', 'foreignObject', 'path', 'g', 'figure', 'figcaption'],
-                        ADD_ATTR: ['id', 'data-theme', 'style', 'class', 'viewBox', 'data-marpit-svg', 'data-marpit-pagination', 'data-marpit-pagination-total', 'data-marpit-advanced-background', 'data-marpit-advanced-background-container', 'data-marpit-advanced-background-direction', 'data-marpit-advanced-background-split', 'data-bg-image', 'data-color', 'width', 'height', 'd', 'fill', 'xmlns'],
-                        FORBID_TAGS: ['script'],
-                        FORBID_ATTR: ['onerror', 'onclick', 'onload']
-                    });
-
-                    // DOMPurify may lowercase SVG attributes when parsed as HTML. Restore viewBox case explicitly.
-                    cleanHtml = cleanHtml.replace(/viewbox=/g, 'viewBox=');
+                    let cleanHtml = slidesHtml;
+                    
+                    // DOMPurifyはSVGのforeignObjectや複雑な属性（Marpの仕様）を破壊するため、
+                    // 公式Marpエンジンの場合はサニタイズをスキップする（ローカルエディタのため自身で記述したMarkdownのみを扱う前提）
+                    if (source !== 'marp-core') {
+                        cleanHtml = DOMPurify.sanitize(slidesHtml, {
+                            USE_PROFILES: { html: true, svg: true },
+                            ADD_TAGS: ['section', 'style', 'svg', 'foreignObject', 'path', 'g', 'figure', 'figcaption'],
+                            ADD_ATTR: ['id', 'data-theme', 'style', 'class', 'viewBox', 'data-marpit-svg', 'data-marpit-pagination', 'data-marpit-pagination-total', 'data-marpit-advanced-background', 'data-marpit-advanced-background-container', 'data-marpit-advanced-background-direction', 'data-marpit-advanced-background-split', 'data-bg-image', 'data-color', 'width', 'height', 'd', 'fill', 'xmlns'],
+                            FORBID_TAGS: ['script'],
+                            FORBID_ATTR: ['onerror', 'onclick', 'onload']
+                        });
+                        cleanHtml = cleanHtml.replace(/viewbox=/g, 'viewBox=');
+                    }
                     
                     previewContainer.innerHTML = cleanHtml;
 
