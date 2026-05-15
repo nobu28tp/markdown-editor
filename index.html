@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Markdown Editor (Ver.5.1.1)</title>
+    <title>Markdown Editor (Ver.5.1.2)</title>
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -399,6 +399,32 @@
             text-transform: uppercase;
             letter-spacing: 0.05em;
             border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .pane-header-actions {
+            display: flex;
+            gap: 0.4rem;
+        }
+
+        .btn-pane-icon {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 2px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .btn-pane-icon:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.1);
         }
 
         /* Editor Specific */
@@ -764,7 +790,7 @@
             <div class="header-left">
                 <div class="logo">
                     <i data-lucide="pen-tool"></i>
-                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.1.1)</span>
+                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.1.2)</span>
                     </h1>
                 </div>
                 <div class="status-indicator" id="save-status">
@@ -818,9 +844,14 @@
         <!-- Main Content (Split View) -->
         <main class="split-view">
             <!-- Editor Pane -->
-            <section class="pane editor-pane">
+            <section class="pane editor-pane" id="editor-pane">
                 <div class="pane-header">
                     <span>Editor</span>
+                    <div class="pane-header-actions">
+                        <button id="btn-toggle-preview" class="btn-pane-icon" title="プレビューの表示/非表示">
+                            <i data-lucide="layout-panel-left"></i>
+                        </button>
+                    </div>
                 </div>
                 <div class="editor-container" id="editor-container">
                     <!-- CodeMirror will attach here -->
@@ -829,9 +860,14 @@
             </section>
 
             <!-- Preview Pane -->
-            <section class="pane preview-pane">
+            <section class="pane preview-pane" id="preview-pane">
                 <div class="pane-header">
                     <span>Preview</span>
+                    <div class="pane-header-actions">
+                        <button id="btn-popout-preview" class="btn-pane-icon" title="別タブで開く">
+                            <i data-lucide="external-link"></i>
+                        </button>
+                    </div>
                 </div>
                 <div class="preview-container" id="preview-content">
                     <!-- HTML Preview will be rendered here -->
@@ -1537,6 +1573,70 @@ paginate: true
             document.getElementById('btn-export-word').addEventListener('click', handleExportWord);
             document.getElementById('btn-export-pdf').addEventListener('click', handleExportPdf);
             document.getElementById('btn-export-html').addEventListener('click', handleExportHtml);
+
+            // Pane toggles
+            document.getElementById('btn-toggle-preview').addEventListener('click', () => {
+                const previewPane = document.getElementById('preview-pane');
+                const btn = document.getElementById('btn-toggle-preview');
+                
+                if (previewPane.style.display === 'none') {
+                    previewPane.style.display = 'flex';
+                    btn.innerHTML = '<i data-lucide="layout-panel-left"></i>';
+                } else {
+                    previewPane.style.display = 'none';
+                    btn.innerHTML = '<i data-lucide="layout-panel-split"></i>';
+                }
+                lucide.createIcons({ root: btn });
+            });
+
+            document.getElementById('btn-popout-preview').addEventListener('click', () => {
+                const title = (document.getElementById('doc-title-input').value || '').trim() || 'Markdown Preview';
+                const isSlideMode = previewContainer.classList.contains('marp-mode');
+                
+                const newWin = window.open('', '_blank');
+                if (!newWin) {
+                    alert('ポップアップがブロックされました。ブラウザの設定を確認してください。');
+                    return;
+                }
+
+                let extraStyles = '';
+                if (isSlideMode) {
+                    const marpStyle = document.getElementById('marp-style').textContent;
+                    extraStyles = \`
+                        \${marpStyle}
+                        body { background-color: #1a1a2e; margin: 0; padding: 2rem; display: flex; flex-direction: column; align-items: center; gap: 1.5rem; }
+                        .marp-slide-wrapper { position: relative; box-shadow: 0 20px 60px rgba(0,0,0,0.6); border-radius: 4px; overflow: hidden; width: 1280px; height: 720px; flex-shrink: 0; }
+                        .marp-slide-wrapper section { transform-origin: top left !important; transform: scale(1) !important; position: absolute; top:0; left:0; width:100%; height:100%; display:block; }
+                        .marp-page-number { text-align: center; font-size: 0.8rem; color: rgba(255,255,255,0.5); font-family: sans-serif; letter-spacing: 0.1em; }
+                    \`;
+                } else {
+                    extraStyles = \`
+                        body { font-family: "Inter", "Meiryo", sans-serif; color: #24292f; background: #fff; line-height: 1.6; max-width: 1000px; margin: 0 auto; padding: 2rem; }
+                        h1, h2, h3, h4 { border-bottom: 1px solid #d0d7de; padding-bottom: 0.3em; }
+                        pre { background: #f6f8fa; padding: 16px; border-radius: 6px; overflow: auto; }
+                        code { font-family: "Fira Code", monospace; background: rgba(175,184,193,0.2); padding: 0.2em 0.4em; border-radius: 6px; }
+                        table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
+                        th, td { border: 1px solid #d0d7de; padding: 6px 13px; }
+                        th { background: #f6f8fa; }
+                        blockquote { border-left: 0.25em solid #d0d7de; padding: 0 1em; color: #57606a; }
+                        img, svg { max-width: 100%; height: auto; }
+                    \`;
+                }
+
+                newWin.document.write(\`<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <title>\${title}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/atom-one-dark.min.css">
+    <style>\${extraStyles}</style>
+</head>
+<body class="\${isSlideMode ? '' : 'markdown-body'}">
+    \${previewContainer.innerHTML}
+</body>
+</html>\`);
+                newWin.document.close();
+            });
 
             // Help Modal functionalities
             const helpModal = document.getElementById('help-modal');
