@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Markdown Editor (Ver.5.1.2)</title>
+    <title>Markdown Editor (Ver.5.2.0)</title>
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -793,7 +793,7 @@
             <div class="header-left">
                 <div class="logo">
                     <i data-lucide="pen-tool"></i>
-                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.1.2)</span>
+                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.2.0)</span>
                     </h1>
                 </div>
                 <div class="status-indicator" id="save-status">
@@ -865,7 +865,10 @@
             <!-- Preview Pane -->
             <section class="pane preview-pane" id="preview-pane">
                 <div class="pane-header">
-                    <span>Preview</span>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span>Preview</span>
+                        <span id="engine-indicator" style="font-size: 0.7em; padding: 2px 6px; border-radius: 4px; display: none; font-weight: 500;"></span>
+                    </div>
                     <div class="pane-header-actions">
                         <button id="btn-popout-preview" class="btn-pane-icon" title="別タブで開く">
                             <i data-lucide="external-link"></i>
@@ -1151,7 +1154,29 @@ paginate: true
         let previewMode = 'doc'; // 'doc' or 'slide'
 
         // ============================================================
-        // Built-in Marp-compatible Slide Engine (No CDN required)
+        // Marp Core - Dynamic Loading (Non-blocking)
+        // ============================================================
+        let MarpClass = null;
+        let marpLoadPromise = null;
+
+        function loadMarp() {
+            if (marpLoadPromise) return marpLoadPromise;
+            marpLoadPromise = import('https://cdn.jsdelivr.net/npm/@marp-team/marp-core/+esm')
+                .then(mod => {
+                    MarpClass = mod.Marp || mod.default;
+                    console.log('Marp Core loaded successfully (official library)');
+                    return MarpClass;
+                })
+                .catch(err => {
+                    console.warn('Marp Core CDN unavailable, using built-in engine:', err.message || err);
+                    MarpClass = null;
+                    return null;
+                });
+            return marpLoadPromise;
+        }
+
+        // ============================================================
+        // Built-in Marp-compatible Slide Engine (Fallback)
         // ============================================================
         const MARP_THEMES = {
             default: `
@@ -1275,13 +1300,12 @@ paginate: true
             }
 
             splitSlides(body) {
-                // Split on '---' that appears on its own line, not inside code blocks
                 const lines = body.split('\n');
                 const slides = [];
                 let current = [];
                 let inCode = false;
                 for (const line of lines) {
-                    if (line.startsWith('```')) inCode = !inCode;
+                    if (line.startsWith('`' + '`' + '`')) inCode = !inCode;
                     if (!inCode && /^---\s*$/.test(line)) {
                         slides.push(current.join('\n'));
                         current = [];
@@ -1293,7 +1317,6 @@ paginate: true
                 return slides.filter(s => s.trim().length > 0);
             }
 
-            // Parse per-slide directives from HTML comments like <!-- _class: lead -->
             parseSlideDirectives(content) {
                 const directives = { class: '', backgroundColor: '', color: '' };
                 const matches = content.matchAll(/<!--\s*_([\w]+):\s*([^>]+?)\s*-->/g);
@@ -1304,7 +1327,6 @@ paginate: true
                     else if (k === 'backgroundColor' || k === 'background-color') directives.backgroundColor = v;
                     else if (k === 'color') directives.color = v;
                 }
-                // Remove the comment tags from content
                 const cleanContent = content.replace(/<!--\s*_[\w]+:\s*[^>]+?\s*-->/g, '');
                 return { directives, content: cleanContent };
             }
@@ -1314,24 +1336,24 @@ paginate: true
                 const htmlContent = marked.parse(content);
                 const classes = ['marp-slide-inner', directives.class].filter(Boolean).join(' ');
                 let inlineStyle = '';
-                if (directives.backgroundColor) inlineStyle += `background-color:${directives.backgroundColor};`;
-                if (directives.color) inlineStyle += `color:${directives.color};`;
+                if (directives.backgroundColor) inlineStyle += 'background-color:' + directives.backgroundColor + ';';
+                if (directives.color) inlineStyle += 'color:' + directives.color + ';';
 
                 let extras = '';
                 if (index === 0 && MARP_THEMES[fm.theme] !== MARP_THEMES.gaia) {
                     extras += '<div class="header-bar"></div>';
                 }
                 if (fm.paginate) {
-                    extras += `<div class="page-number">${index + 1} / ${total}</div>`;
+                    extras += '<div class="page-number">' + (index + 1) + ' / ' + total + '</div>';
                 }
                 if (fm.header) {
-                    extras += `<div style="position:absolute;top:16px;left:80px;right:80px;font-size:0.55em;color:#888;">${fm.header}</div>`;
+                    extras += '<div style="position:absolute;top:16px;left:80px;right:80px;font-size:0.55em;color:#888;">' + fm.header + '</div>';
                 }
                 if (fm.footer) {
-                    extras += `<div style="position:absolute;bottom:16px;left:80px;right:80px;font-size:0.55em;color:#888;">${fm.footer}</div>`;
+                    extras += '<div style="position:absolute;bottom:16px;left:80px;right:80px;font-size:0.55em;color:#888;">' + fm.footer + '</div>';
                 }
 
-                return `<section class="${classes}" style="${inlineStyle}">${extras}${htmlContent}</section>`;
+                return '<section class="' + classes + '" style="' + inlineStyle + '">' + extras + htmlContent + '</section>';
             }
 
             render(markdown) {
@@ -1345,6 +1367,42 @@ paginate: true
         }
 
         const marpEngine = new MarpEngine();
+
+        // ============================================================
+        // Unified Render Helper (Official Marp > Fallback Engine)
+        // ============================================================
+        // Returns { html, css, slides, fm, source } - normalized output
+        function renderWithMarp(markdownText) {
+            // Try official Marp Core first
+            if (MarpClass) {
+                try {
+                    const marp = new MarpClass({ html: true });
+                    const result = marp.render(markdownText);
+                    // Parse sections for slide array
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(result.html, 'text/html');
+                    const sections = Array.from(doc.querySelectorAll('section'));
+                    return {
+                        html: result.html,
+                        css: result.css,
+                        slides: sections.map(s => s.outerHTML),
+                        fm: null,
+                        source: 'marp-core'
+                    };
+                } catch (e) {
+                    console.error('Marp Core render error, falling back:', e);
+                }
+            }
+            // Fallback to built-in engine
+            const result = marpEngine.render(markdownText);
+            return {
+                html: null,
+                css: result.css,
+                slides: result.slides,
+                fm: result.fm,
+                source: 'built-in'
+            };
+        }
 
         // ウィジェット作成関数（非表示になったBase64データの代わりに見せるUI）
         function createHiddenWidget(isInline = false) {
@@ -1404,6 +1462,14 @@ paginate: true
 
         // Initial setup
         function init() {
+            // Start loading Marp Core in the background (non-blocking)
+            loadMarp().then(() => {
+                // Re-render preview once Marp is loaded
+                if (editor && editor.getValue()) {
+                    updatePreview(editor.getValue());
+                }
+            });
+
             if (window.mermaid) {
                 mermaid.initialize({
                     startOnLoad: false,
@@ -1754,28 +1820,40 @@ paginate: true
 
                 const shouldRenderSlide = previewMode === 'slide' || isMarpDetected;
                 const marpStyleTag = document.getElementById('marp-style');
+                const engineIndicator = document.getElementById('engine-indicator');
 
                 if (shouldRenderSlide) {
-                    const { slides, css, fm } = marpEngine.render(markdownText);
+                    const marpResult = renderWithMarp(markdownText);
+                    const { css, slides, source } = marpResult;
 
-                    // Apply theme CSS: replace 'section' selector with scoped '.marp-slide-wrapper section'
+                    // Update Engine Indicator
+                    if (engineIndicator) {
+                        engineIndicator.style.display = 'inline-block';
+                        if (source === 'marp-core') {
+                            engineIndicator.textContent = '公式 Marp Core';
+                            engineIndicator.style.color = '#58a6ff'; // Blue
+                            engineIndicator.style.background = 'rgba(88, 166, 255, 0.1)';
+                        } else {
+                            engineIndicator.textContent = '内蔵エンジン (Fallback)';
+                            engineIndicator.style.color = '#ffa657'; // Orange
+                            engineIndicator.style.background = 'rgba(255, 166, 87, 0.1)';
+                        }
+                    }
+
+                    // Apply theme CSS
                     const scopedCss = css.replace(/\bsection\b/g, '.marp-slide-wrapper section');
                     marpStyleTag.textContent = scopedCss;
 
                     // Build slide wrappers
                     let slidesHtml = '';
                     slides.forEach((slideHtml, i) => {
-                        slidesHtml += `
-                            <div class="marp-slide-wrapper">
-                                ${slideHtml}
-                            </div>
-                            <div class="marp-page-number">SLIDE ${i + 1} / ${slides.length}</div>
-                        `;
+                        slidesHtml += '<div class="marp-slide-wrapper">' + slideHtml + '</div>';
+                        slidesHtml += '<div class="marp-page-number">SLIDE ' + (i + 1) + ' / ' + slides.length + '</div>';
                     });
 
                     previewContainer.innerHTML = DOMPurify.sanitize(slidesHtml, {
-                        ADD_TAGS: ['section', 'style'],
-                        ADD_ATTR: ['style', 'class'],
+                        ADD_TAGS: ['section', 'style', 'svg', 'foreignObject', 'path', 'g'],
+                        ADD_ATTR: ['style', 'class', 'viewBox', 'data-marpit-svg', 'data-marpit-pagination', 'data-marpit-pagination-total', 'width', 'height', 'd', 'fill', 'xmlns'],
                         FORBID_TAGS: ['script'],
                         FORBID_ATTR: ['onerror', 'onclick', 'onload']
                     });
@@ -1784,6 +1862,9 @@ paginate: true
                     previewContainer.classList.remove('markdown-body');
                 } else {
                     // Document Mode
+                    if (engineIndicator) {
+                        engineIndicator.style.display = 'none';
+                    }
                     const rawHtml = marked.parse(markdownText);
                     const cleanHtml = DOMPurify.sanitize(rawHtml, {
                         ADD_TAGS: ['iframe'],
@@ -1916,7 +1997,7 @@ paginate: true
         }
 
         // ── App Version ──
-        const APP_VERSION = '5.1.0';
+        const APP_VERSION = '5.2.0';
 
         // ── Helper: Get sanitized document title for use in filenames ──
         function getDocTitle() {
@@ -2057,7 +2138,8 @@ paginate: true
                 ul, ol { margin-bottom: 16px; padding-left: 24px; }
                 img, iframe, svg { max-width: 100%; height: auto; }
                 ${isSlideMode ? (() => {
-                    const { css } = marpEngine.render(editor.getValue());
+                    const marpResultW = renderWithMarp(editor.getValue());
+                    const css = marpResultW ? marpResultW.css : '';
                     return css.replace(/\bsection\b/g, 'section') + `
                     .marp-slide-wrapper { page-break-after: always; }
                     .marp-page-number { display: none; }
@@ -2099,9 +2181,10 @@ paginate: true
                 let wrapper;
 
                 if (isSlideMode) {
-                    // Slide mode: use MarpEngine theme CSS for accurate reproduction
+                    // Slide mode: use Marp Core theme CSS for accurate reproduction
                     const markdown = editor.getValue();
-                    const { css } = marpEngine.render(markdown);
+                    const marpResultP = renderWithMarp(markdown);
+                    const css = marpResultP ? marpResultP.css : '';
 
                     style = document.createElement('style');
                     const scopedCss = css.replace(/\bsection\b/g, '.marp-slide-wrapper section');
@@ -2200,16 +2283,17 @@ paginate: true
                 if (isSlideMode) {
                     // Slide mode: generate a full-featured slideshow HTML
                     const markdown = editor.getValue();
-                    const { slides, css, fm } = marpEngine.render(markdown);
-                    const totalSlides = slides.length;
+                    const marpResultH = renderWithMarp(markdown);
+                    const { css: marpCss, slides: marpSlides } = marpResultH;
+                    const totalSlides = marpSlides.length;
 
                     // Build individual slide divs (hidden by default except first)
-                    const slidesHtml = slides.map((s, i) =>
-                        `<div class="slide" data-index="${i}" style="display:${i === 0 ? 'flex' : 'none'}">${s}</div>`
+                    const slidesHtml = marpSlides.map((slideHtml, i) =>
+                        '<div class="slide" data-index="' + i + '" style="display:' + (i === 0 ? 'flex' : 'none') + '">' + slideHtml + '</div>'
                     ).join('\n');
 
                     // Scope the theme CSS to .slide section
-                    const scopedCss = css.replace(/\bsection\b/g, '.slide section');
+                    const scopedCss = marpCss.replace(/\bsection\b/g, '.slide section');
 
                     content = `<!DOCTYPE html>
 <html lang="ja">
