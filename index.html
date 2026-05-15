@@ -526,7 +526,6 @@
             flex-direction: column;
             align-items: center;
             gap: 1.5rem;
-            container-type: inline-size;
         }
 
         /* Hide default markdown body styles in marp mode */
@@ -545,9 +544,8 @@
             /* Auto-scaling based on container width */
             --slide-w: 1280;
             --slide-h: 720;
-            --preview-scale: min(1, calc((100cqw - 4rem) / var(--slide-w)));
-            width: calc(var(--slide-w) * 1px * var(--preview-scale));
-            height: calc(var(--slide-h) * 1px * var(--preview-scale));
+            width: calc(var(--slide-w) * 1px * var(--preview-scale, 1));
+            height: calc(var(--slide-h) * 1px * var(--preview-scale, 1));
         }
 
         .marp-slide-wrapper section {
@@ -556,7 +554,7 @@
             top: 0;
             left: 0;
             transform-origin: top left !important;
-            transform: scale(var(--preview-scale)) !important;
+            transform: scale(var(--preview-scale, 1)) !important;
         }
 
         .marp-page-number {
@@ -1652,6 +1650,19 @@ paginate: true
                     helpModal.classList.remove('active');
                 }
             });
+
+            // Live Preview Scaling Observer
+            const resizeObserver = new ResizeObserver(entries => {
+                for (let entry of entries) {
+                    if (previewContainer.classList.contains('marp-mode')) {
+                        const containerWidth = entry.contentRect.width;
+                        // Calculate scale (1280 is default Marp slide width, subtract padding approx 64px)
+                        const scale = Math.min(1, (containerWidth - 64) / 1280);
+                        previewContainer.style.setProperty('--preview-scale', scale);
+                    }
+                }
+            });
+            resizeObserver.observe(previewContainer);
 
             // 4. Scroll Synchronization
             let syncTimer = null;
