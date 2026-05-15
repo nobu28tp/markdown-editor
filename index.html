@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Markdown Editor (Ver.5.1.0)</title>
+    <title>Markdown Editor (Ver.5.1.1)</title>
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -480,10 +480,11 @@
         /* Preview Specific */
         .preview-container {
             flex: 1;
+            min-width: 0;
             overflow-y: auto;
-            padding: 2rem;
+            overflow-x: hidden;
+            padding: 1.5rem 2rem;
             background-color: #ffffff;
-            /* Light theme */
             transition: background-color 0.3s ease;
         }
 
@@ -554,9 +555,14 @@
 
         /* Better typography for the preview (Markdown styles) */
         .markdown-body {
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
             color: #24292f;
             font-family: var(--font-ui);
             line-height: 1.6;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
 
         .markdown-body h1,
@@ -638,6 +644,9 @@
 
         .markdown-body img {
             max-width: 100%;
+            width: auto;
+            height: auto;
+            display: block;
             box-sizing: content-box;
             background-color: #ffffff;
         }
@@ -645,9 +654,9 @@
         .markdown-body table {
             display: block;
             width: 100%;
-            width: max-content;
             max-width: 100%;
             overflow: auto;
+            border-collapse: collapse;
         }
 
         .markdown-body table th,
@@ -713,7 +722,7 @@
             <div class="header-left">
                 <div class="logo">
                     <i data-lucide="pen-tool"></i>
-                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.1.0)</span>
+                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.1.1)</span>
                     </h1>
                 </div>
                 <div class="status-indicator" id="save-status">
