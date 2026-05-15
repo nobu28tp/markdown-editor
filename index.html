@@ -1406,11 +1406,12 @@ paginate: true
                     // Parse sections for slide array
                     const parser = new DOMParser();
                     const doc = parser.parseFromString(result.html, 'text/html');
-                    const sections = Array.from(doc.querySelectorAll('section'));
+                    // Marp Core outputs <svg data-marpit-svg> for each slide
+                    const svgs = Array.from(doc.querySelectorAll('svg[data-marpit-svg]'));
                     return {
                         html: result.html,
                         css: result.css,
-                        slides: sections.map(s => s.outerHTML),
+                        slides: svgs.map(s => s.outerHTML),
                         fm: null,
                         source: 'marp-core'
                     };
@@ -1865,20 +1866,28 @@ paginate: true
                         }
                     }
 
-                    // Apply theme CSS
-                    const scopedCss = css.replace(/\bsection\b/g, '.marp-slide-wrapper section');
+                    // Apply theme CSS based on engine source
+                    let scopedCss = '';
+                    if (source === 'marp-core') {
+                        // 公式MarpのCSSは "div.marpit > svg" のように指定されているため、中間のwrapperを許容するように ">" の直前にセレクタを挿入する
+                        scopedCss = css.replace(/div\.marpit\s*>\s*svg/g, 'div.marpit .marp-slide-wrapper > svg');
+                    } else {
+                        // 内蔵エンジンのCSSは "section" に直接当たっているため、wrapperのsectionにスコープする
+                        scopedCss = css.replace(/\bsection\b/g, '.marp-slide-wrapper section');
+                    }
                     marpStyleTag.textContent = scopedCss;
 
                     // Build slide wrappers
-                    let slidesHtml = '';
+                    let slidesHtml = '<div class="marpit">';
                     slides.forEach((slideHtml, i) => {
                         slidesHtml += '<div class="marp-slide-wrapper">' + slideHtml + '</div>';
                         slidesHtml += '<div class="marp-page-number">SLIDE ' + (i + 1) + ' / ' + slides.length + '</div>';
                     });
+                    slidesHtml += '</div>';
 
                     previewContainer.innerHTML = DOMPurify.sanitize(slidesHtml, {
-                        ADD_TAGS: ['section', 'style', 'svg', 'foreignObject', 'path', 'g'],
-                        ADD_ATTR: ['style', 'class', 'viewBox', 'data-marpit-svg', 'data-marpit-pagination', 'data-marpit-pagination-total', 'width', 'height', 'd', 'fill', 'xmlns'],
+                        ADD_TAGS: ['section', 'style', 'svg', 'foreignObject', 'path', 'g', 'figure', 'figcaption'],
+                        ADD_ATTR: ['style', 'class', 'viewBox', 'data-marpit-svg', 'data-marpit-pagination', 'data-marpit-pagination-total', 'data-marpit-advanced-background', 'data-marpit-advanced-background-container', 'data-marpit-advanced-background-direction', 'data-marpit-advanced-background-split', 'data-bg-image', 'data-color', 'width', 'height', 'd', 'fill', 'xmlns'],
                         FORBID_TAGS: ['script'],
                         FORBID_ATTR: ['onerror', 'onclick', 'onload']
                     });
@@ -2165,7 +2174,13 @@ paginate: true
                 ${isSlideMode ? (() => {
                     const marpResultW = renderWithMarp(editor.getValue());
                     const css = marpResultW ? marpResultW.css : '';
-                    return css.replace(/\bsection\b/g, 'section') + `
+                    let scopedCss = '';
+                    if (marpResultW && marpResultW.source === 'marp-core') {
+                        scopedCss = css.replace(/div\.marpit\s*>\s*svg/g, 'div.marpit .marp-slide-wrapper > svg');
+                    } else {
+                        scopedCss = css.replace(/\bsection\b/g, '.marp-slide-wrapper section');
+                    }
+                    return scopedCss + `
                     .marp-slide-wrapper { page-break-after: always; }
                     .marp-page-number { display: none; }
                     .header-bar, .page-number { display: none !important; }`;
@@ -2212,7 +2227,12 @@ paginate: true
                     const css = marpResultP ? marpResultP.css : '';
 
                     style = document.createElement('style');
-                    const scopedCss = css.replace(/\bsection\b/g, '.marp-slide-wrapper section');
+                    let scopedCss = '';
+                    if (marpResultP && marpResultP.source === 'marp-core') {
+                        scopedCss = css.replace(/div\.marpit\s*>\s*svg/g, 'div.marpit .marp-slide-wrapper > svg');
+                    } else {
+                        scopedCss = css.replace(/\bsection\b/g, '.marp-slide-wrapper section');
+                    }
                     style.textContent = `
                         .marp-slide-wrapper { page-break-after: always; }
                         ${scopedCss}
@@ -2317,8 +2337,13 @@ paginate: true
                         '<div class="slide" data-index="' + i + '" style="display:' + (i === 0 ? 'flex' : 'none') + '">' + slideHtml + '</div>'
                     ).join('\n');
 
-                    // Scope the theme CSS to .slide section
-                    const scopedCss = marpCss.replace(/\bsection\b/g, '.slide section');
+                    // Scope the theme CSS based on engine source
+                    let scopedCss = '';
+                    if (marpResultH.source === 'marp-core') {
+                        scopedCss = marpCss.replace(/div\.marpit\s*>\s*svg/g, '#slideshow.marpit .slide > svg');
+                    } else {
+                        scopedCss = marpCss.replace(/\bsection\b/g, '.slide section');
+                    }
 
                     content = `<!DOCTYPE html>
 <html lang="ja">
@@ -2378,8 +2403,8 @@ paginate: true
             to   { opacity: 1; }
         }
 
-        /* Scale slide section to fill viewport */
-        .slide section {
+        /* Scale slide content to fill viewport */
+        .slide > * {
             transform-origin: center center !important;
             transform: scale(var(--slide-scale, 1)) !important;
         }
@@ -2463,7 +2488,7 @@ paginate: true
     <div id="zone-prev" onclick="changeSlide(-1)"></div>
     <div id="zone-next" onclick="changeSlide(1)"></div>
 
-    <div id="slideshow">
+    <div id="slideshow" class="marpit">
 ${slidesHtml}
     </div>
 
