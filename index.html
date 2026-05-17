@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Markdown Editor (Ver.5.2.0)</title>
+    <title>Markdown Editor (Ver.5.2.1)</title>
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -553,7 +553,7 @@
             height: calc(var(--slide-h) * 1px * var(--preview-scale, 1));
         }
 
-        .marp-slide-wrapper > section {
+        .marp-slide-wrapper>section {
             display: block !important;
             position: absolute !important;
             top: 0;
@@ -562,7 +562,7 @@
             transform: scale(var(--preview-scale, 1)) !important;
         }
 
-        .marp-slide-wrapper > svg {
+        .marp-slide-wrapper>svg {
             width: 100% !important;
             height: 100% !important;
             display: block !important;
@@ -571,7 +571,7 @@
         .marp-page-number {
             text-align: center;
             font-size: 0.7rem;
-            color: rgba(255,255,255,0.4);
+            color: rgba(255, 255, 255, 0.4);
             margin-top: -0.8rem;
             letter-spacing: 0.1em;
         }
@@ -746,7 +746,7 @@
         }
 
         /* Ensure any direct block child doesn't overflow */
-        .markdown-body > * {
+        .markdown-body>* {
             max-width: 100%;
             box-sizing: border-box;
         }
@@ -799,7 +799,7 @@
             <div class="header-left">
                 <div class="logo">
                     <i data-lucide="pen-tool"></i>
-                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.2.0)</span>
+                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.2.1)</span>
                     </h1>
                 </div>
                 <div class="status-indicator" id="save-status">
@@ -873,7 +873,8 @@
                 <div class="pane-header">
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <span>Preview</span>
-                        <span id="engine-indicator" style="font-size: 0.7em; padding: 2px 6px; border-radius: 4px; display: none; font-weight: 500;"></span>
+                        <span id="engine-indicator"
+                            style="font-size: 0.7em; padding: 2px 6px; border-radius: 4px; display: none; font-weight: 500;"></span>
                     </div>
                     <div class="pane-header-actions">
                         <button id="btn-popout-preview" class="btn-pane-icon" title="別タブで開く">
@@ -1064,7 +1065,8 @@
                     </tbody>
                 </table>
 
-                <h3 style="margin: 1.5rem 0.75rem 0.5rem; font-size: 1.1em; color: var(--text-primary);">🖼️ Marp スライド記法</h3>
+                <h3 style="margin: 1.5rem 0.75rem 0.5rem; font-size: 1.1em; color: var(--text-primary);">🖼️ Marp スライド記法
+                </h3>
                 <table class="cheat-sheet-table">
                     <thead>
                         <tr>
@@ -1124,9 +1126,11 @@
                     </tbody>
                 </table>
 
-                <div style="margin: 1rem 0.75rem; padding: 0.75rem 1rem; background: rgba(88,166,255,0.1); border-left: 3px solid #58a6ff; border-radius: 4px; font-size: 0.85em; color: var(--text-secondary);">
+                <div
+                    style="margin: 1rem 0.75rem; padding: 0.75rem 1rem; background: rgba(88,166,255,0.1); border-left: 3px solid #58a6ff; border-radius: 4px; font-size: 0.85em; color: var(--text-secondary);">
                     <strong style="color: var(--text-primary);">📝 Marpサンプル</strong><br>
-                    <pre style="margin-top: 0.5rem; background: rgba(0,0,0,0.3); padding: 0.75rem; border-radius: 4px; font-size: 0.8em; color: #a5d6ff;">---
+                    <pre
+                        style="margin-top: 0.5rem; background: rgba(0,0,0,0.3); padding: 0.75rem; border-radius: 4px; font-size: 0.8em; color: #a5d6ff;">---
 marp: true
 theme: gaia
 paginate: true
@@ -1179,7 +1183,7 @@ paginate: true
                     if (window.Marp) {
                         MarpClass = window.Marp;
                         console.log('Marp Core loaded successfully from local bundle');
-                        
+
                         // バッジの色も青（公式ローカル版）に更新できるようにする準備
                         const engineIndicator = document.getElementById('engine-indicator');
                         if (engineIndicator && previewMode === 'slide') {
@@ -1187,7 +1191,7 @@ paginate: true
                             engineIndicator.style.color = '#58a6ff';
                             engineIndicator.style.background = 'rgba(88, 166, 255, 0.1)';
                         }
-                        
+
                         resolve(MarpClass);
                     } else {
                         reject(new Error('Marp class not found in bundle'));
@@ -1679,7 +1683,7 @@ paginate: true
             document.getElementById('btn-toggle-preview').addEventListener('click', () => {
                 const previewPane = document.getElementById('preview-pane');
                 const btnIcon = document.querySelector('#btn-toggle-preview i');
-                
+
                 if (previewPane.style.display === 'none') {
                     previewPane.style.display = 'flex';
                     btnIcon.setAttribute('data-lucide', 'layout-panel-left');
@@ -1695,7 +1699,7 @@ paginate: true
             document.getElementById('btn-popout-preview').addEventListener('click', () => {
                 const title = (document.getElementById('doc-title-input').value || '').trim() || 'Markdown Preview';
                 const isSlideMode = previewContainer.classList.contains('marp-mode');
-                
+
                 const newWin = window.open('', '_blank');
                 if (!newWin) {
                     alert('ポップアップがブロックされました。ブラウザの設定を確認してください。');
@@ -1893,7 +1897,7 @@ paginate: true
                     slidesHtml += '</div>';
 
                     let cleanHtml = slidesHtml;
-                    
+
                     // DOMPurifyはSVGのforeignObjectや複雑な属性（Marpの仕様）を破壊するため、
                     // 公式Marpエンジンの場合はサニタイズをスキップする（ローカルエディタのため自身で記述したMarkdownのみを扱う前提）
                     if (source !== 'marp-core') {
@@ -1906,7 +1910,7 @@ paginate: true
                         });
                         cleanHtml = cleanHtml.replace(/viewbox=/g, 'viewBox=');
                     }
-                    
+
                     previewContainer.innerHTML = cleanHtml;
 
                     previewContainer.classList.add('marp-mode');
@@ -2028,7 +2032,7 @@ paginate: true
                     localStorage.setItem('lumina_autosave', content);
                     updateStatus('saved', 'ファイルを開きました');
                 };
-                reader.readAsText(file);
+                reader.readAsText(file, 'UTF-8');
             };
 
             // Trigger the file browser dialog
@@ -2048,7 +2052,7 @@ paginate: true
         }
 
         // ── App Version ──
-        const APP_VERSION = '5.2.0';
+        const APP_VERSION = '5.2.1';
 
         // ── Helper: Get sanitized document title for use in filenames ──
         function getDocTitle() {
@@ -2177,7 +2181,7 @@ paginate: true
 
                 const title = (document.getElementById('doc-title-input').value || '').trim() || 'Document';
                 const isSlideMode = previewContainer.classList.contains('marp-mode');
-                
+
                 // Inline css for Word Document styles
                 let content = `
         <!DOCTYPE html>
@@ -2202,19 +2206,19 @@ paginate: true
                 ul, ol { margin-bottom: 16px; padding-left: 24px; }
                 img, iframe, svg { max-width: 100%; height: auto; }
                 ${isSlideMode ? (() => {
-                    const marpResultW = renderWithMarp(editor.getValue());
-                    const css = marpResultW ? marpResultW.css : '';
-                    let scopedCss = '';
-                    if (marpResultW && marpResultW.source === 'marp-core') {
-                        scopedCss = css.replace(/div\.marpit\s*>\s*svg/g, 'div.marpit .marp-slide-wrapper > svg');
-                    } else {
-                        scopedCss = css.replace(/\bsection\b/g, '.marp-slide-wrapper section');
-                    }
-                    return scopedCss + `
+                        const marpResultW = renderWithMarp(editor.getValue());
+                        const css = marpResultW ? marpResultW.css : '';
+                        let scopedCss = '';
+                        if (marpResultW && marpResultW.source === 'marp-core') {
+                            scopedCss = css.replace(/div\.marpit\s*>\s*svg/g, 'div.marpit .marp-slide-wrapper > svg');
+                        } else {
+                            scopedCss = css.replace(/\bsection\b/g, '.marp-slide-wrapper section');
+                        }
+                        return scopedCss + `
                     .marp-slide-wrapper { page-break-after: always; }
                     .marp-page-number { display: none; }
                     .header-bar, .page-number { display: none !important; }`;
-                })() : ''}
+                    })() : ''}
             </style>
         </head>
         <body>
