@@ -830,6 +830,16 @@
                     <i data-lucide="file-plus"></i>
                     <span>新規作成</span>
                 </button>
+                <div class="encoding-selector-wrap" style="display: flex; align-items: center; gap: 0.4rem; background: rgba(0, 0, 0, 0.2); border: 1px solid var(--border-color); border-radius: 6px; padding: 0 0.5rem; height: 38px; box-sizing: border-box;">
+                    <label for="encoding-select" style="cursor: pointer; display: flex; align-items: center; color: var(--text-secondary);" title="読み込み時の文字コード">
+                        <i data-lucide="languages" style="width: 16px; height: 16px;"></i>
+                    </label>
+                    <select id="encoding-select" style="background: transparent; border: none; color: var(--text-primary); font-size: 0.875rem; font-family: var(--font-ui); cursor: pointer; outline: none; padding-right: 0.5rem; height: 100%;">
+                        <option value="UTF-8" style="background: var(--pane-bg); color: var(--text-primary);">UTF-8 (推奨)</option>
+                        <option value="Shift_JIS" style="background: var(--pane-bg); color: var(--text-primary);">Shift_JIS</option>
+                        <option value="EUC-JP" style="background: var(--pane-bg); color: var(--text-primary);">EUC-JP</option>
+                    </select>
+                </div>
                 <button class="btn btn-outline" id="btn-open">
                     <i data-lucide="folder-open"></i>
                     <span>開く</span>
@@ -2023,6 +2033,8 @@ paginate: true
                 const file = e.target.files[0];
                 if (!file) return;
 
+                const encoding = document.getElementById('encoding-select').value || 'UTF-8';
+
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     const content = event.target.result;
@@ -2030,9 +2042,9 @@ paginate: true
                     updatePreview(content);
                     // Instantly save to local storage as well
                     localStorage.setItem('lumina_autosave', content);
-                    updateStatus('saved', 'ファイルを開きました');
+                    updateStatus('saved', `ファイルを開きました (${encoding})`);
                 };
-                reader.readAsText(file, 'UTF-8');
+                reader.readAsText(file, encoding);
             };
 
             // Trigger the file browser dialog
