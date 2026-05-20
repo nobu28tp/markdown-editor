@@ -2088,7 +2088,7 @@ paginate: true
             }
         }
 
-        // Helper: Convert SVG to PNG Base64
+        // Helper: Convert SVG to PNG Base64 (Robust version with Blob for Japanese support)
         function convertSvgToPng(svgElement) {
             return new Promise((resolve, reject) => {
                 const rect = svgElement.getBoundingClientRect();
@@ -2104,7 +2104,10 @@ paginate: true
                     svgString = svgString.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
                 }
 
-                const imgSrc = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgString)));
+                // Use Blob and createObjectURL to support Japanese (multibyte) characters safely
+                const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+                const imgSrc = URL.createObjectURL(blob);
+
                 const img = new Image();
                 img.crossOrigin = "Anonymous";
                 img.onload = function () {
@@ -2117,13 +2120,20 @@ paginate: true
                     ctx.fillStyle = '#ffffff';
                     ctx.fillRect(0, 0, width, height);
                     ctx.drawImage(img, 0, 0, width, height);
+                    
+                    const pngData = canvas.toDataURL('image/png');
+                    URL.revokeObjectURL(imgSrc); // Clean up memory
+                    
                     resolve({
-                        src: canvas.toDataURL('image/png'),
+                        src: pngData,
                         width: width,
                         height: height
                     });
                 };
-                img.onerror = reject;
+                img.onerror = function (err) {
+                    URL.revokeObjectURL(imgSrc); // Clean up memory
+                    reject(err);
+                };
                 img.src = imgSrc;
             });
         }
@@ -2378,7 +2388,7 @@ paginate: true
         }
 
         // Export as .html
-        function handleExportHtml() {
+        async function handleExportHtml() {
             try {
                 updateStatus('saving', 'HTML出力生成中...');
 
@@ -2392,6 +2402,36 @@ paginate: true
                     const marpResultH = renderWithMarp(markdown);
                     const { css: marpCss, slides: marpSlides } = marpResultH;
                     const totalSlides = marpSlides.length;
+
+                    // Render Mermaid Diagrams in slides before exporting (Static pre-rendering approach)
+                    if (window.mermaid) {
+                        for (let i = 0; i < marpSlides.length; i++) {
+                            const tempDiv = document.createElement('div');
+                            tempDiv.innerHTML = marpSlides[i];
+                            const mermaidBlocks = tempDiv.querySelectorAll('code.language-mermaid');
+                            if (mermaidBlocks.length > 0) {
+                                for (let j = 0; j < mermaidBlocks.length; j++) {
+                                    const block = mermaidBlocks[j];
+                                    try {
+                                        const code = block.textContent;
+                                        const id = 'mermaid-export-' + i + '-' + j + '-' + Math.random().toString(36).substr(2, 9);
+                                        const { svg } = await mermaid.render(id, code);
+                                        const container = document.createElement('div');
+                                        container.className = 'mermaid-container';
+                                        container.style.display = 'flex';
+                                        container.style.justifyContent = 'center';
+                                        container.style.margin = '1.5rem 0';
+                                        container.innerHTML = svg;
+                                        block.parentNode.replaceWith(container);
+                                    } catch (err) {
+                                        console.error('Export Mermaid render error:', err);
+                                        block.style.color = '#ff6b6b';
+                                    }
+                                }
+                                marpSlides[i] = tempDiv.innerHTML;
+                            }
+                        }
+                    }
 
                     // Build individual slide divs (hidden by default except first)
                     const slidesHtml = marpSlides.map((slideHtml, i) =>
