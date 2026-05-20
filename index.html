@@ -536,6 +536,11 @@
             line-height: normal !important;
         }
 
+        /* SVG内部はコンテナのfont-sizeを継承させず、Mermaid本来のサイズ計算を維持する */
+        .mermaid-container svg {
+            font-size: initial !important;
+        }
+
         .mermaid-container text,
         .mermaid-container text *,
         .mermaid-container span,
@@ -1975,19 +1980,14 @@ paginate: true
                             const code = block.textContent;
                             const id = 'mermaid-diagram-' + Math.random().toString(36).substr(2, 9);
                             const { svg } = await mermaid.render(id, code);
+                            // SVG文字列からtextLengthとlengthAdjustを正規表現で完全に除去（DOM操作では効かないケースがあるため文字列レベルで処理）
+                            const cleanSvg = svg.replace(/\s+textLength="[^"]*"/g, '').replace(/\s+lengthAdjust="[^"]*"/g, '');
                             const container = document.createElement('div');
                             container.className = 'mermaid-container';
                             container.style.display = 'flex';
                             container.style.justifyContent = 'center';
                             container.style.margin = '1.5rem 0';
-                            container.innerHTML = svg;
-
-                            // Remove textLength & lengthAdjust from all elements (including text and tspan) to prevent Japanese characters from being squished into tiny dots (iOS Safari, Windows Chrome, etc.)
-                            const squishedElements = container.querySelectorAll('[textLength], [lengthAdjust]');
-                            squishedElements.forEach(el => {
-                                el.removeAttribute('textLength');
-                                el.removeAttribute('lengthAdjust');
-                            });
+                            container.innerHTML = cleanSvg;
 
                             block.parentNode.replaceWith(container);
                         } catch (err) {
@@ -2268,6 +2268,7 @@ paginate: true
                     letter-spacing: normal !important;
                     line-height: normal !important;
                 }
+                .mermaid-container svg { font-size: initial !important; }
                 .mermaid-container text, .mermaid-container text *, .mermaid-container span, .mermaid-container div,
                 div.marpit .mermaid-container text, div.marpit .mermaid-container text *, div.marpit .mermaid-container span, div.marpit .mermaid-container div {
                     fill: #333333 !important;
@@ -2362,6 +2363,7 @@ paginate: true
                             letter-spacing: normal !important;
                             line-height: normal !important;
                         }
+                        .mermaid-container svg { font-size: initial !important; }
                         .mermaid-container text, .mermaid-container text *, .mermaid-container span, .mermaid-container div,
                         div.marpit .mermaid-container text, div.marpit .mermaid-container text *, div.marpit .mermaid-container span, div.marpit .mermaid-container div {
                             fill: #333333 !important;
@@ -2401,6 +2403,7 @@ paginate: true
                             letter-spacing: normal !important;
                             line-height: normal !important;
                         }
+                        .mermaid-container svg { font-size: initial !important; }
                         .mermaid-container text, .mermaid-container text *, .mermaid-container span, .mermaid-container div,
                         .pdf-export-wrapper .mermaid-container text, .pdf-export-wrapper .mermaid-container text *, .pdf-export-wrapper .mermaid-container span, .pdf-export-wrapper .mermaid-container div {
                             fill: #333333 !important;
@@ -2497,18 +2500,14 @@ paginate: true
                                         const code = block.textContent;
                                         const id = 'mermaid-export-' + i + '-' + j + '-' + Math.random().toString(36).substr(2, 9);
                                         const { svg } = await mermaid.render(id, code);
+                                        // SVG文字列からtextLengthとlengthAdjustを正規表現で完全に除去
+                                        const cleanSvg = svg.replace(/\s+textLength="[^"]*"/g, '').replace(/\s+lengthAdjust="[^"]*"/g, '');
                                         const container = document.createElement('div');
                                         container.className = 'mermaid-container';
                                         container.style.display = 'flex';
                                         container.style.justifyContent = 'center';
                                         container.style.margin = '1.5rem 0';
-                                        container.innerHTML = svg;
-                                        // Remove textLength & lengthAdjust from all elements (including text and tspan) to prevent Japanese characters from being squished into tiny dots (iOS Safari, Windows Chrome, etc.)
-                                        const squishedElements = container.querySelectorAll('[textLength], [lengthAdjust]');
-                                        squishedElements.forEach(el => {
-                                            el.removeAttribute('textLength');
-                                            el.removeAttribute('lengthAdjust');
-                                        });
+                                        container.innerHTML = cleanSvg;
 
                                         block.parentNode.replaceWith(container);
                                     } catch (err) {
@@ -2686,6 +2685,7 @@ paginate: true
             letter-spacing: normal !important;
             line-height: normal !important;
         }
+        .mermaid-container svg { font-size: initial !important; }
         .mermaid-container text, .mermaid-container text *, .mermaid-container span, .mermaid-container div,
         #slideshow .mermaid-container text, #slideshow .mermaid-container text *, #slideshow .mermaid-container span, #slideshow .mermaid-container div {
             fill: #333333 !important;
@@ -2826,6 +2826,7 @@ ${slidesHtml}
             letter-spacing: normal !important;
             line-height: normal !important;
         }
+        .mermaid-container svg { font-size: initial !important; }
         .mermaid-container text, .mermaid-container text *, .mermaid-container span, .mermaid-container div,
         .markdown-body .mermaid-container text, .markdown-body .mermaid-container text *, .markdown-body .mermaid-container span, .markdown-body .mermaid-container div {
             fill: #333333 !important;
