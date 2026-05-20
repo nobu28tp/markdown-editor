@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Markdown Editor (Ver.5.2.1)</title>
+    <title>Markdown Editor (Ver.5.2.2)</title>
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -812,7 +812,7 @@
             <div class="header-left">
                 <div class="logo">
                     <i data-lucide="pen-tool"></i>
-                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.2.1)</span>
+                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.2.2)</span>
                     </h1>
                 </div>
                 <div class="status-indicator" id="save-status">
@@ -1543,7 +1543,7 @@ paginate: true
                         primaryBorderColor: '#888888',
                         primaryTextColor: '#333333',
                         lineColor: '#666666',
-                        fontFamily: 'var(--font-ui)'
+                        fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
                     }
                 });
             }
@@ -2077,7 +2077,7 @@ paginate: true
         }
 
         // ── App Version ──
-        const APP_VERSION = '5.2.1';
+        const APP_VERSION = '5.2.2';
 
         // ── Helper: Get sanitized document title for use in filenames ──
         function getDocTitle() {
@@ -2424,9 +2424,18 @@ paginate: true
 
                     // Render Mermaid Diagrams in slides before exporting (Static pre-rendering approach)
                     if (window.mermaid) {
+                        // Create temporary container to attach nodes to DOM for correct text measurement (getBBox)
+                        const tempContainer = document.createElement('div');
+                        tempContainer.style.position = 'absolute';
+                        tempContainer.style.left = '-9999px';
+                        tempContainer.style.top = '0';
+                        document.body.appendChild(tempContainer);
+
                         for (let i = 0; i < marpSlides.length; i++) {
                             const tempDiv = document.createElement('div');
                             tempDiv.innerHTML = marpSlides[i];
+                            tempContainer.appendChild(tempDiv); // Attach to DOM
+
                             const mermaidBlocks = tempDiv.querySelectorAll('code.language-mermaid');
                             if (mermaidBlocks.length > 0) {
                                 for (let j = 0; j < mermaidBlocks.length; j++) {
@@ -2449,7 +2458,9 @@ paginate: true
                                 }
                                 marpSlides[i] = tempDiv.innerHTML;
                             }
+                            tempContainer.removeChild(tempDiv); // Detach from DOM
                         }
+                        document.body.removeChild(tempContainer); // Clean up
                     }
 
                     // Build individual slide divs (hidden by default except first)
