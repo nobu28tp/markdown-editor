@@ -521,6 +521,19 @@
             background-color: #ffffff;
             transition: background-color 0.3s ease;
             contain: content;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+
+        /* Mermaid Text Color Protection (Prevent white-out override by themes) */
+        .mermaid-container text,
+        .mermaid-container text *,
+        .mermaid-container span,
+        .mermaid-container div {
+            fill: #333333 !important;
+            color: #333333 !important;
         }
 
         /* --- Marp Slide Preview Layout --- */
@@ -1522,7 +1535,7 @@ paginate: true
                     theme: 'base',
                     securityLevel: 'loose',
                     flowchart: {
-                        htmlLabels: true,
+                        htmlLabels: false,
                         useMaxWidth: true
                     },
                     themeVariables: {
@@ -2227,6 +2240,8 @@ paginate: true
                 p, span, div { overflow-wrap: break-word; word-break: break-word; }
                 ul, ol { margin-bottom: 16px; padding-left: 24px; }
                 img, iframe, svg { max-width: 100%; height: auto; }
+                /* Mermaid Text Color Protection */
+                .mermaid-container text, .mermaid-container text *, .mermaid-container span, .mermaid-container div { fill: #333333 !important; color: #333333 !important; }
                 ${isSlideMode ? (() => {
                         const marpResultW = renderWithMarp(editor.getValue());
                         const css = marpResultW ? marpResultW.css : '';
@@ -2308,6 +2323,8 @@ paginate: true
                         ${scopedCss}
                         .marp-page-number { display: none; }
                         .header-bar, .page-number { display: none !important; }
+                        /* Mermaid Text Color Protection */
+                        .mermaid-container text, .mermaid-container text *, .mermaid-container span, .mermaid-container div { fill: #333333 !important; color: #333333 !important; }
                     `;
                     wrapper = document.createElement('div');
                     wrapper.className = 'marp-mode';
@@ -2334,6 +2351,8 @@ paginate: true
                         .pdf-export-wrapper table { width: 100% !important; table-layout: fixed !important; border-collapse: collapse; }
                         .pdf-export-wrapper th, .pdf-export-wrapper td { border: 1px solid #d0d7de !important; padding: 6px 12px; }
                         .pdf-export-wrapper img, .pdf-export-wrapper svg { max-width: 100% !important; height: auto !important; }
+                        /* Mermaid Text Color Protection */
+                        .mermaid-container text, .mermaid-container text *, .mermaid-container span, .mermaid-container div { fill: #333333 !important; color: #333333 !important; }
                     `;
                     wrapper = document.createElement('div');
                     wrapper.className = 'markdown-body pdf-export-wrapper';
@@ -2588,6 +2607,8 @@ paginate: true
             #controls, #progress-bar, #zone-prev, #zone-next { display: none !important; }
             .slide { position: static; display: flex !important; page-break-after: always; }
         }
+        /* Mermaid Text Color Protection */
+        .mermaid-container text, .mermaid-container text *, .mermaid-container span, .mermaid-container div { fill: #333333 !important; color: #333333 !important; }
     </style>
 </head>
 <body>
@@ -2702,6 +2723,8 @@ ${slidesHtml}
         th, td { border: 1px solid #d0d7de; padding: 6px 13px; }
         th { background: #fff; font-weight: 600; }
         tr:nth-child(2n) { background: #f6f8fa; }
+        /* Mermaid Text Color Protection */
+        .mermaid-container text, .mermaid-container text *, .mermaid-container span, .mermaid-container div { fill: #333333 !important; color: #333333 !important; }
     </style>
 </head>
 <body>
