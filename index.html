@@ -1977,6 +1977,14 @@ paginate: true
                             container.style.justifyContent = 'center';
                             container.style.margin = '1.5rem 0';
                             container.innerHTML = svg;
+
+                            // Remove textLength & lengthAdjust to prevent Japanese characters from being squished into tiny dots (iOS Safari, Windows Chrome, etc.)
+                            const svgTexts = container.querySelectorAll('text');
+                            svgTexts.forEach(t => {
+                                t.removeAttribute('textLength');
+                                t.removeAttribute('lengthAdjust');
+                            });
+
                             block.parentNode.replaceWith(container);
                         } catch (err) {
                             console.error('Mermaid render error:', err);
@@ -2482,6 +2490,13 @@ paginate: true
                                         container.style.justifyContent = 'center';
                                         container.style.margin = '1.5rem 0';
                                         container.innerHTML = svg;
+                                        // Remove textLength & lengthAdjust to prevent Japanese characters from being squished into tiny dots (iOS Safari, Windows Chrome, etc.)
+                                        const svgTexts = container.querySelectorAll('text');
+                                        svgTexts.forEach(t => {
+                                            t.removeAttribute('textLength');
+                                            t.removeAttribute('lengthAdjust');
+                                        });
+
                                         block.parentNode.replaceWith(container);
                                     } catch (err) {
                                         console.error('Export Mermaid render error:', err);
