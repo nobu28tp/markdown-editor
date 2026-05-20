@@ -1978,11 +1978,11 @@ paginate: true
                             container.style.margin = '1.5rem 0';
                             container.innerHTML = svg;
 
-                            // Remove textLength & lengthAdjust to prevent Japanese characters from being squished into tiny dots (iOS Safari, Windows Chrome, etc.)
-                            const svgTexts = container.querySelectorAll('text');
-                            svgTexts.forEach(t => {
-                                t.removeAttribute('textLength');
-                                t.removeAttribute('lengthAdjust');
+                            // Remove textLength & lengthAdjust from all elements (including text and tspan) to prevent Japanese characters from being squished into tiny dots (iOS Safari, Windows Chrome, etc.)
+                            const squishedElements = container.querySelectorAll('[textLength], [lengthAdjust]');
+                            squishedElements.forEach(el => {
+                                el.removeAttribute('textLength');
+                                el.removeAttribute('lengthAdjust');
                             });
 
                             block.parentNode.replaceWith(container);
@@ -2490,11 +2490,11 @@ paginate: true
                                         container.style.justifyContent = 'center';
                                         container.style.margin = '1.5rem 0';
                                         container.innerHTML = svg;
-                                        // Remove textLength & lengthAdjust to prevent Japanese characters from being squished into tiny dots (iOS Safari, Windows Chrome, etc.)
-                                        const svgTexts = container.querySelectorAll('text');
-                                        svgTexts.forEach(t => {
-                                            t.removeAttribute('textLength');
-                                            t.removeAttribute('lengthAdjust');
+                                        // Remove textLength & lengthAdjust from all elements (including text and tspan) to prevent Japanese characters from being squished into tiny dots (iOS Safari, Windows Chrome, etc.)
+                                        const squishedElements = container.querySelectorAll('[textLength], [lengthAdjust]');
+                                        squishedElements.forEach(el => {
+                                            el.removeAttribute('textLength');
+                                            el.removeAttribute('lengthAdjust');
                                         });
 
                                         block.parentNode.replaceWith(container);
