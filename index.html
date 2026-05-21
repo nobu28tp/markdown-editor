@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Markdown Editor (Ver.5.2.3)</title>
+    <title>Markdown Editor (Ver.5.2.4)</title>
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -531,26 +531,51 @@
         .mermaid-container,
         div.marpit .mermaid-container {
             font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif !important;
-            font-size: 14px !important;
-            letter-spacing: normal !important;
-            line-height: normal !important;
-        }
-
-        /* SVG内部はコンテナのfont-sizeを継承させず、Mermaid本来のサイズ計算を維持する */
-        .mermaid-container svg {
-            font-size: initial !important;
         }
 
         .mermaid-container text,
-        .mermaid-container text *,
-        .mermaid-container span,
-        .mermaid-container div,
+        .mermaid-container tspan,
         div.marpit .mermaid-container text,
-        div.marpit .mermaid-container text *,
-        div.marpit .mermaid-container span,
-        div.marpit .mermaid-container div {
+        div.marpit .mermaid-container tspan,
+        svg[data-marpit-svg] .mermaid-container text,
+        svg[data-marpit-svg] .mermaid-container tspan,
+        div.marpit svg[data-marpit-svg] .mermaid-container text,
+        div.marpit svg[data-marpit-svg] .mermaid-container tspan,
+        .marp-slide-wrapper section .mermaid-container text,
+        .marp-slide-wrapper section .mermaid-container tspan {
             fill: #333333 !important;
+            font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif !important;
+            dominant-baseline: auto !important;
+            alignment-baseline: auto !important;
+            baseline-shift: normal !important;
+        }
+
+        /* HTML-based Mermaid Labels Protection (foreignObject / nodeLabel) */
+        .mermaid-container foreignObject,
+        .mermaid-container foreignObject div,
+        .mermaid-container foreignObject span,
+        .mermaid-container .nodeLabel,
+        .mermaid-container .edgeLabel,
+        .mermaid-container .label,
+        div.marpit .mermaid-container foreignObject,
+        div.marpit .mermaid-container foreignObject div,
+        div.marpit .mermaid-container foreignObject span,
+        div.marpit .mermaid-container .nodeLabel,
+        svg[data-marpit-svg] .mermaid-container foreignObject,
+        svg[data-marpit-svg] .mermaid-container foreignObject div,
+        svg[data-marpit-svg] .mermaid-container foreignObject span,
+        svg[data-marpit-svg] .mermaid-container .nodeLabel,
+        div.marpit svg[data-marpit-svg] .mermaid-container foreignObject,
+        div.marpit svg[data-marpit-svg] .mermaid-container foreignObject div,
+        div.marpit svg[data-marpit-svg] .mermaid-container .nodeLabel,
+        .marp-slide-wrapper section .mermaid-container foreignObject,
+        .marp-slide-wrapper section .mermaid-container foreignObject div,
+        .marp-slide-wrapper section .mermaid-container .nodeLabel {
             color: #333333 !important;
+            fill: #333333 !important;
+            background-color: transparent !important;
+            visibility: visible !important;
+            opacity: 1 !important;
         }
 
         /* --- Marp Slide Preview Layout --- */
@@ -829,7 +854,7 @@
             <div class="header-left">
                 <div class="logo">
                     <i data-lucide="pen-tool"></i>
-                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.2.3)</span>
+                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.2.4)</span>
                     </h1>
                 </div>
                 <div class="status-indicator" id="save-status">
@@ -891,6 +916,15 @@
                     style="background: #e36209; border-color: rgba(255, 255, 255, 0.1);">
                     <i data-lucide="globe"></i>
                     <span>HTML出力</span>
+                </button>
+                <div style="width: 1px; background-color: var(--border-color); margin: 0 0.5rem;"></div>
+                <button class="btn btn-outline" id="btn-open-exporter" title="Mermaid Exporter を別タブで開く">
+                    <i data-lucide="external-link"></i>
+                    <span>Mermaid Exporter</span>
+                </button>
+                <button class="btn btn-outline" id="btn-github-sync" style="border-color: rgba(88, 166, 255, 0.4);" title="GitHubリポジトリと連携する">
+                    <i data-lucide="github"></i>
+                    <span>GitHub連携</span>
                 </button>
             </div>
         </header>
@@ -1185,6 +1219,78 @@ paginate: true
 - 項目1
 - **太字**
 - *斜体*</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- GitHub Sync Modal -->
+    <div class="modal-overlay" id="github-modal">
+        <div class="modal-content" style="max-width: 520px;">
+            <div class="modal-header">
+                <h2><i data-lucide="github"></i> GitHub リポジトリ連携</h2>
+                <button class="btn-close" id="btn-close-github">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.2rem;">
+                <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;">
+                    GitHub のリポジトリと直接連携し、ファイルを読み書きできます。<br>
+                    トークンはブラウザ内（LocalStorage）にのみ安全に保存されます。
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                    <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">
+                        🔑 パーソナルアクセストークン (PAT)
+                    </label>
+                    <input type="password" id="gh-token" placeholder="ghp_..."
+                        style="padding: 0.6rem 0.8rem; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 6px; color: #e6edf3; font-size: 0.9rem; width: 100%; transition: border-color 0.2s;"
+                        onfocus="this.style.borderColor='#58a6ff'" onblur="this.style.borderColor='var(--border-color)'">
+                </div>
+
+                <div style="display: flex; gap: 1rem;">
+                    <div style="flex: 2; display: flex; flex-direction: column; gap: 0.4rem;">
+                        <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">
+                            📂 リポジトリ (owner/repo)
+                        </label>
+                        <input type="text" id="gh-repo" placeholder="ユーザー名/リポジトリ名"
+                            style="padding: 0.6rem 0.8rem; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 6px; color: #e6edf3; font-size: 0.9rem; width: 100%; transition: border-color 0.2s;"
+                            onfocus="this.style.borderColor='#58a6ff'" onblur="this.style.borderColor='var(--border-color)'">
+                    </div>
+                    <div style="flex: 1; display: flex; flex-direction: column; gap: 0.4rem;">
+                        <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">
+                            🌿 ブランチ
+                        </label>
+                        <input type="text" id="gh-branch" placeholder="main" value="main"
+                            style="padding: 0.6rem 0.8rem; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 6px; color: #e6edf3; font-size: 0.9rem; width: 100%; transition: border-color 0.2s;"
+                            onfocus="this.style.borderColor='#58a6ff'" onblur="this.style.borderColor='var(--border-color)'">
+                    </div>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                    <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">
+                        📝 ファイルパス (リポジトリ内)
+                    </label>
+                    <input type="text" id="gh-path" placeholder="例: docs/slide.md"
+                        style="padding: 0.6rem 0.8rem; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 6px; color: #e6edf3; font-size: 0.9rem; width: 100%; transition: border-color 0.2s;"
+                        onfocus="this.style.borderColor='#58a6ff'" onblur="this.style.borderColor='var(--border-color)'">
+                </div>
+
+                <div id="gh-modal-status" style="font-size: 0.85rem; color: #58a6ff; display: none; padding: 0.5rem 0.8rem; background: rgba(88, 166, 255, 0.08); border-radius: 6px; border: 1px solid rgba(88, 166, 255, 0.15);"></div>
+
+                <div style="display: flex; gap: 0.8rem; margin-top: 0.3rem; justify-content: flex-end; flex-wrap: wrap;">
+                    <button class="btn btn-outline" id="btn-save-gh-settings" style="margin-right: auto;">
+                        <i data-lucide="check"></i>
+                        <span>設定のみ保存</span>
+                    </button>
+                    <button class="btn btn-secondary" id="btn-gh-load" style="background: #1f6feb; border-color: rgba(255, 255, 255, 0.1);">
+                        <i data-lucide="download"></i>
+                        <span>読込</span>
+                    </button>
+                    <button class="btn btn-primary" id="btn-gh-save" style="background: #238636; border-color: rgba(255, 255, 255, 0.1);">
+                        <i data-lucide="upload"></i>
+                        <span>保存・上書き</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -1560,7 +1666,8 @@ paginate: true
                         primaryBorderColor: '#888888',
                         primaryTextColor: '#333333',
                         lineColor: '#666666',
-                        fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif'
+                        fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif',
+                        fontSize: '14px'
                     }
                 });
             }
@@ -1718,6 +1825,29 @@ paginate: true
             document.getElementById('btn-export-word').addEventListener('click', handleExportWord);
             document.getElementById('btn-export-pdf').addEventListener('click', handleExportPdf);
             document.getElementById('btn-export-html').addEventListener('click', handleExportHtml);
+
+            // Mermaid Exporter を別タブで開く
+            document.getElementById('btn-open-exporter').addEventListener('click', () => {
+                window.open('https://nobu28tp.github.io/mermaid_exporter/', '_blank');
+            });
+
+            // GitHub連携モーダルの開閉
+            const githubModal = document.getElementById('github-modal');
+            document.getElementById('btn-github-sync').addEventListener('click', () => {
+                loadGitHubSettings();
+                githubModal.classList.add('active');
+            });
+            document.getElementById('btn-close-github').addEventListener('click', () => {
+                githubModal.classList.remove('active');
+            });
+            githubModal.addEventListener('click', (e) => {
+                if (e.target === githubModal) githubModal.classList.remove('active');
+            });
+
+            // GitHub連携ボタン群
+            document.getElementById('btn-save-gh-settings').addEventListener('click', saveGitHubSettings);
+            document.getElementById('btn-gh-load').addEventListener('click', loadFromGitHub);
+            document.getElementById('btn-gh-save').addEventListener('click', saveToGitHub);
 
             // Pane toggles
             document.getElementById('btn-toggle-preview').addEventListener('click', () => {
@@ -1926,7 +2056,39 @@ paginate: true
                         // 内蔵エンジンのCSSは "section" に直接当たっているため、wrapperのsectionにスコープする
                         scopedCss = css.replace(/\bsection\b/g, '.marp-slide-wrapper section');
                     }
-                    marpStyleTag.textContent = scopedCss;
+                    marpStyleTag.textContent = scopedCss + `
+                        /* Force override Mermaid baseline styles under Marp SVG */
+                        svg[data-marpit-svg] .mermaid-container text,
+                        svg[data-marpit-svg] .mermaid-container tspan,
+                        div.marpit svg[data-marpit-svg] .mermaid-container text,
+                        div.marpit svg[data-marpit-svg] .mermaid-container tspan,
+                        .marp-slide-wrapper section .mermaid-container text,
+                        .marp-slide-wrapper section .mermaid-container tspan {
+                            fill: #333333 !important;
+                            font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif !important;
+                            dominant-baseline: auto !important;
+                            alignment-baseline: auto !important;
+                            baseline-shift: normal !important;
+                        }
+
+                        /* Force override HTML-based Mermaid labels under Marp SVG */
+                        svg[data-marpit-svg] .mermaid-container foreignObject,
+                        svg[data-marpit-svg] .mermaid-container foreignObject div,
+                        svg[data-marpit-svg] .mermaid-container foreignObject span,
+                        svg[data-marpit-svg] .mermaid-container .nodeLabel,
+                        div.marpit svg[data-marpit-svg] .mermaid-container foreignObject,
+                        div.marpit svg[data-marpit-svg] .mermaid-container foreignObject div,
+                        div.marpit svg[data-marpit-svg] .mermaid-container .nodeLabel,
+                        .marp-slide-wrapper section .mermaid-container foreignObject,
+                        .marp-slide-wrapper section .mermaid-container foreignObject div,
+                        .marp-slide-wrapper section .mermaid-container .nodeLabel {
+                            color: #333333 !important;
+                            fill: #333333 !important;
+                            background-color: transparent !important;
+                            visibility: visible !important;
+                            opacity: 1 !important;
+                        }
+                    `;
 
                     // Build slide wrappers
                     let slidesHtml = '<div class="marpit" style="color-scheme: light;">';
@@ -1990,6 +2152,22 @@ paginate: true
                             container.innerHTML = cleanSvg;
 
                             block.parentNode.replaceWith(container);
+
+                            // DOMツリー挿入後に確実にSVG内のテキスト要素を取得し、Marpの強制スタイルを無効化するインラインスタイルを注入する
+                            container.querySelectorAll('text, tspan').forEach(el => {
+                                el.style.setProperty('dominant-baseline', 'auto', 'important');
+                                el.style.setProperty('alignment-baseline', 'auto', 'important');
+                                el.style.setProperty('baseline-shift', 'normal', 'important');
+                                el.style.setProperty('fill', '#333333', 'important');
+                            });
+                            // HTMLベースのMermaidラベル（foreignObject内の要素）に対するインラインスタイルの強制注入
+                            container.querySelectorAll('foreignObject, foreignObject div, foreignObject span, .nodeLabel, .edgeLabel, .label').forEach(el => {
+                                el.style.setProperty('color', '#333333', 'important');
+                                el.style.setProperty('fill', '#333333', 'important');
+                                el.style.setProperty('background-color', 'transparent', 'important');
+                                el.style.setProperty('visibility', 'visible', 'important');
+                                el.style.setProperty('opacity', '1', 'important');
+                            });
                         } catch (err) {
                             console.error('Mermaid render error:', err);
                             // Provide visual feedback for the error in preview
@@ -2121,12 +2299,34 @@ paginate: true
             }
         }
 
-        // Helper: Convert SVG to PNG Base64 (Robust version with Blob for Japanese support)
+        // Helper: Convert SVG to PNG Base64 (Robust version with Blob and safety timeout)
         function convertSvgToPng(svgElement) {
-            return new Promise((resolve, reject) => {
+            // Ensure textLength and lengthAdjust are removed from internal texts to prevent dot-compression during canvas rendering
+            svgElement.querySelectorAll('text, tspan').forEach(el => {
+                el.removeAttribute('textLength');
+                el.removeAttribute('lengthAdjust');
+            });
+
+            return new Promise((resolve) => {
                 const rect = svgElement.getBoundingClientRect();
                 let width = rect.width || parseFloat(svgElement.getAttribute('width')) || 600;
                 let height = rect.height || parseFloat(svgElement.getAttribute('height')) || 400;
+
+                // Size sanitization
+                if (isNaN(width) || width <= 1) width = 600;
+                if (isNaN(height) || height <= 1) height = 400;
+
+                // Safety timeout (1.5 seconds) to prevent freezing on local CORS or image load errors
+                const timeoutId = setTimeout(() => {
+                    console.warn("SVG conversion timed out, returning fallback");
+                    cleanup();
+                    resolve({
+                        src: null,
+                        width: width,
+                        height: height,
+                        failed: true
+                    });
+                }, 1500);
 
                 svgElement.setAttribute('width', width);
                 svgElement.setAttribute('height', height);
@@ -2137,36 +2337,70 @@ paginate: true
                     svgString = svgString.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
                 }
 
-                // Use Blob and createObjectURL to support Japanese (multibyte) characters safely
-                const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-                const imgSrc = URL.createObjectURL(blob);
+                let imgSrc;
+                let isBlob = false;
+                try {
+                    // Use Blob and createObjectURL to support Japanese (multibyte) characters safely
+                    const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+                    imgSrc = URL.createObjectURL(blob);
+                    isBlob = true;
+                } catch (e) {
+                    // Fallback to Base64 data URI if Blob fails
+                    imgSrc = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgString)));
+                }
 
                 const img = new Image();
-                img.crossOrigin = "Anonymous";
+                // Do NOT set img.crossOrigin = "Anonymous" in local file:/// context to prevent CORS freeze
+
+                function cleanup() {
+                    clearTimeout(timeoutId);
+                    if (isBlob && imgSrc) {
+                        URL.revokeObjectURL(imgSrc);
+                    }
+                }
+
                 img.onload = function () {
-                    const canvas = document.createElement('canvas');
-                    const scale = 2; // high resolution
-                    canvas.width = width * scale;
-                    canvas.height = height * scale;
-                    const ctx = canvas.getContext('2d');
-                    ctx.scale(scale, scale);
-                    ctx.fillStyle = '#ffffff';
-                    ctx.fillRect(0, 0, width, height);
-                    ctx.drawImage(img, 0, 0, width, height);
-                    
-                    const pngData = canvas.toDataURL('image/png');
-                    URL.revokeObjectURL(imgSrc); // Clean up memory
-                    
+                    try {
+                        const canvas = document.createElement('canvas');
+                        const scale = 2; // high resolution
+                        canvas.width = width * scale;
+                        canvas.height = height * scale;
+                        const ctx = canvas.getContext('2d');
+                        ctx.scale(scale, scale);
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(0, 0, width, height);
+                        ctx.drawImage(img, 0, 0, width, height);
+                        
+                        const pngData = canvas.toDataURL('image/png');
+                        cleanup();
+                        resolve({
+                            src: pngData,
+                            width: width,
+                            height: height
+                        });
+                    } catch (err) {
+                        console.error('Canvas rendering failed:', err);
+                        cleanup();
+                        resolve({
+                            src: null,
+                            width: width,
+                            height: height,
+                            failed: true
+                        });
+                    }
+                };
+
+                img.onerror = function (err) {
+                    console.error('SVG Image rendering failed:', err);
+                    cleanup();
                     resolve({
-                        src: pngData,
+                        src: null,
                         width: width,
-                        height: height
+                        height: height,
+                        failed: true
                     });
                 };
-                img.onerror = function (err) {
-                    URL.revokeObjectURL(imgSrc); // Clean up memory
-                    reject(err);
-                };
+
                 img.src = imgSrc;
             });
         }
@@ -2208,15 +2442,19 @@ paginate: true
                     svg.parentNode.removeChild(svg);
                 });
 
-                const svgs = Array.from(exportContainer.querySelectorAll('svg'));
+                const svgs = Array.from(exportContainer.querySelectorAll('svg:not([data-marpit-svg])'));
                 for (const svg of svgs) {
                     try {
                         const pngData = await convertSvgToPng(svg);
-                        const img = document.createElement('img');
-                        img.src = pngData.src;
-                        img.style.width = pngData.width + 'px';
-                        img.style.height = pngData.height + 'px';
-                        svg.parentNode.replaceChild(img, svg);
+                        if (pngData && pngData.src) {
+                            const img = document.createElement('img');
+                            img.src = pngData.src;
+                            img.style.width = pngData.width + 'px';
+                            img.style.height = pngData.height + 'px';
+                            svg.parentNode.replaceChild(img, svg);
+                        } else {
+                            console.warn('SVG conversion failed or timed out, keeping original SVG in Word');
+                        }
                     } catch (err) {
                         console.error('SVG conversion failed', err);
                     }
@@ -2264,15 +2502,20 @@ paginate: true
                 .mermaid-container,
                 div.marpit .mermaid-container {
                     font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif !important;
-                    font-size: 14px !important;
-                    letter-spacing: normal !important;
-                    line-height: normal !important;
                 }
-                .mermaid-container svg { font-size: initial !important; }
-                .mermaid-container text, .mermaid-container text *, .mermaid-container span, .mermaid-container div,
-                div.marpit .mermaid-container text, div.marpit .mermaid-container text *, div.marpit .mermaid-container span, div.marpit .mermaid-container div {
+                .mermaid-container text,
+                .mermaid-container tspan,
+                div.marpit .mermaid-container text,
+                div.marpit .mermaid-container tspan,
+                svg[data-marpit-svg] .mermaid-container text,
+                svg[data-marpit-svg] .mermaid-container tspan,
+                .marp-slide-wrapper section .mermaid-container text,
+                .marp-slide-wrapper section .mermaid-container tspan {
                     fill: #333333 !important;
-                    color: #333333 !important;
+                    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif !important;
+                    dominant-baseline: auto !important;
+                    alignment-baseline: auto !important;
+                    baseline-shift: normal !important;
                 }
                 ${isSlideMode ? (() => {
                         const marpResultW = renderWithMarp(editor.getValue());
@@ -2317,66 +2560,137 @@ paginate: true
                 updateStatus('saving', 'PDF生成中...');
 
                 const isSlideMode = previewContainer.classList.contains('marp-mode');
-                const printContainer = document.createElement('div');
-                printContainer.style.colorScheme = 'light';
-                printContainer.innerHTML = previewContainer.innerHTML;
-
-                let style;
-                let wrapper;
 
                 if (isSlideMode) {
-                    // Slide mode: use Marp Core theme CSS for accurate reproduction
+                    // スライドモードの場合：各スライドを個別に1280x720の固定サイズでキャプチャしてPDFに追加
                     const markdown = editor.getValue();
                     const marpResultP = renderWithMarp(markdown);
                     const css = marpResultP ? marpResultP.css : '';
 
-                    style = document.createElement('style');
-                    let scopedCss = '';
-                    if (marpResultP && marpResultP.source === 'marp-core') {
-                        // html2canvas(html2pdf)はSVGのforeignObjectを描画できないため、スライド出力時はSVGのラッパーを外す
-                        const marpSvgs = Array.from(printContainer.querySelectorAll('svg[data-marpit-svg]'));
-                        marpSvgs.forEach(svg => {
-                            const foreignObject = svg.querySelector('foreignObject');
-                            if (foreignObject) {
-                                while (foreignObject.firstChild) {
-                                    svg.parentNode.insertBefore(foreignObject.firstChild, svg);
-                                }
-                            }
-                            svg.parentNode.removeChild(svg);
-                        });
-                        scopedCss = css.replace(/div\.marpit\s*>\s*svg\s*>\s*foreignObject/g, 'div.marpit .marp-slide-wrapper');
-                        scopedCss = scopedCss.replace(/div\.marpit\s*>\s*svg/g, 'div.marpit .marp-slide-wrapper');
-                        scopedCss += '\ndiv.marpit { color-scheme: light; }';
-                    } else {
-                        scopedCss = css.replace(/\bsection\b/g, '.marp-slide-wrapper section');
+                    // プレビューコンテナ内のすべてのスライド wrapper を取得
+                    const slideWrappers = Array.from(previewContainer.querySelectorAll('.marp-slide-wrapper'));
+                    if (slideWrappers.length === 0) {
+                        throw new Error("スライドが見つかりません。プレビューを表示した状態で実行してください。");
                     }
-                    style.textContent = `
-                        .marp-slide-wrapper { page-break-after: always; width: 1280px; height: 720px; overflow: hidden; position: relative; }
-                        ${scopedCss}
-                        .marp-page-number { display: none; }
-                        .header-bar, .page-number { display: none !important; }
-                        /* Mermaid Text & Font Protection */
-                        .mermaid-container,
-                        div.marpit .mermaid-container {
-                            font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif !important;
-                            font-size: 14px !important;
-                            letter-spacing: normal !important;
-                            line-height: normal !important;
+
+                    // オフスクリーンの一時親コンテナを作成
+                    const offscreen = document.createElement('div');
+                    offscreen.style.cssText = 'position: fixed; top: -9999px; left: -9999px; width: 1280px; height: 720px; overflow: hidden; z-index: -9999; pointer-events: none;';
+                    document.body.appendChild(offscreen);
+
+                    // jsPDF の初期化 (アスペクト比 16:9 [297, 167.06] mm)
+                    const { jsPDF } = window.jspdf || window;
+                    const pdf = new jsPDF({
+                        orientation: 'landscape',
+                        unit: 'mm',
+                        format: [297, 167.06]
+                    });
+
+                    // 各スライドを個別に処理してキャプチャ
+                    for (let i = 0; i < slideWrappers.length; i++) {
+                        updateStatus('saving', `PDF生成中 (${i + 1} / ${slideWrappers.length})...`);
+
+                        // スライド単体を格納する固定サイズコンテナ
+                        const tempContainer = document.createElement('div');
+                        tempContainer.className = 'marp-mode';
+                        tempContainer.style.cssText = 'width: 1280px; height: 720px; background-color: #ffffff; position: relative; overflow: hidden; display: block;';
+
+                        // Marpテーマスタイル
+                        const style = document.createElement('style');
+                        let scopedCss = '';
+                        if (marpResultP && marpResultP.source === 'marp-core') {
+                            scopedCss = css.replace(/div\.marpit\s*>\s*svg\s*/g, 'div.marpit .marp-slide-wrapper > svg');
+                            scopedCss += '\ndiv.marpit { color-scheme: light; }';
+                        } else {
+                            scopedCss = css.replace(/\bsection\b/g, '.marp-slide-wrapper section');
                         }
-                        .mermaid-container svg { font-size: initial !important; }
-                        .mermaid-container text, .mermaid-container text *, .mermaid-container span, .mermaid-container div,
-                        div.marpit .mermaid-container text, div.marpit .mermaid-container text *, div.marpit .mermaid-container span, div.marpit .mermaid-container div {
-                            fill: #333333 !important;
-                            color: #333333 !important;
+
+                        style.textContent = `
+                            ${scopedCss}
+                            .marp-slide-wrapper { width: 1280px; height: 720px; overflow: hidden; position: relative; display: block !important; transform: none !important; }
+                            .marp-slide-wrapper > svg { width: 100% !important; height: 100% !important; display: block !important; }
+                            .marp-page-number { display: none; }
+                            .header-bar, .page-number { display: none !important; }
+                            
+                            /* HTML-based Mermaid Labels Protection in PDF */
+                            .mermaid-container foreignObject,
+                            .mermaid-container foreignObject div,
+                            .mermaid-container foreignObject span,
+                            .mermaid-container .nodeLabel,
+                            .mermaid-container .edgeLabel,
+                            .mermaid-container .label {
+                                color: #333333 !important;
+                                fill: #333333 !important;
+                                background-color: transparent !important;
+                                visibility: visible !important;
+                                opacity: 1 !important;
+                            }
+                            .mermaid-container text,
+                            .mermaid-container tspan {
+                                fill: #333333 !important;
+                                font-family: "Inter", sans-serif !important;
+                            }
+                        `;
+
+                        const contentDiv = document.createElement('div');
+                        contentDiv.innerHTML = slideWrappers[i].outerHTML;
+
+                        tempContainer.appendChild(style);
+                        tempContainer.appendChild(contentDiv);
+                        offscreen.appendChild(tempContainer);
+
+                        // スライド内のMermaid SVG等をCanvas描画用にPNG画像に変換
+                        const svgs = Array.from(contentDiv.querySelectorAll('svg:not([data-marpit-svg])'));
+                        for (const svg of svgs) {
+                            try {
+                                const pngData = await convertSvgToPng(svg);
+                                if (pngData && pngData.src) {
+                                    const img = document.createElement('img');
+                                    img.src = pngData.src;
+                                    img.style.width = pngData.width + 'px';
+                                    img.style.height = pngData.height + 'px';
+                                    svg.parentNode.replaceChild(img, svg);
+                                }
+                            } catch (err) {
+                                console.error('SVG conversion failed', err);
+                            }
                         }
-                    `;
-                    wrapper = document.createElement('div');
-                    wrapper.className = 'marp-mode';
-                    wrapper.appendChild(style);
-                    wrapper.appendChild(printContainer);
+
+                        // html2canvas を実行して画像化
+                        const canvas = await html2canvas(tempContainer, {
+                            scale: 2, // 高精細化 (Retina対応)
+                            useCORS: true,
+                            backgroundColor: '#ffffff',
+                            width: 1280,
+                            height: 720,
+                            windowWidth: 1280,
+                            windowHeight: 720
+                        });
+
+                        const imgData = canvas.toDataURL('image/jpeg', 0.98);
+
+                        // PDF ページ追加
+                        if (i > 0) {
+                            pdf.addPage([297, 167.06], 'landscape');
+                        }
+                        pdf.addImage(imgData, 'JPEG', 0, 0, 297, 167.06);
+
+                        // 一時スライドを破棄
+                        offscreen.removeChild(tempContainer);
+                    }
+
+                    // PDF を保存
+                    pdf.save(getDocTitle() + '.pdf');
+                    offscreen.remove();
+                    updateStatus('saved', 'PDF出力完了');
+
                 } else {
-                    // Document mode
-                    style = document.createElement('style');
+                    // ドキュメントモード：安定性の高い従来の html2pdf 一括変換
+                    const printContainer = document.createElement('div');
+                    printContainer.style.colorScheme = 'light';
+                    printContainer.innerHTML = previewContainer.innerHTML;
+
+                    const style = document.createElement('style');
                     style.textContent = `
                         .pdf-export-wrapper {
                             background-color: #ffffff !important; color: #333333 !important;
@@ -2394,66 +2708,84 @@ paginate: true
                         }
                         .pdf-export-wrapper table { width: 100% !important; table-layout: fixed !important; border-collapse: collapse; }
                         .pdf-export-wrapper th, .pdf-export-wrapper td { border: 1px solid #d0d7de !important; padding: 6px 12px; }
+                        .pdf-export-wrapper th { background: #fff; font-weight: 600; }
                         .pdf-export-wrapper img, .pdf-export-wrapper svg { max-width: 100% !important; height: auto !important; }
-                        /* Mermaid Text & Font Protection */
-                        .mermaid-container,
-                        .pdf-export-wrapper .mermaid-container {
-                            font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif !important;
-                            font-size: 14px !important;
-                            letter-spacing: normal !important;
-                            line-height: normal !important;
-                        }
-                        .mermaid-container svg { font-size: initial !important; }
-                        .mermaid-container text, .mermaid-container text *, .mermaid-container span, .mermaid-container div,
-                        .pdf-export-wrapper .mermaid-container text, .pdf-export-wrapper .mermaid-container text *, .pdf-export-wrapper .mermaid-container span, .pdf-export-wrapper .mermaid-container div {
-                            fill: #333333 !important;
+                        
+                        /* HTML-based Mermaid Labels Protection in PDF Document Mode */
+                        .mermaid-container foreignObject,
+                        .mermaid-container foreignObject div,
+                        .mermaid-container foreignObject span,
+                        .mermaid-container .nodeLabel,
+                        .mermaid-container .edgeLabel,
+                        .mermaid-container .label {
                             color: #333333 !important;
+                            fill: #333333 !important;
+                            background-color: transparent !important;
+                            visibility: visible !important;
+                            opacity: 1 !important;
+                        }
+                        .mermaid-container text,
+                        .mermaid-container tspan {
+                            fill: #333333 !important;
+                            font-family: "Inter", sans-serif !important;
                         }
                     `;
-                    wrapper = document.createElement('div');
+                    const wrapper = document.createElement('div');
                     wrapper.className = 'markdown-body pdf-export-wrapper';
                     wrapper.appendChild(style);
                     wrapper.appendChild(printContainer);
-                }
 
-                // Temporarily place off-screen for SVG size calculation
-                const offscreen = document.createElement('div');
-                offscreen.style.cssText = 'position:absolute;left:-9999px;top:0';
-                offscreen.appendChild(wrapper);
-                document.body.appendChild(offscreen);
+                    const offscreen = document.createElement('div');
+                    offscreen.style.cssText = 'position: fixed; top: 0; left: 0; width: 750px; opacity: 0.01; z-index: -9999; pointer-events: none; overflow: auto;';
+                    offscreen.appendChild(wrapper);
+                    document.body.appendChild(offscreen);
 
-                // Convert remaining SVGs (like mermaid or user SVGs) to PNG
-                const svgs = Array.from(printContainer.querySelectorAll('svg'));
-                for (const svg of svgs) {
-                    try {
-                        const pngData = await convertSvgToPng(svg);
-                        const img = document.createElement('img');
-                        img.src = pngData.src;
-                        img.style.width = pngData.width + 'px';
-                        img.style.height = pngData.height + 'px';
-                        svg.parentNode.replaceChild(img, svg);
-                    } catch (err) {
-                        console.error('SVG conversion failed', err);
+                    // Convert remaining SVGs to PNG
+                    const svgs = Array.from(printContainer.querySelectorAll('svg:not([data-marpit-svg])'));
+                    for (const svg of svgs) {
+                        try {
+                            const pngData = await convertSvgToPng(svg);
+                            if (pngData && pngData.src) {
+                                const img = document.createElement('img');
+                                img.src = pngData.src;
+                                img.style.width = pngData.width + 'px';
+                                img.style.height = pngData.height + 'px';
+                                svg.parentNode.replaceChild(img, svg);
+                            }
+                        } catch (err) {
+                            console.error('SVG conversion failed', err);
+                        }
                     }
+
+                    const opt = {
+                        margin: 10,
+                        filename: getDocTitle() + '.pdf',
+                        image: { type: 'jpeg', quality: 0.98 },
+                        html2canvas: { 
+                            scale: 2, 
+                            useCORS: true, 
+                            backgroundColor: '#ffffff', 
+                            letterRendering: true,
+                            width: 710,
+                            windowWidth: 710
+                        },
+                        jsPDF: { 
+                            unit: 'mm', 
+                            format: 'a4', 
+                            orientation: 'portrait' 
+                        }
+                    };
+
+                    html2pdf().set(opt).from(wrapper).save().then(() => {
+                        offscreen.remove();
+                        updateStatus('saved', 'PDF出力完了');
+                    }).catch(err => {
+                        offscreen.remove();
+                        console.error('PDF generation failed:', err);
+                        updateStatus('normal', 'PDF出力失敗');
+                        alert('PDF出力中にエラーが発生しました。');
+                    });
                 }
-
-                document.body.removeChild(offscreen);
-
-                const opt = {
-                    margin: isSlideMode ? 0 : 10,
-                    filename: getDocTitle() + '.pdf',
-                    image: { type: 'jpeg', quality: 0.98 },
-                    html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', letterRendering: true },
-                    jsPDF: { unit: 'mm', format: 'a4', orientation: isSlideMode ? 'landscape' : 'portrait' }
-                };
-
-                html2pdf().set(opt).from(wrapper).save().then(() => {
-                    updateStatus('saved', 'PDF出力完了');
-                }).catch(err => {
-                    console.error('PDF generation failed:', err);
-                    updateStatus('normal', 'PDF出力失敗');
-                    alert('PDF出力中にエラーが発生しました。');
-                });
 
             } catch (err) {
                 console.error('PDF export failed:', err);
@@ -2475,52 +2807,15 @@ paginate: true
                     // Slide mode: generate a full-featured slideshow HTML
                     const markdown = editor.getValue();
                     const marpResultH = renderWithMarp(markdown);
-                    const { css: marpCss, slides: marpSlides } = marpResultH;
-                    const totalSlides = marpSlides.length;
+                    const { css: marpCss } = marpResultH;
 
-                    // Render Mermaid Diagrams in slides before exporting (Static pre-rendering approach)
-                    if (window.mermaid) {
-                        // Create temporary container to attach nodes to DOM for correct text measurement (getBBox)
-                        const tempContainer = document.createElement('div');
-                        tempContainer.style.position = 'absolute';
-                        tempContainer.style.left = '-9999px';
-                        tempContainer.style.top = '0';
-                        document.body.appendChild(tempContainer);
-
-                        for (let i = 0; i < marpSlides.length; i++) {
-                            const tempDiv = document.createElement('div');
-                            tempDiv.innerHTML = marpSlides[i];
-                            tempContainer.appendChild(tempDiv); // Attach to DOM
-
-                            const mermaidBlocks = tempDiv.querySelectorAll('code.language-mermaid');
-                            if (mermaidBlocks.length > 0) {
-                                for (let j = 0; j < mermaidBlocks.length; j++) {
-                                    const block = mermaidBlocks[j];
-                                    try {
-                                        const code = block.textContent;
-                                        const id = 'mermaid-export-' + i + '-' + j + '-' + Math.random().toString(36).substr(2, 9);
-                                        const { svg } = await mermaid.render(id, code);
-                                        // SVG文字列からtextLengthとlengthAdjustを正規表現で完全に除去
-                                        const cleanSvg = svg.replace(/\s+textLength="[^"]*"/g, '').replace(/\s+lengthAdjust="[^"]*"/g, '');
-                                        const container = document.createElement('div');
-                                        container.className = 'mermaid-container';
-                                        container.style.display = 'flex';
-                                        container.style.justifyContent = 'center';
-                                        container.style.margin = '1.5rem 0';
-                                        container.innerHTML = cleanSvg;
-
-                                        block.parentNode.replaceWith(container);
-                                    } catch (err) {
-                                        console.error('Export Mermaid render error:', err);
-                                        block.style.color = '#ff6b6b';
-                                    }
-                                }
-                                marpSlides[i] = tempDiv.innerHTML;
-                            }
-                            tempContainer.removeChild(tempDiv); // Detach from DOM
-                        }
-                        document.body.removeChild(tempContainer); // Clean up
+                    // プレビューコンテナ内にすでに完璧にレンダリング済みのスライド要素（Mermaid描画完了済み）を直接利用する
+                    const slideWrappers = Array.from(previewContainer.querySelectorAll('.marp-slide-wrapper'));
+                    if (slideWrappers.length === 0) {
+                        throw new Error("スライドのレンダリングデータが見つかりません。プレビューを表示した状態でエクスポートしてください。");
                     }
+                    const marpSlides = slideWrappers.map(wrapper => wrapper.innerHTML);
+                    const totalSlides = marpSlides.length;
 
                     // Build individual slide divs (hidden by default except first)
                     const slidesHtml = marpSlides.map((slideHtml, i) =>
@@ -2681,15 +2976,42 @@ paginate: true
         .mermaid-container,
         #slideshow .mermaid-container {
             font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif !important;
-            font-size: 14px !important;
-            letter-spacing: normal !important;
-            line-height: normal !important;
         }
-        .mermaid-container svg { font-size: initial !important; }
-        .mermaid-container text, .mermaid-container text *, .mermaid-container span, .mermaid-container div,
-        #slideshow .mermaid-container text, #slideshow .mermaid-container text *, #slideshow .mermaid-container span, #slideshow .mermaid-container div {
+        .mermaid-container text,
+        .mermaid-container tspan,
+        #slideshow .mermaid-container text,
+        #slideshow .mermaid-container tspan,
+        svg[data-marpit-svg] .mermaid-container text,
+        svg[data-marpit-svg] .mermaid-container tspan,
+        .slide section .mermaid-container text,
+        .slide section .mermaid-container tspan {
             fill: #333333 !important;
+            font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif !important;
+            dominant-baseline: auto !important;
+            alignment-baseline: auto !important;
+            baseline-shift: normal !important;
+        }
+        /* HTML-based Mermaid Labels Protection */
+        .mermaid-container foreignObject,
+        .mermaid-container foreignObject div,
+        .mermaid-container foreignObject span,
+        .mermaid-container .nodeLabel,
+        .mermaid-container .edgeLabel,
+        .mermaid-container .label,
+        #slideshow .mermaid-container foreignObject,
+        #slideshow .mermaid-container foreignObject div,
+        #slideshow .mermaid-container .nodeLabel,
+        svg[data-marpit-svg] .mermaid-container foreignObject,
+        svg[data-marpit-svg] .mermaid-container foreignObject div,
+        svg[data-marpit-svg] .mermaid-container .nodeLabel,
+        .slide section .mermaid-container foreignObject,
+        .slide section .mermaid-container foreignObject div,
+        .slide section .mermaid-container .nodeLabel {
             color: #333333 !important;
+            fill: #333333 !important;
+            background-color: transparent !important;
+            visibility: visible !important;
+            opacity: 1 !important;
         }
     </style>
 </head>
@@ -2784,6 +3106,17 @@ ${slidesHtml}
                 el.removeAttribute('textLength');
                 el.removeAttribute('lengthAdjust');
             });
+            document.querySelectorAll('.mermaid-container text, .mermaid-container tspan').forEach(el => {
+                el.style.setProperty('fill', '#333333', 'important');
+                el.style.setProperty('dominant-baseline', 'auto', 'important');
+            });
+            document.querySelectorAll('.mermaid-container foreignObject, .mermaid-container foreignObject div, .mermaid-container foreignObject span, .mermaid-container .nodeLabel, .mermaid-container .edgeLabel, .mermaid-container .label').forEach(el => {
+                el.style.setProperty('color', '#333333', 'important');
+                el.style.setProperty('fill', '#333333', 'important');
+                el.style.setProperty('background-color', 'transparent', 'important');
+                el.style.setProperty('visibility', 'visible', 'important');
+                el.style.setProperty('opacity', '1', 'important');
+            });
         }
         cleanupMermaidAttributes();
         // 画面サイズ変更時などにも繰り返し実行
@@ -2822,20 +3155,60 @@ ${slidesHtml}
         .mermaid-container,
         .markdown-body .mermaid-container {
             font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif !important;
-            font-size: 14px !important;
-            letter-spacing: normal !important;
-            line-height: normal !important;
         }
-        .mermaid-container svg { font-size: initial !important; }
-        .mermaid-container text, .mermaid-container text *, .mermaid-container span, .mermaid-container div,
-        .markdown-body .mermaid-container text, .markdown-body .mermaid-container text *, .markdown-body .mermaid-container span, .markdown-body .mermaid-container div {
+        .mermaid-container text,
+        .mermaid-container tspan,
+        .markdown-body .mermaid-container text,
+        .markdown-body .mermaid-container tspan {
             fill: #333333 !important;
+            font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif !important;
+            dominant-baseline: auto !important;
+            alignment-baseline: auto !important;
+            baseline-shift: normal !important;
+        }
+        /* HTML-based Mermaid Labels Protection */
+        .mermaid-container foreignObject,
+        .mermaid-container foreignObject div,
+        .mermaid-container foreignObject span,
+        .mermaid-container .nodeLabel,
+        .mermaid-container .edgeLabel,
+        .mermaid-container .label,
+        .markdown-body .mermaid-container foreignObject,
+        .markdown-body .mermaid-container foreignObject div,
+        .markdown-body .mermaid-container .nodeLabel {
             color: #333333 !important;
+            fill: #333333 !important;
+            background-color: transparent !important;
+            visibility: visible !important;
+            opacity: 1 !important;
         }
     </style>
 </head>
 <body>
     <div class="markdown-body">${previewContainer.innerHTML}</div>
+    <script>
+        function cleanupMermaidAttributes() {
+            document.querySelectorAll('.mermaid-container [textLength], .mermaid-container [lengthAdjust]').forEach(el => {
+                el.removeAttribute('textLength');
+                el.removeAttribute('lengthAdjust');
+            });
+            document.querySelectorAll('.mermaid-container text, .mermaid-container tspan').forEach(el => {
+                el.style.setProperty('fill', '#333333', 'important');
+                el.style.setProperty('dominant-baseline', 'auto', 'important');
+            });
+            document.querySelectorAll('.mermaid-container foreignObject, .mermaid-container foreignObject div, .mermaid-container foreignObject span, .mermaid-container .nodeLabel, .mermaid-container .edgeLabel, .mermaid-container .label').forEach(el => {
+                el.style.setProperty('color', '#333333', 'important');
+                el.style.setProperty('fill', '#333333', 'important');
+                el.style.setProperty('background-color', 'transparent', 'important');
+                el.style.setProperty('visibility', 'visible', 'important');
+                el.style.setProperty('opacity', '1', 'important');
+            });
+        }
+        cleanupMermaidAttributes();
+        window.addEventListener('resize', () => {
+            setTimeout(cleanupMermaidAttributes, 100);
+        });
+    <\/script>
 </body>
 </html>`;
                 }
@@ -2848,6 +3221,187 @@ ${slidesHtml}
                 console.error('HTML export failed:', err);
                 updateStatus('normal', '出力失敗');
                 alert('HTMLエクスポート機能の実行中にエラーが発生しました。');
+            }
+        }
+
+
+        // ===== GitHub連携機能 =====
+
+        // UTF-8対応のBase64エンコーダ（日本語文字化け防止）
+        function utf8ToBase64(str) {
+            return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => {
+                return String.fromCharCode(parseInt(p1, 16));
+            }));
+        }
+
+        // UTF-8対応のBase64デコーダ
+        function base64ToUtf8(str) {
+            return decodeURIComponent(Array.prototype.map.call(atob(str), (c) => {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+        }
+
+        // GitHub設定をLocalStorageに保存
+        function saveGitHubSettings() {
+            const settings = {
+                token: document.getElementById('gh-token').value,
+                repo: document.getElementById('gh-repo').value,
+                branch: document.getElementById('gh-branch').value || 'main',
+                path: document.getElementById('gh-path').value
+            };
+            localStorage.setItem('lumina_github_settings', JSON.stringify(settings));
+            showGhStatus('✅ 設定を保存しました', '#3fb950');
+        }
+
+        // GitHub設定をLocalStorageから読み込み
+        function loadGitHubSettings() {
+            try {
+                const raw = localStorage.getItem('lumina_github_settings');
+                if (!raw) return;
+                const s = JSON.parse(raw);
+                if (s.token) document.getElementById('gh-token').value = s.token;
+                if (s.repo) document.getElementById('gh-repo').value = s.repo;
+                if (s.branch) document.getElementById('gh-branch').value = s.branch;
+                if (s.path) document.getElementById('gh-path').value = s.path;
+            } catch (e) {
+                console.warn('GitHub設定の読込に失敗:', e);
+            }
+        }
+
+        // モーダル内ステータス表示
+        function showGhStatus(msg, color) {
+            const el = document.getElementById('gh-modal-status');
+            el.textContent = msg;
+            el.style.color = color || '#58a6ff';
+            el.style.display = 'block';
+            setTimeout(() => { el.style.display = 'none'; }, 5000);
+        }
+
+        // GitHub連携の入力値バリデーション
+        function getGitHubInputs() {
+            const token = document.getElementById('gh-token').value.trim();
+            const repo = document.getElementById('gh-repo').value.trim();
+            const branch = document.getElementById('gh-branch').value.trim() || 'main';
+            const path = document.getElementById('gh-path').value.trim();
+            if (!token) { showGhStatus('⚠️ パーソナルアクセストークンを入力してください', '#d29922'); return null; }
+            if (!repo) { showGhStatus('⚠️ リポジトリ名 (owner/repo) を入力してください', '#d29922'); return null; }
+            if (!path) { showGhStatus('⚠️ ファイルパスを入力してください', '#d29922'); return null; }
+            return { token, repo, branch, path };
+        }
+
+        // GitHubからファイルを読み込む
+        async function loadFromGitHub() {
+            const inputs = getGitHubInputs();
+            if (!inputs) return;
+            const { token, repo, branch, path } = inputs;
+
+            showGhStatus('📥 GitHubから読み込み中...', '#58a6ff');
+            try {
+                const res = await fetch(
+                    `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}`,
+                    {
+                        headers: {
+                            'Authorization': `token ${token}`,
+                            'Accept': 'application/vnd.github.v3.raw'
+                        }
+                    }
+                );
+                if (!res.ok) {
+                    if (res.status === 404) {
+                        showGhStatus('❌ ファイルが見つかりませんでした (404)', '#f85149');
+                    } else if (res.status === 401) {
+                        showGhStatus('❌ 認証失敗。トークンを確認してください (401)', '#f85149');
+                    } else {
+                        showGhStatus(`❌ APIエラー: ${res.status} ${res.statusText}`, '#f85149');
+                    }
+                    return;
+                }
+                const text = await res.text();
+                editor.setValue(text);
+                updatePreview(text);
+                localStorage.setItem('lumina_autosave', text);
+                saveGitHubSettings();
+                showGhStatus('✅ GitHubから読み込みに成功しました', '#3fb950');
+                updateStatus('saved', 'GitHub読込完了');
+            } catch (err) {
+                console.error('GitHub load failed:', err);
+                showGhStatus('❌ 通信エラー: ' + err.message, '#f85149');
+            }
+        }
+
+        // GitHubへファイルを保存（新規 or 上書き）
+        async function saveToGitHub() {
+            const inputs = getGitHubInputs();
+            if (!inputs) return;
+            const { token, repo, branch, path } = inputs;
+
+            const content = editor.getValue();
+            if (!content.trim()) {
+                showGhStatus('⚠️ エディタが空です。保存するテキストを入力してください', '#d29922');
+                return;
+            }
+
+            showGhStatus('📤 GitHubへ保存中...', '#58a6ff');
+            try {
+                let sha = null;
+                try {
+                    const checkRes = await fetch(
+                        `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}`,
+                        {
+                            headers: {
+                                'Authorization': `token ${token}`,
+                                'Accept': 'application/vnd.github.v3+json'
+                            }
+                        }
+                    );
+                    if (checkRes.ok) {
+                        const data = await checkRes.json();
+                        sha = data.sha;
+                    }
+                } catch (e) {
+                    // ファイルが存在しない場合は sha = null のまま新規作成
+                }
+
+                const body = {
+                    message: (sha ? 'Update' : 'Create') + ` ${path} via Markdown Editor`,
+                    content: utf8ToBase64(content),
+                    branch: branch
+                };
+                if (sha) body.sha = sha;
+
+                const putRes = await fetch(
+                    `https://api.github.com/repos/${repo}/contents/${path}`,
+                    {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `token ${token}`,
+                            'Accept': 'application/vnd.github.v3+json',
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(body)
+                    }
+                );
+
+                if (!putRes.ok) {
+                    const errData = await putRes.json().catch(() => ({}));
+                    if (putRes.status === 409) {
+                        showGhStatus('❌ 競合エラー: 他の変更と衝突しています。再度読み込んでからお試しください (409)', '#f85149');
+                    } else if (putRes.status === 422) {
+                        showGhStatus('❌ SHAの不一致エラー: 再度読み込んでからお試しください (422)', '#f85149');
+                    } else if (putRes.status === 401) {
+                        showGhStatus('❌ 認証失敗。トークンを確認してください (401)', '#f85149');
+                    } else {
+                        showGhStatus(`❌ 保存失敗: ${putRes.status} ${errData.message || putRes.statusText}`, '#f85149');
+                    }
+                    return;
+                }
+
+                saveGitHubSettings();
+                showGhStatus(`✅ GitHubへの${sha ? '上書き' : '新規'}保存に成功しました`, '#3fb950');
+                updateStatus('saved', 'GitHub保存完了');
+            } catch (err) {
+                console.error('GitHub save failed:', err);
+                showGhStatus('❌ 通信エラー: ' + err.message, '#f85149');
             }
         }
 
