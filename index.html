@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Markdown Editor (Ver.5.2.4)</title>
+    <title>Markdown Editor (Ver.5.2.5)</title>
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -854,7 +854,7 @@
             <div class="header-left">
                 <div class="logo">
                     <i data-lucide="pen-tool"></i>
-                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.2.4)</span>
+                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.2.5)</span>
                     </h1>
                 </div>
                 <div class="status-indicator" id="save-status">
@@ -2278,7 +2278,7 @@ paginate: true
         }
 
         // ── App Version ──
-        const APP_VERSION = '5.2.3';
+        const APP_VERSION = '5.2.5';
 
         // ── Helper: Get sanitized document title for use in filenames ──
         function getDocTitle() {
@@ -2501,39 +2501,14 @@ paginate: true
                 p, span, div { overflow-wrap: break-word; word-break: break-word; }
                 ul, ol { margin-bottom: 16px; padding-left: 24px; }
                 img, iframe, svg { max-width: 100%; height: auto; }
-                /* Mermaid Text & Font Protection */
-                .mermaid-container,
-                div.marpit .mermaid-container {
-                    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif !important;
-                }
-                .mermaid-container text,
-                .mermaid-container tspan,
-                div.marpit .mermaid-container text,
-                div.marpit .mermaid-container tspan,
-                svg[data-marpit-svg] .mermaid-container text,
-                svg[data-marpit-svg] .mermaid-container tspan,
-                .marp-slide-wrapper section .mermaid-container text,
-                .marp-slide-wrapper section .mermaid-container tspan {
-                    fill: #333333 !important;
-                    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif !important;
-                    dominant-baseline: auto !important;
-                    alignment-baseline: auto !important;
-                    baseline-shift: normal !important;
-                }
                 ${isSlideMode ? (() => {
-                        const marpResultW = renderWithMarp(editor.getValue());
-                        const css = marpResultW ? marpResultW.css : '';
-                        let scopedCss = '';
-                        if (marpResultW && marpResultW.source === 'marp-core') {
-                            scopedCss = css.replace(/div\.marpit\s*>\s*svg/g, 'div.marpit .marp-slide-wrapper > svg');
-                        } else {
-                            scopedCss = css.replace(/\bsection\b/g, '.marp-slide-wrapper section');
-                        }
-                        return scopedCss + `
+                    const marpResult = renderWithMarp(editor.getValue());
+                    const css = marpResult ? marpResult.css : '';
+                    return css.replace(/\bsection\b/g, 'section') + `
                     .marp-slide-wrapper { page-break-after: always; }
                     .marp-page-number { display: none; }
                     .header-bar, .page-number { display: none !important; }`;
-                    })() : ''}
+                })() : ''}
             </style>
         </head>
         <body>
@@ -2557,245 +2532,219 @@ paginate: true
             }
         }
 
-        // Export as .pdf
+        // Export as .pdf (Pro Clean Print Engine)
         async function handleExportPdf() {
             try {
-                updateStatus('saving', 'PDF生成中...');
+                updateStatus('saving', 'PDF印刷画面を準備中...');
 
                 const isSlideMode = previewContainer.classList.contains('marp-mode');
+                const title = getDocTitle();
+
+                // タイトルを一時的に設定（印刷時のファイル保存名に反映されるため）
+                const originalTitle = document.title;
+                document.title = title;
+
+                // 【極上競合回避1】Marpエンジンが生成したCSS（特に@page定義）が競合の主因となるため、
+                // 印刷直前に一時的に「marp-style」内の@pageルールを無効化（除去）する
+                let originalMarpStyle = '';
+                const marpStyleTag = document.getElementById('marp-style');
+                if (marpStyleTag) {
+                    originalMarpStyle = marpStyleTag.textContent;
+                    // @page { ... } ルールを正規表現で安全に消去する（競合の物理的消去）
+                    marpStyleTag.textContent = originalMarpStyle.replace(/@page\s*{[^}]*}/gi, '');
+                }
+
+                // 【極上競合回避2】印刷用スタイルタグを毎回新規作成し、確実にDOM（body）の一番最後（末尾）に挿入する。
+                // CSSの優先順位（同一詳細度ならDOMの末尾に近いものが最優先）を絶対的に担保するため
+                let printStyle = document.getElementById('dynamic-print-style');
+                if (printStyle) {
+                    printStyle.remove(); // 既存のものは一旦完全に削除
+                }
+                printStyle = document.createElement('style');
+                printStyle.id = 'dynamic-print-style';
 
                 if (isSlideMode) {
-                    // スライドモードの場合：各スライドを個別に1280x720の固定サイズでキャプチャしてPDFに追加
-                    const markdown = editor.getValue();
-                    const marpResultP = renderWithMarp(markdown);
-                    const css = marpResultP ? marpResultP.css : '';
-
-                    // プレビューコンテナ内のすべてのスライド wrapper を取得
-                    const slideWrappers = Array.from(previewContainer.querySelectorAll('.marp-slide-wrapper'));
-                    if (slideWrappers.length === 0) {
-                        throw new Error("スライドが見つかりません。プレビューを表示した状態で実行してください。");
-                    }
-
-                    // オフスクリーンの一時親コンテナを作成
-                    const offscreen = document.createElement('div');
-                    offscreen.style.cssText = 'position: fixed; top: -9999px; left: -9999px; width: 1280px; height: 720px; overflow: hidden; z-index: -9999; pointer-events: none;';
-                    document.body.appendChild(offscreen);
-
-                    // jsPDF の初期化 (アスペクト比 16:9 [297, 167.06] mm)
-                    const jsPDF = (window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF : (window.jsPDF || window.jspdf);
-                    const pdf = new jsPDF({
-                        orientation: 'landscape',
-                        unit: 'mm',
-                        format: [297, 167.06]
-                    });
-
-                    // 各スライドを個別に処理してキャプチャ
-                    for (let i = 0; i < slideWrappers.length; i++) {
-                        updateStatus('saving', `PDF生成中 (${i + 1} / ${slideWrappers.length})...`);
-
-                        // スライド単体を格納する固定サイズコンテナ
-                        const tempContainer = document.createElement('div');
-                        tempContainer.className = 'marp-mode';
-                        tempContainer.style.cssText = 'width: 1280px; height: 720px; background-color: #ffffff; position: relative; overflow: hidden; display: block;';
-
-                        // Marpテーマスタイル
-                        const style = document.createElement('style');
-                        let scopedCss = '';
-                        if (marpResultP && marpResultP.source === 'marp-core') {
-                            scopedCss = css.replace(/div\.marpit\s*>\s*svg\s*/g, 'div.marpit .marp-slide-wrapper > svg');
-                            scopedCss += '\ndiv.marpit { color-scheme: light; }';
-                        } else {
-                            scopedCss = css.replace(/\bsection\b/g, '.marp-slide-wrapper section');
+                    // ==========================================
+                    // スライドモード（A4横・余白0・レイアウト100%維持）
+                    // ==========================================
+                    printStyle.textContent = `
+                        @page {
+                            size: landscape;
+                            margin: 0; /* 余白0でファイルパス・日付を強制非表示 */
                         }
-
-                        style.textContent = `
-                            ${scopedCss}
-                            .marp-slide-wrapper { width: 1280px; height: 720px; overflow: hidden; position: relative; display: block !important; transform: none !important; }
-                            .marp-slide-wrapper > svg { width: 100% !important; height: 100% !important; display: block !important; }
-                            .marp-page-number { display: none; }
-                            .header-bar, .page-number { display: none !important; }
-                            
-                            /* HTML-based Mermaid Labels Protection in PDF */
-                            .mermaid-container foreignObject,
-                            .mermaid-container foreignObject div,
-                            .mermaid-container foreignObject span,
-                            .mermaid-container .nodeLabel,
-                            .mermaid-container .edgeLabel,
-                            .mermaid-container .label {
-                                color: #333333 !important;
-                                fill: #333333 !important;
+                        * {
+                            -webkit-print-color-adjust: exact !important;
+                            print-color-adjust: exact !important;
+                            box-sizing: border-box;
+                        }
+                        @media print {
+                            header, .glass-header, .pane-header, .editor-pane, .marp-page-number, ::-webkit-scrollbar {
+                                display: none !important;
+                            }
+                            html, body, .app-container, .split-view, .preview-pane, .preview-container, .preview-container.marp-mode {
+                                display: block !important;
+                                position: static !important;
+                                width: 100% !important;
+                                height: auto !important;
+                                min-height: none !important;
+                                max-height: none !important;
+                                overflow: visible !important;
+                                background: #ffffff !important;
+                                margin: 0 !important;
+                                padding: 0 !important;
+                                box-shadow: none !important;
+                                border: none !important;
+                                flex: none !important;
+                                flex-direction: row !important;
+                                align-items: stretch !important;
+                                justify-content: flex-start !important;
+                                gap: 0 !important;
+                            }
+                            .preview-container, .preview-container.marp-mode {
+                                padding: 0 !important;
+                                background: #ffffff !important;
+                            }
+                            .marpit {
+                                width: 100% !important;
+                                height: auto !important;
+                                margin: 0 !important;
+                                padding: 0 !important;
+                                display: block !important;
                                 background-color: transparent !important;
-                                visibility: visible !important;
-                                opacity: 1 !important;
                             }
-                            .mermaid-container text,
-                            .mermaid-container tspan {
-                                fill: #333333 !important;
-                                font-family: "Inter", sans-serif !important;
+                            .marp-slide-wrapper {
+                                width: 100vw !important;
+                                height: 100vh !important;
+                                min-width: 100vw !important;
+                                min-height: 100vh !important;
+                                max-width: 100vw !important;
+                                max-height: 100vh !important;
+                                margin: 0 !important;
+                                padding: 0 !important;
+                                box-shadow: none !important;
+                                border-radius: 0 !important;
+                                page-break-inside: avoid !important;
+                                break-inside: avoid !important;
+                                page-break-before: avoid !important;
+                                break-before: avoid !important;
+                                display: block !important;
+                                position: relative !important;
+                                overflow: hidden !important;
+                                background-color: #ffffff !important;
                             }
-                        `;
-
-                        const contentDiv = document.createElement('div');
-                        contentDiv.innerHTML = slideWrappers[i].outerHTML;
-
-                        tempContainer.appendChild(style);
-                        tempContainer.appendChild(contentDiv);
-                        offscreen.appendChild(tempContainer);
-
-                        // スライド内のMermaid SVG等をCanvas描画用にPNG画像に変換
-                        const svgs = Array.from(contentDiv.querySelectorAll('svg:not([data-marpit-svg])'));
-                        for (const svg of svgs) {
-                            try {
-                                const pngData = await convertSvgToPng(svg);
-                                if (pngData && pngData.src) {
-                                    const img = document.createElement('img');
-                                    img.src = pngData.src;
-                                    img.style.width = pngData.width + 'px';
-                                    img.style.height = pngData.height + 'px';
-                                    svg.parentNode.replaceChild(img, svg);
-                                }
-                            } catch (err) {
-                                console.error('SVG conversion failed', err);
+                            .marp-slide-wrapper:not(:last-child) {
+                                page-break-after: always !important;
+                                break-after: page !important;
                             }
-                        }
-
-                        // html2canvas を実行して画像化
-                        const canvas = await html2canvas(tempContainer, {
-                            scale: 2, // 高精細化 (Retina対応)
-                            useCORS: true,
-                            backgroundColor: '#ffffff',
-                            width: 1280,
-                            height: 720,
-                            windowWidth: 1280,
-                            windowHeight: 720
-                        });
-
-                        const imgData = canvas.toDataURL('image/jpeg', 0.98);
-
-                        // PDF ページ追加
-                        if (i > 0) {
-                            pdf.addPage([297, 167.06], 'landscape');
-                        }
-                        pdf.addImage(imgData, 'JPEG', 0, 0, 297, 167.06);
-
-                        // 一時スライドを破棄
-                        offscreen.removeChild(tempContainer);
-                    }
-
-                    // PDF を保存
-                    pdf.save(getDocTitle() + '.pdf');
-                    offscreen.remove();
-                    updateStatus('saved', 'PDF出力完了');
-
-                } else {
-                    // ドキュメントモード：安定性の高い従来の html2pdf 一括変換
-                    const printContainer = document.createElement('div');
-                    printContainer.style.colorScheme = 'light';
-                    printContainer.innerHTML = previewContainer.innerHTML;
-
-                    const style = document.createElement('style');
-                    style.textContent = `
-                        .pdf-export-wrapper {
-                            background-color: #ffffff !important; color: #333333 !important;
-                            padding: 20px; width: 710px !important; box-sizing: border-box !important;
-                            word-break: break-word !important; overflow-wrap: break-word !important;
-                            font-family: 'Inter', "Meiryo", "Yu Gothic", sans-serif !important;
-                            line-height: 1.6 !important;
-                        }
-                        .pdf-export-wrapper h1, .pdf-export-wrapper h2, .pdf-export-wrapper h3 {
-                            color: #000 !important; word-break: break-word !important;
-                        }
-                        .pdf-export-wrapper code, .pdf-export-wrapper pre {
-                            background-color: #f6f8fa !important; color: #24292f !important;
-                            white-space: pre-wrap !important; word-break: break-all !important;
-                        }
-                        .pdf-export-wrapper table { width: 100% !important; table-layout: fixed !important; border-collapse: collapse; }
-                        .pdf-export-wrapper th, .pdf-export-wrapper td { border: 1px solid #d0d7de !important; padding: 6px 12px; }
-                        .pdf-export-wrapper th { background: #fff; font-weight: 600; }
-                        .pdf-export-wrapper img, .pdf-export-wrapper svg { max-width: 100% !important; height: auto !important; }
-                        
-                        /* HTML-based Mermaid Labels Protection in PDF Document Mode */
-                        .mermaid-container foreignObject,
-                        .mermaid-container foreignObject div,
-                        .mermaid-container foreignObject span,
-                        .mermaid-container .nodeLabel,
-                        .mermaid-container .edgeLabel,
-                        .mermaid-container .label {
-                            color: #333333 !important;
-                            fill: #333333 !important;
-                            background-color: transparent !important;
-                            visibility: visible !important;
-                            opacity: 1 !important;
-                        }
-                        .mermaid-container text,
-                        .mermaid-container tspan {
-                            fill: #333333 !important;
-                            font-family: "Inter", sans-serif !important;
+                            .marp-slide-wrapper > section {
+                                width: 1280px !important;
+                                height: 720px !important;
+                                transform: scale(calc(100vw / 1280)) !important;
+                                transform-origin: top left !important;
+                                position: absolute !important;
+                                top: 0 !important;
+                                left: 0 !important;
+                                margin: 0 !important;
+                                border: none !important;
+                                box-sizing: border-box !important;
+                            }
+                            .marp-slide-wrapper > svg {
+                                width: 100vw !important;
+                                height: 100vh !important;
+                                display: block !important;
+                                transform: none !important;
+                            }
                         }
                     `;
-                    const wrapper = document.createElement('div');
-                    wrapper.className = 'markdown-body pdf-export-wrapper';
-                    wrapper.appendChild(style);
-                    wrapper.appendChild(printContainer);
-
-                    const offscreen = document.createElement('div');
-                    offscreen.style.cssText = 'position: fixed; top: 0; left: 0; width: 750px; opacity: 0.01; z-index: -9999; pointer-events: none; overflow: auto;';
-                    offscreen.appendChild(wrapper);
-                    document.body.appendChild(offscreen);
-
-                    // Convert remaining SVGs to PNG
-                    const svgs = Array.from(printContainer.querySelectorAll('svg:not([data-marpit-svg])'));
-                    for (const svg of svgs) {
-                        try {
-                            const pngData = await convertSvgToPng(svg);
-                            if (pngData && pngData.src) {
-                                const img = document.createElement('img');
-                                img.src = pngData.src;
-                                img.style.width = pngData.width + 'px';
-                                img.style.height = pngData.height + 'px';
-                                svg.parentNode.replaceChild(img, svg);
+                } else {
+                    // ==========================================
+                    // ドキュメントモード（A4縦・余白0指定でヘッダーカット・内側paddingで余白再現）
+                    // ==========================================
+                    printStyle.textContent = `
+                        @page {
+                            size: A4 portrait;
+                            margin: 0; /* 余白0でファイルパス・日付を強制非表示 */
+                        }
+                        * {
+                            -webkit-print-color-adjust: exact !important;
+                            print-color-adjust: exact !important;
+                        }
+                        @media print {
+                            header, .glass-header, .pane-header, .editor-pane, ::-webkit-scrollbar {
+                                display: none !important;
                             }
-                        } catch (err) {
-                            console.error('SVG conversion failed', err);
+                            html, body, .app-container, .split-view, .preview-pane, .preview-container {
+                                position: static !important;
+                                width: 100% !important;
+                                height: auto !important;
+                                overflow: visible !important;
+                                background: #ffffff !important;
+                                color: #333333 !important;
+                                margin: 0 !important;
+                                padding: 0 !important;
+                                box-shadow: none !important;
+                            }
+                            .app-container, .split-view, .preview-pane, .preview-container {
+                                display: block !important;
+                            }
+                            /* 実際の余白は内側のパディング(padding)で美しく確保 */
+                            .preview-container {
+                                padding: 20mm 15mm !important; 
+                                background: #ffffff !important;
+                            }
+                            .markdown-body {
+                                background: #ffffff !important;
+                                color: #333333 !important;
+                            }
+                            h1, h2, h3, h4, h5, h6 {
+                                color: #000000 !important;
+                                page-break-after: avoid;
+                            }
+                            pre, code {
+                                background-color: #f6f8fa !important;
+                                color: #24292f !important;
+                            }
+                            table, img, svg {
+                                page-break-inside: avoid;
+                            }
                         }
-                    }
-
-                    const opt = {
-                        margin: 10,
-                        filename: getDocTitle() + '.pdf',
-                        image: { type: 'jpeg', quality: 0.98 },
-                        html2canvas: { 
-                            scale: 2, 
-                            useCORS: true, 
-                            backgroundColor: '#ffffff', 
-                            letterRendering: true,
-                            width: 710,
-                            windowWidth: 710
-                        },
-                        jsPDF: { 
-                            unit: 'mm', 
-                            format: 'a4', 
-                            orientation: 'portrait' 
-                        }
-                    };
-
-                    html2pdf().set(opt).from(wrapper).save().then(() => {
-                        offscreen.remove();
-                        updateStatus('saved', 'PDF出力完了');
-                    }).catch(err => {
-                        offscreen.remove();
-                        console.error('PDF generation failed:', err);
-                        updateStatus('normal', 'PDF出力失敗');
-                        alert('PDF出力中にエラーが発生しました。');
-                    });
+                    `;
                 }
+
+                // 絶対優先のために、スタイルシートをbodyの最末尾に挿入する
+                document.body.appendChild(printStyle);
+
+                // 印刷終了後にタイトルとステータス、Marp元のスタイルを復元するリスナー
+                const cleanupPrint = () => {
+                    if (marpStyleTag && originalMarpStyle) {
+                        marpStyleTag.textContent = originalMarpStyle;
+                    }
+                    document.title = originalTitle;
+                    updateStatus('saved', 'PDF出力完了');
+                    window.removeEventListener('afterprint', cleanupPrint);
+                };
+                window.addEventListener('afterprint', cleanupPrint);
+
+                // スタイルがDOMおよびレンダリングエンジンに確実に適用されるよう、200msの待機時間を置いてから非同期で印刷ダイアログを起動
+                await new Promise(resolve => {
+                    requestAnimationFrame(() => {
+                        setTimeout(resolve, 200); // Chromeの描画サイクルを考慮し、200msの遅延を設定
+                    });
+                });
+
+                // 印刷プレビューを起動
+                window.print();
 
             } catch (err) {
                 console.error('PDF export failed:', err);
-                updateStatus('normal', 'エラー');
-                alert('PDFエクスポート機能の実行中にエラーが発生しました。');
+                updateStatus('error', '印刷失敗');
+                alert('PDFエクスポート起動中にエラーが発生しました: ' + err.message);
             }
         }
+
+
+
+
 
         // Export as .html
         async function handleExportHtml() {
