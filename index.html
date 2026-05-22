@@ -1885,6 +1885,17 @@ paginate: true
                     extraStyles = `
                         ${marpStyle}
                         body { background-color: #1a1a2e; margin: 0; padding: 2rem; display: flex; flex-direction: column; align-items: center; gap: 1.5rem; }
+                        div.marpit {
+                            width: auto !important;
+                            height: auto !important;
+                            position: static !important;
+                            overflow: visible !important;
+                            display: flex !important;
+                            flex-direction: column !important;
+                            align-items: center !important;
+                            gap: 1.5rem !important;
+                            background: transparent !important;
+                        }
                         .marp-slide-wrapper { position: relative; box-shadow: 0 20px 60px rgba(0,0,0,0.6); border-radius: 4px; overflow: hidden; width: 1280px; height: 720px; flex-shrink: 0; }
                         .marp-slide-wrapper section { transform-origin: top left !important; transform: scale(1) !important; position: absolute; top:0; left:0; width:100%; height:100%; display:block; }
                         .marp-page-number { text-align: center; font-size: 0.8rem; color: rgba(255,255,255,0.5); font-family: sans-serif; letter-spacing: 0.1em; }
