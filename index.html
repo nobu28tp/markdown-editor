@@ -917,6 +917,11 @@
                     <i data-lucide="globe"></i>
                     <span>HTML出力</span>
                 </button>
+                <button class="btn btn-secondary" id="btn-preview-html"
+                    style="background: #8957e5; border-color: rgba(255, 255, 255, 0.1);" title="HTMLを別タブでプレビュー表示">
+                    <i data-lucide="eye"></i>
+                    <span>HTMLプレビュー</span>
+                </button>
                 <div style="width: 1px; background-color: var(--border-color); margin: 0 0.5rem;"></div>
                 <button class="btn btn-outline" id="btn-open-exporter" title="Mermaid Exporter を別タブで開く">
                     <i data-lucide="external-link"></i>
@@ -1271,12 +1276,28 @@ paginate: true
                 </div>
 
                 <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-                    <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">
-                        📝 ファイルパス (リポジトリ内)
-                    </label>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">
+                            📝 ファイルパス (リポジトリ内)
+                        </label>
+                        <button class="btn" id="btn-gh-browse" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; background: #21262d; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 4px; display: flex; align-items: center; gap: 0.3rem; height: auto; cursor: pointer;">
+                            <i data-lucide="folder-open" style="width: 12px; height: 12px;"></i>
+                            <span>参照</span>
+                        </button>
+                    </div>
                     <input type="text" id="gh-path" placeholder="例: docs/slide.md"
                         style="padding: 0.6rem 0.8rem; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 6px; color: #e6edf3; font-size: 0.9rem; width: 100%; transition: border-color 0.2s;"
                         onfocus="this.style.borderColor='#58a6ff'" onblur="this.style.borderColor='var(--border-color)'">
+                </div>
+
+                <!-- ファイルブラウザ領域 -->
+                <div id="gh-file-browser" style="display: none; flex-direction: column; gap: 0.5rem; padding: 0.75rem; background: rgba(0, 0, 0, 0.2); border: 1px solid var(--border-color); border-radius: 6px; max-height: 250px; overflow-y: auto;">
+                    <div id="gh-breadcrumb" style="font-size: 0.8rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 0.4rem; margin-bottom: 0.2rem;">
+                        <!-- パンくずリスト -->
+                    </div>
+                    <div id="gh-file-list" style="display: flex; flex-direction: column; gap: 0.25rem;">
+                        <!-- ファイル一覧 -->
+                    </div>
                 </div>
 
                 <div id="gh-modal-status" style="font-size: 0.85rem; color: #58a6ff; display: none; padding: 0.5rem 0.8rem; background: rgba(88, 166, 255, 0.08); border-radius: 6px; border: 1px solid rgba(88, 166, 255, 0.15);"></div>
@@ -1828,6 +1849,7 @@ paginate: true
             document.getElementById('btn-export-word').addEventListener('click', handleExportWord);
             document.getElementById('btn-export-pdf').addEventListener('click', handleExportPdf);
             document.getElementById('btn-export-html').addEventListener('click', handleExportHtml);
+            document.getElementById('btn-preview-html').addEventListener('click', handlePreviewHtml);
 
             // Mermaid Exporter を別タブで開く
             document.getElementById('btn-open-exporter').addEventListener('click', () => {
@@ -1851,6 +1873,7 @@ paginate: true
             document.getElementById('btn-save-gh-settings').addEventListener('click', saveGitHubSettings);
             document.getElementById('btn-gh-load').addEventListener('click', loadFromGitHub);
             document.getElementById('btn-gh-save').addEventListener('click', saveToGitHub);
+            document.getElementById('btn-gh-browse').addEventListener('click', browseGitHubRepo);
 
             // Pane toggles
             document.getElementById('btn-toggle-preview').addEventListener('click', () => {
@@ -3187,6 +3210,246 @@ ${slidesHtml}
             }
         }
 
+        // Preview HTML in a new tab (same content as handleExportHtml but opens in browser)
+        async function handlePreviewHtml() {
+            try {
+                updateStatus('saving', 'HTMLプレビュー生成中...');
+
+                const title = (document.getElementById('doc-title-input').value || '').trim() || 'Document';
+                const isSlideMode = previewContainer.classList.contains('marp-mode');
+                let content;
+
+                if (isSlideMode) {
+                    // スライドモード: handleExportHtmlと同じ完全なスライドショーHTMLを生成
+                    const markdown = editor.getValue();
+                    const marpResultH = renderWithMarp(markdown);
+                    const { css: marpCss } = marpResultH;
+
+                    const slideWrappers = Array.from(previewContainer.querySelectorAll('.marp-slide-wrapper'));
+                    if (slideWrappers.length === 0) {
+                        throw new Error("スライドのレンダリングデータが見つかりません。プレビューを表示した状態で実行してください。");
+                    }
+                    const marpSlides = slideWrappers.map(wrapper => wrapper.innerHTML);
+                    const totalSlides = marpSlides.length;
+
+                    const slidesHtml = marpSlides.map((slideHtml, i) =>
+                        '<div class="slide" data-index="' + i + '" style="display:' + (i === 0 ? 'flex' : 'none') + '">' + slideHtml + '</div>'
+                    ).join('\n');
+
+                    let scopedCss = '';
+                    if (marpResultH.source === 'marp-core') {
+                        scopedCss = marpCss.replace(/div\.marpit\s*>\s*svg/g, '#slideshow.marpit .slide > svg');
+                    } else {
+                        scopedCss = marpCss.replace(/\bsection\b/g, '.slide section');
+                    }
+
+                    content = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${title}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: #0d0d1a; width: 100vw; height: 100vh;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            overflow: hidden; font-family: 'Inter', sans-serif; user-select: none;
+        }
+        #progress-bar { position: fixed; top: 0; left: 0; height: 3px; background: linear-gradient(90deg, #58a6ff, #a371f7); transition: width 0.3s ease; z-index: 100; }
+        #slideshow { position: relative; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
+        .slide { position: absolute; display: flex; align-items: center; justify-content: center; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        ${marpResultH.source !== 'marp-core' ? `
+        .slide > * { transform-origin: center center !important; transform: scale(var(--slide-scale, 1)) !important; }
+        ` : `
+        .slide > svg { width: 100vw !important; height: 100vh !important; }
+        `}
+        ${scopedCss}
+        #controls {
+            position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
+            display: flex; align-items: center; gap: 1rem;
+            background: rgba(255,255,255,0.08); backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.15); border-radius: 40px;
+            padding: 0.5rem 1.2rem; opacity: 0; transition: opacity 0.3s ease; z-index: 200;
+        }
+        body:hover #controls { opacity: 1; }
+        .ctrl-btn {
+            background: transparent; border: none; color: rgba(255,255,255,0.8);
+            font-size: 1.2rem; cursor: pointer; padding: 0.3rem 0.6rem;
+            border-radius: 6px; transition: background 0.2s, color 0.2s; line-height: 1;
+        }
+        .ctrl-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+        .ctrl-btn:disabled { opacity: 0.3; cursor: default; }
+        #slide-counter { font-size: 0.85rem; color: rgba(255,255,255,0.7); min-width: 4em; text-align: center; font-variant-numeric: tabular-nums; }
+        #btn-fullscreen { font-size: 1rem; }
+        #zone-prev, #zone-next { position: fixed; top: 0; bottom: 0; width: 20%; cursor: pointer; z-index: 50; }
+        #zone-prev { left: 0; } #zone-next { right: 0; }
+        .slide section .page-number { display: block; }
+        @media print {
+            body { background: #fff; height: auto; overflow: visible; }
+            #controls, #progress-bar, #zone-prev, #zone-next { display: none !important; }
+            .slide { position: static; display: flex !important; page-break-after: always; }
+        }
+        .mermaid-container, #slideshow .mermaid-container { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif !important; }
+        .mermaid-container text, .mermaid-container tspan, #slideshow .mermaid-container text, #slideshow .mermaid-container tspan,
+        svg[data-marpit-svg] .mermaid-container text, svg[data-marpit-svg] .mermaid-container tspan,
+        .slide section .mermaid-container text, .slide section .mermaid-container tspan {
+            fill: #333333 !important; font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif !important;
+            dominant-baseline: auto !important; alignment-baseline: auto !important; baseline-shift: normal !important;
+        }
+        .mermaid-container foreignObject, .mermaid-container foreignObject div, .mermaid-container foreignObject span,
+        .mermaid-container .nodeLabel, .mermaid-container .edgeLabel, .mermaid-container .label,
+        #slideshow .mermaid-container foreignObject, #slideshow .mermaid-container foreignObject div, #slideshow .mermaid-container .nodeLabel,
+        svg[data-marpit-svg] .mermaid-container foreignObject, svg[data-marpit-svg] .mermaid-container foreignObject div, svg[data-marpit-svg] .mermaid-container .nodeLabel,
+        .slide section .mermaid-container foreignObject, .slide section .mermaid-container foreignObject div, .slide section .mermaid-container .nodeLabel {
+            color: #333333 !important; fill: #333333 !important; background-color: transparent !important; visibility: visible !important; opacity: 1 !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="progress-bar"></div>
+    <div id="zone-prev" onclick="changeSlide(-1)"></div>
+    <div id="zone-next" onclick="changeSlide(1)"></div>
+    <div id="slideshow" class="marpit" style="color-scheme: light;">
+${slidesHtml}
+    </div>
+    <div id="controls">
+        <button class="ctrl-btn" id="btn-prev" onclick="changeSlide(-1)" title="前のスライド (←)">&#8592;</button>
+        <span id="slide-counter">1 / ${totalSlides}</span>
+        <button class="ctrl-btn" id="btn-next" onclick="changeSlide(1)" title="次のスライド (→)">&#8594;</button>
+        <button class="ctrl-btn" id="btn-fullscreen" onclick="toggleFullscreen()" title="フルスクリーン (F)">&#x26F6;</button>
+    </div>
+    <script>
+        let current = 0;
+        const total = ${totalSlides};
+        const slides = document.querySelectorAll('.slide');
+        function goTo(n) {
+            if (n < 0 || n >= total) return;
+            slides[current].style.display = 'none';
+            current = n;
+            slides[current].style.display = 'flex';
+            document.getElementById('slide-counter').textContent = (current + 1) + ' / ' + total;
+            document.getElementById('progress-bar').style.width = ((current + 1) / total * 100) + '%';
+            document.getElementById('btn-prev').disabled = current === 0;
+            document.getElementById('btn-next').disabled = current === total - 1;
+        }
+        function changeSlide(dir) { goTo(current + dir); }
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) { document.documentElement.requestFullscreen().catch(() => {}); }
+            else { document.exitFullscreen(); }
+        }
+        document.addEventListener('keydown', e => {
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') { e.preventDefault(); changeSlide(1); }
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); changeSlide(-1); }
+            if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+            if (e.key === 'Home') goTo(0);
+            if (e.key === 'End') goTo(total - 1);
+        });
+        let touchStartX = 0;
+        document.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; }, { passive: true });
+        document.addEventListener('touchend', e => {
+            const dx = e.changedTouches[0].clientX - touchStartX;
+            if (Math.abs(dx) > 50) changeSlide(dx < 0 ? 1 : -1);
+        }, { passive: true });
+        function updateScale() {
+            const vw = window.innerWidth; const vh = window.innerHeight;
+            const sec = document.querySelector('.slide section');
+            const slideW = sec ? sec.offsetWidth || 1280 : 1280;
+            const slideH = sec ? sec.offsetHeight || 720 : 720;
+            const scale = Math.min(vw / slideW, vh / slideH);
+            document.documentElement.style.setProperty('--slide-scale', scale);
+            const scaledW = slideW * scale; const scaledH = slideH * scale;
+            document.querySelectorAll('.slide').forEach(el => { el.style.width = scaledW + 'px'; el.style.height = scaledH + 'px'; });
+        }
+        window.addEventListener('resize', updateScale);
+        goTo(0);
+        setTimeout(updateScale, 50);
+        function cleanupMermaidAttributes() {
+            document.querySelectorAll('.mermaid-container [textLength], .mermaid-container [lengthAdjust]').forEach(el => { el.removeAttribute('textLength'); el.removeAttribute('lengthAdjust'); });
+            document.querySelectorAll('.mermaid-container text, .mermaid-container tspan').forEach(el => { el.style.setProperty('fill', '#333333', 'important'); el.style.setProperty('dominant-baseline', 'auto', 'important'); });
+            document.querySelectorAll('.mermaid-container foreignObject, .mermaid-container foreignObject div, .mermaid-container foreignObject span, .mermaid-container .nodeLabel, .mermaid-container .edgeLabel, .mermaid-container .label').forEach(el => {
+                el.style.setProperty('color', '#333333', 'important'); el.style.setProperty('fill', '#333333', 'important');
+                el.style.setProperty('background-color', 'transparent', 'important'); el.style.setProperty('visibility', 'visible', 'important'); el.style.setProperty('opacity', '1', 'important');
+            });
+        }
+        cleanupMermaidAttributes();
+        window.addEventListener('resize', () => { setTimeout(cleanupMermaidAttributes, 100); });
+    <\/script>
+</body>
+</html>`;
+                } else {
+                    // ドキュメントモード
+                    content = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${title}</title>
+    <style>
+        body { font-family: 'Inter', -apple-system, sans-serif; color: #24292f; background: #fff; line-height: 1.6; max-width: 1200px; margin: 0 auto; padding: 2rem; }
+        h1, h2, h3, h4 { color: #000; margin-top: 24px; margin-bottom: 16px; font-weight: 600; }
+        h1 { font-size: 2em; border-bottom: 1px solid #d0d7de; padding-bottom: .3em; }
+        h2 { font-size: 1.5em; border-bottom: 1px solid #d0d7de; padding-bottom: .3em; }
+        p, blockquote, ul, ol, dl, table, pre { margin-top: 0; margin-bottom: 16px; }
+        a { color: #0969da; text-decoration: none; } a:hover { text-decoration: underline; }
+        code { background: rgba(175,184,193,0.2); padding: .2em .4em; border-radius: 6px; font-family: monospace; font-size: 85%; }
+        pre { background: #f6f8fa; padding: 16px; border-radius: 6px; overflow: auto; }
+        pre code { background: transparent; padding: 0; font-size: 100%; }
+        blockquote { border-left: .25em solid #d0d7de; padding: 0 1em; color: #57606a; }
+        img, svg { display: block; max-width: min(1000px, 100%); height: auto; margin: 0 auto; }
+        table { border-collapse: collapse; width: 100%; display: block; overflow: auto; }
+        th, td { border: 1px solid #d0d7de; padding: 6px 13px; }
+        th { background: #fff; font-weight: 600; } tr:nth-child(2n) { background: #f6f8fa; }
+        .mermaid-container, .markdown-body .mermaid-container { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif !important; }
+        .mermaid-container text, .mermaid-container tspan, .markdown-body .mermaid-container text, .markdown-body .mermaid-container tspan {
+            fill: #333333 !important; font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif !important;
+            dominant-baseline: auto !important; alignment-baseline: auto !important; baseline-shift: normal !important;
+        }
+        .mermaid-container foreignObject, .mermaid-container foreignObject div, .mermaid-container foreignObject span,
+        .mermaid-container .nodeLabel, .mermaid-container .edgeLabel, .mermaid-container .label,
+        .markdown-body .mermaid-container foreignObject, .markdown-body .mermaid-container foreignObject div, .markdown-body .mermaid-container .nodeLabel {
+            color: #333333 !important; fill: #333333 !important; background-color: transparent !important; visibility: visible !important; opacity: 1 !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="markdown-body">${previewContainer.innerHTML}</div>
+    <script>
+        function cleanupMermaidAttributes() {
+            document.querySelectorAll('.mermaid-container [textLength], .mermaid-container [lengthAdjust]').forEach(el => { el.removeAttribute('textLength'); el.removeAttribute('lengthAdjust'); });
+            document.querySelectorAll('.mermaid-container text, .mermaid-container tspan').forEach(el => { el.style.setProperty('fill', '#333333', 'important'); el.style.setProperty('dominant-baseline', 'auto', 'important'); });
+            document.querySelectorAll('.mermaid-container foreignObject, .mermaid-container foreignObject div, .mermaid-container foreignObject span, .mermaid-container .nodeLabel, .mermaid-container .edgeLabel, .mermaid-container .label').forEach(el => {
+                el.style.setProperty('color', '#333333', 'important'); el.style.setProperty('fill', '#333333', 'important');
+                el.style.setProperty('background-color', 'transparent', 'important'); el.style.setProperty('visibility', 'visible', 'important'); el.style.setProperty('opacity', '1', 'important');
+            });
+        }
+        cleanupMermaidAttributes();
+        window.addEventListener('resize', () => { setTimeout(cleanupMermaidAttributes, 100); });
+    <\/script>
+</body>
+</html>`;
+                }
+
+                // 別タブでHTMLプレビューを開く
+                const newWin = window.open('', '_blank');
+                if (!newWin) {
+                    alert('ポップアップがブロックされました。ブラウザの設定を確認してください。');
+                    updateStatus('normal', '');
+                    return;
+                }
+                newWin.document.write(content);
+                newWin.document.close();
+                updateStatus('saved', 'HTMLプレビュー表示完了');
+
+            } catch (err) {
+                console.error('HTML preview failed:', err);
+                updateStatus('normal', 'プレビュー失敗');
+                alert('HTMLプレビュー生成中にエラーが発生しました。');
+            }
+        }
+
 
         // ===== GitHub連携機能 =====
 
@@ -3366,6 +3629,206 @@ ${slidesHtml}
                 console.error('GitHub save failed:', err);
                 showGhStatus('❌ 通信エラー: ' + err.message, '#f85149');
             }
+        }
+
+        // ===== GitHubリポジトリブラウザ機能 =====
+        let currentGhBrowsePath = '';
+
+        // GitHubリポジトリブラウザの表示・非表示トグルとロード
+        async function browseGitHubRepo() {
+            const token = document.getElementById('gh-token').value.trim();
+            const repo = document.getElementById('gh-repo').value.trim();
+
+            if (!token) { showGhStatus('⚠️ パーソナルアクセストークンを入力してください', '#d29922'); return; }
+            if (!repo) { showGhStatus('⚠️ リポジトリ名 (owner/repo) を入力してください', '#d29922'); return; }
+
+            const browserEl = document.getElementById('gh-file-browser');
+            
+            // すでに表示されている場合は非表示にする
+            if (browserEl.style.display === 'flex') {
+                browserEl.style.display = 'none';
+                return;
+            }
+
+            // ルートフォルダから取得
+            currentGhBrowsePath = '';
+            await fetchGitHubDir(currentGhBrowsePath);
+        }
+
+        // 指定パスのGitHubリポジトリ内容を取得
+        async function fetchGitHubDir(path) {
+            const token = document.getElementById('gh-token').value.trim();
+            const repo = document.getElementById('gh-repo').value.trim();
+            const branch = document.getElementById('gh-branch').value.trim() || 'main';
+            
+            const fileListEl = document.getElementById('gh-file-list');
+            const browserEl = document.getElementById('gh-file-browser');
+
+            browserEl.style.display = 'flex';
+            fileListEl.innerHTML = '<div style="font-size: 0.85rem; color: var(--text-secondary); padding: 0.5rem; text-align: center;">⌛ 読み込み中...</div>';
+            
+            renderBreadcrumb(path);
+
+            try {
+                const url = `https://api.github.com/repos/${repo}/contents/${path ? path : ''}?ref=${branch}`;
+                const res = await fetch(url, {
+                    headers: {
+                        'Authorization': `token ${token}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                });
+
+                if (!res.ok) {
+                    if (res.status === 404) {
+                        fileListEl.innerHTML = '<div style="font-size: 0.85rem; color: #f85149; padding: 0.5rem;">❌ フォルダまたはリポジトリが見つかりません。</div>';
+                    } else if (res.status === 401) {
+                        fileListEl.innerHTML = '<div style="font-size: 0.85rem; color: #f85149; padding: 0.5rem;">❌ 認証失敗。トークンを確認してください。</div>';
+                    } else {
+                        fileListEl.innerHTML = `<div style="font-size: 0.85rem; color: #f85149; padding: 0.5rem;">❌ エラー: ${res.status}</div>`;
+                    }
+                    return;
+                }
+
+                const items = await res.json();
+                
+                // フォルダを先、ファイルを後に並び替える
+                items.sort((a, b) => {
+                    if (a.type === b.type) return a.name.localeCompare(b.name);
+                    return a.type === 'dir' ? -1 : 1;
+                });
+
+                renderFileBrowser(items, path);
+            } catch (err) {
+                console.error('GitHub fetch dir failed:', err);
+                fileListEl.innerHTML = `<div style="font-size: 0.85rem; color: #f85149; padding: 0.5rem;">❌ エラー: ${err.message}</div>`;
+            }
+        }
+
+        // パンくずリストのレンダリング
+        function renderBreadcrumb(path) {
+            const breadcrumbEl = document.getElementById('gh-breadcrumb');
+            breadcrumbEl.innerHTML = '';
+
+            // ルート
+            const rootSpan = document.createElement('span');
+            rootSpan.textContent = 'root';
+            rootSpan.style.cursor = 'pointer';
+            rootSpan.style.color = '#58a6ff';
+            rootSpan.style.fontWeight = '600';
+            rootSpan.addEventListener('click', () => {
+                currentGhBrowsePath = '';
+                fetchGitHubDir('');
+            });
+            breadcrumbEl.appendChild(rootSpan);
+
+            if (!path) return;
+
+            const parts = path.split('/');
+            let accumulatedPath = '';
+
+            parts.forEach((part, index) => {
+                const separator = document.createElement('span');
+                separator.textContent = ' / ';
+                separator.style.color = 'var(--text-secondary)';
+                breadcrumbEl.appendChild(separator);
+
+                accumulatedPath += (index === 0 ? '' : '/') + part;
+                const currentPathCopy = accumulatedPath;
+
+                const partSpan = document.createElement('span');
+                partSpan.textContent = part;
+                
+                if (index === parts.length - 1) {
+                    partSpan.style.color = 'var(--text-primary)';
+                    partSpan.style.fontWeight = 'bold';
+                } else {
+                    partSpan.style.cursor = 'pointer';
+                    partSpan.style.color = '#58a6ff';
+                    partSpan.addEventListener('click', () => {
+                        currentGhBrowsePath = currentPathCopy;
+                        fetchGitHubDir(currentPathCopy);
+                    });
+                }
+                breadcrumbEl.appendChild(partSpan);
+            });
+        }
+
+        // ファイルリストのレンダリング
+        function renderFileBrowser(items, currentPath) {
+            const fileListEl = document.getElementById('gh-file-list');
+            fileListEl.innerHTML = '';
+
+            if (items.length === 0) {
+                fileListEl.innerHTML = '<div style="font-size: 0.85rem; color: var(--text-secondary); padding: 0.5rem; text-align: center;">このフォルダは空です。</div>';
+                return;
+            }
+
+            items.forEach(item => {
+                const itemEl = document.createElement('div');
+                itemEl.style.display = 'flex';
+                itemEl.style.alignItems = 'center';
+                itemEl.style.gap = '0.5rem';
+                itemEl.style.padding = '0.4rem 0.6rem';
+                itemEl.style.borderRadius = '4px';
+                itemEl.style.cursor = 'pointer';
+                itemEl.style.transition = 'background 0.2s';
+                itemEl.style.fontSize = '0.9rem';
+                
+                // ホバーエフェクト
+                itemEl.addEventListener('mouseenter', () => {
+                    itemEl.style.background = 'rgba(255, 255, 255, 0.08)';
+                });
+                itemEl.addEventListener('mouseleave', () => {
+                    itemEl.style.background = 'transparent';
+                });
+
+                const icon = document.createElement('i');
+                icon.style.width = '16px';
+                icon.style.height = '16px';
+                icon.style.flexShrink = '0';
+
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = item.name;
+                nameSpan.style.overflow = 'hidden';
+                nameSpan.style.textOverflow = 'ellipsis';
+                nameSpan.style.whiteSpace = 'nowrap';
+
+                if (item.type === 'dir') {
+                    icon.setAttribute('data-lucide', 'folder');
+                    icon.style.color = '#e3b341';
+                    itemEl.appendChild(icon);
+                    itemEl.appendChild(nameSpan);
+                    
+                    itemEl.addEventListener('click', () => {
+                        currentGhBrowsePath = item.path;
+                        fetchGitHubDir(item.path);
+                    });
+                } else {
+                    icon.setAttribute('data-lucide', 'file-text');
+                    icon.style.color = '#8b949e';
+                    itemEl.appendChild(icon);
+                    itemEl.appendChild(nameSpan);
+
+                    itemEl.addEventListener('click', () => {
+                        selectGitHubFile(item.path);
+                    });
+                }
+
+                fileListEl.appendChild(itemEl);
+            });
+
+            // Lucideアイコンの再描画
+            if (window.lucide) {
+                window.lucide.createIcons();
+            }
+        }
+
+        // ファイルが選択されたとき
+        function selectGitHubFile(filePath) {
+            document.getElementById('gh-path').value = filePath;
+            // ファイルブラウザを閉じる
+            document.getElementById('gh-file-browser').style.display = 'none';
+            showGhStatus('📂 ファイルを選択しました: ' + filePath, '#58a6ff');
         }
 
         // Initialize application
