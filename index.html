@@ -3524,11 +3524,13 @@ ${slidesHtml}
             showGhStatus('📥 GitHubから読み込み中...', '#58a6ff');
             try {
                 const res = await fetch(
-                    `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}`,
+                    `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}&_=${Date.now()}`,
                     {
+                        cache: 'no-store',
                         headers: {
                             'Authorization': `token ${token}`,
-                            'Accept': 'application/vnd.github.v3.raw'
+                            'Accept': 'application/vnd.github.v3.raw',
+                            'Cache-Control': 'no-cache'
                         }
                     }
                 );
@@ -3572,11 +3574,13 @@ ${slidesHtml}
                 let sha = null;
                 try {
                     const checkRes = await fetch(
-                        `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}`,
+                        `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}&_=${Date.now()}`,
                         {
+                            cache: 'no-store',
                             headers: {
                                 'Authorization': `token ${token}`,
-                                'Accept': 'application/vnd.github.v3+json'
+                                'Accept': 'application/vnd.github.v3+json',
+                                'Cache-Control': 'no-cache'
                             }
                         }
                     );
@@ -3670,11 +3674,13 @@ ${slidesHtml}
             renderBreadcrumb(path);
 
             try {
-                const url = `https://api.github.com/repos/${repo}/contents/${path ? path : ''}?ref=${branch}`;
+                const url = `https://api.github.com/repos/${repo}/contents/${path ? path : ''}?ref=${branch}&_=${Date.now()}`;
                 const res = await fetch(url, {
+                    cache: 'no-store',
                     headers: {
                         'Authorization': `token ${token}`,
-                        'Accept': 'application/vnd.github.v3+json'
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Cache-Control': 'no-cache'
                     }
                 });
 
