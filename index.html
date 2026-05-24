@@ -3526,11 +3526,9 @@ ${slidesHtml}
                 const res = await fetch(
                     `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}&_=${Date.now()}`,
                     {
-                        cache: 'no-store',
                         headers: {
                             'Authorization': `token ${token}`,
-                            'Accept': 'application/vnd.github.v3.raw',
-                            'Cache-Control': 'no-cache'
+                            'Accept': 'application/vnd.github.v3.raw'
                         }
                     }
                 );
@@ -3576,11 +3574,9 @@ ${slidesHtml}
                     const checkRes = await fetch(
                         `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}&_=${Date.now()}`,
                         {
-                            cache: 'no-store',
                             headers: {
                                 'Authorization': `token ${token}`,
-                                'Accept': 'application/vnd.github.v3+json',
-                                'Cache-Control': 'no-cache'
+                                'Accept': 'application/vnd.github.v3+json'
                             }
                         }
                     );
@@ -3676,11 +3672,9 @@ ${slidesHtml}
             try {
                 const url = `https://api.github.com/repos/${repo}/contents/${path ? path : ''}?ref=${branch}&_=${Date.now()}`;
                 const res = await fetch(url, {
-                    cache: 'no-store',
                     headers: {
                         'Authorization': `token ${token}`,
-                        'Accept': 'application/vnd.github.v3+json',
-                        'Cache-Control': 'no-cache'
+                        'Accept': 'application/vnd.github.v3+json'
                     }
                 });
 
