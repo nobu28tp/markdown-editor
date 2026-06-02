@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Markdown Editor (Ver.5.2.5)</title>
+    <title>Markdown Editor (Ver.5.3.1)</title>
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -748,6 +748,86 @@
             margin-bottom: 16px;
         }
 
+        /* Lists */
+        .markdown-body ul,
+        .markdown-body ol {
+            padding-left: 2em;
+        }
+
+        .markdown-body ol {
+            list-style-type: decimal;
+        }
+
+        .markdown-body ul {
+            list-style-type: disc;
+        }
+
+        .markdown-body li {
+            margin-top: 0.25em;
+        }
+
+        .markdown-body li>p {
+            margin-top: 16px;
+        }
+
+        .markdown-body li+li {
+            margin-top: 0.25em;
+        }
+
+        /* Nested lists */
+        .markdown-body ul ul,
+        .markdown-body ul ol,
+        .markdown-body ol ul,
+        .markdown-body ol ol {
+            margin-top: 0;
+            margin-bottom: 0;
+        }
+
+        .markdown-body ul ul {
+            list-style-type: circle;
+        }
+
+        .markdown-body ul ul ul {
+            list-style-type: square;
+        }
+
+        /* Task lists (GFM) */
+        .markdown-body .contains-task-list {
+            list-style-type: none;
+            padding-left: 1.5em;
+        }
+
+        .markdown-body .task-list-item {
+            position: relative;
+        }
+
+        .markdown-body .task-list-item input[type="checkbox"] {
+            margin: 0 0.35em 0 -1.4em;
+            vertical-align: middle;
+            cursor: default;
+        }
+
+        /* Horizontal rule */
+        .markdown-body hr {
+            height: 0.25em;
+            padding: 0;
+            margin: 24px 0;
+            background-color: #d0d7de;
+            border: 0;
+            border-radius: 2px;
+        }
+
+        /* Definition lists */
+        .markdown-body dl dt {
+            font-weight: 600;
+            margin-top: 16px;
+        }
+
+        .markdown-body dl dd {
+            padding-left: 16px;
+            margin-bottom: 16px;
+        }
+
         .markdown-body a {
             color: #0969da;
             text-decoration: none;
@@ -886,6 +966,160 @@
             color: var(--text-secondary);
             opacity: 0.6;
         }
+
+        /* ── Document Theme Dropdown ── */
+        .doc-theme-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .doc-theme-menu {
+            display: none;
+            position: absolute;
+            top: calc(100% + 4px);
+            right: 0;
+            min-width: 260px;
+            background: var(--pane-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 6px 0;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            z-index: 1000;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .doc-theme-menu.show {
+            display: block;
+        }
+
+        .doc-theme-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            color: var(--text-primary);
+            transition: background 0.15s;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+            font-family: var(--font-ui);
+        }
+
+        .doc-theme-menu-item:hover {
+            background: rgba(88, 166, 255, 0.1);
+        }
+
+        .doc-theme-menu-item.active {
+            color: var(--accent-color);
+            font-weight: 600;
+        }
+
+        .doc-theme-menu-item .check-mark {
+            width: 16px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .doc-theme-menu-divider {
+            height: 1px;
+            background: var(--border-color);
+            margin: 4px 0;
+        }
+
+        /* ── CSS Editor Modal ── */
+        .css-editor-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(4px);
+        }
+
+        .css-editor-overlay.show {
+            display: flex;
+        }
+
+        .css-editor-modal {
+            background: var(--pane-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            width: 700px;
+            max-width: 90vw;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 16px 48px rgba(0,0,0,0.4);
+        }
+
+        .css-editor-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .css-editor-header h3 {
+            font-size: 1rem;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        .css-editor-body {
+            padding: 16px 20px;
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .css-editor-body textarea {
+            flex: 1;
+            min-height: 300px;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+            font-size: 13px;
+            line-height: 1.5;
+            padding: 12px;
+            resize: vertical;
+            tab-size: 2;
+        }
+
+        .css-editor-body textarea:focus {
+            outline: none;
+            border-color: var(--accent-color);
+        }
+
+        .css-editor-hint {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .css-editor-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            border-top: 1px solid var(--border-color);
+            gap: 8px;
+        }
+
+        .css-editor-footer .btn-group {
+            display: flex;
+            gap: 8px;
+        }
     </style>
 </head>
 
@@ -896,7 +1130,7 @@
             <div class="header-left">
                 <div class="logo">
                     <i data-lucide="pen-tool"></i>
-                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.2.5)</span>
+                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.3.1)</span>
                     </h1>
                 </div>
                 <div class="status-indicator" id="save-status">
@@ -964,6 +1198,44 @@
                     <i data-lucide="eye"></i>
                     <span>HTMLプレビュー</span>
                 </button>
+                <div class="doc-theme-dropdown" id="doc-theme-dropdown">
+                    <button class="btn btn-outline" id="btn-doc-theme" style="border-color: rgba(163, 113, 247, 0.4);" title="ドキュメントテーマを選択">
+                        <i data-lucide="palette"></i>
+                        <span>テーマ</span>
+                    </button>
+                    <div class="doc-theme-menu" id="doc-theme-menu">
+                        <button class="doc-theme-menu-item active" data-theme="github">
+                            <span class="check-mark">✓</span>
+                            <span>📄 GitHub（デフォルト）</span>
+                        </button>
+                        <button class="doc-theme-menu-item" data-theme="academic">
+                            <span class="check-mark"></span>
+                            <span>📚 アカデミック（論文風）</span>
+                        </button>
+                        <button class="doc-theme-menu-item" data-theme="corporate">
+                            <span class="check-mark"></span>
+                            <span>💼 コーポレート（ビジネス）</span>
+                        </button>
+                        <button class="doc-theme-menu-item" data-theme="minimal">
+                            <span class="check-mark"></span>
+                            <span>✨ ミニマル</span>
+                        </button>
+                        <div class="doc-theme-menu-divider"></div>
+                        <button class="doc-theme-menu-item" id="btn-load-css-file">
+                            <span class="check-mark"></span>
+                            <span>📂 CSSファイルを読み込む...</span>
+                        </button>
+                        <button class="doc-theme-menu-item" id="btn-open-css-editor">
+                            <span class="check-mark"></span>
+                            <span>✏️ カスタムCSSを編集...</span>
+                        </button>
+                        <div class="doc-theme-menu-divider"></div>
+                        <button class="doc-theme-menu-item" id="btn-reset-theme" style="color: #f85149;">
+                            <span class="check-mark"></span>
+                            <span>🗑️ カスタムテーマを削除</span>
+                        </button>
+                    </div>
+                </div>
                 <div style="width: 1px; background-color: var(--border-color); margin: 0 0.5rem;"></div>
                 <button class="btn btn-outline" id="btn-open-exporter" title="Mermaid Exporter を別タブで開く">
                     <i data-lucide="external-link"></i>
@@ -1015,6 +1287,33 @@
                     <!-- HTML Preview will be rendered here -->
                 </div>
                 <style id="marp-style"></style>
+                <style id="custom-theme-style"></style>
+
+                <!-- CSS Editor Modal -->
+                <div class="css-editor-overlay" id="css-editor-overlay">
+                    <div class="css-editor-modal">
+                        <div class="css-editor-header">
+                            <h3>✏️ カスタムCSSエディター</h3>
+                            <button class="btn-pane-icon" id="btn-close-css-editor" title="閉じる">
+                                <i data-lucide="x"></i>
+                            </button>
+                        </div>
+                        <div class="css-editor-body">
+                            <textarea id="css-editor-textarea" spellcheck="false" placeholder="カスタムCSSをここに入力..."></textarea>
+                            <div class="css-editor-hint">
+                                💡 入力したCSSは自動的にプレビュー領域にスコーピングされます。<br>
+                                　 例: <code>h1 { color: red; }</code> → ドキュメント・スライド両方の見出しに適用
+                            </div>
+                        </div>
+                        <div class="css-editor-footer">
+                            <button class="btn btn-outline" id="btn-css-template">テンプレート挿入</button>
+                            <div class="btn-group">
+                                <button class="btn btn-outline" id="btn-cancel-css-editor">キャンセル</button>
+                                <button class="btn btn-primary" id="btn-apply-css-editor">適用して保存</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </section>
         </main>
     </div>
@@ -2350,8 +2649,8 @@ paginate: true
                     }
                     const rawHtml = marked.parse(markdownText);
                     const cleanHtml = DOMPurify.sanitize(rawHtml, {
-                        ADD_TAGS: ['iframe'],
-                        ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'target']
+                        ADD_TAGS: ['iframe', 'input'],
+                        ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'target', 'type', 'checked', 'disabled', 'start']
                     });
                     previewContainer.innerHTML = cleanHtml;
                     marpStyleTag.textContent = '';
@@ -2501,7 +2800,263 @@ paginate: true
         }
 
         // ── App Version ──
-        const APP_VERSION = '5.2.5';
+        const APP_VERSION = '5.3.1';
+
+        // ══════════════════════════════════════
+        // 🎨 Document Theme Engine
+        // ══════════════════════════════════════
+        const PRESET_THEMES = {
+            github: '', // Default — no override CSS needed
+            academic: `
+                h1 { font-family: 'Noto Serif JP', 'Georgia', serif; border-bottom: 2px solid #333; padding-bottom: 0.3em; }
+                h2 { font-family: 'Noto Serif JP', 'Georgia', serif; border-bottom: 1px solid #999; padding-bottom: 0.2em; }
+                h3, h4, h5, h6 { font-family: 'Noto Serif JP', 'Georgia', serif; }
+                body, p, li, td, th, dd, dt { font-family: 'Noto Serif JP', 'Georgia', serif; font-size: 15px; line-height: 1.9; }
+                blockquote { font-style: italic; border-left-color: #666; }
+                table th { background-color: #f0f0f0; font-weight: 700; }
+                code { font-size: 80%; }
+                hr { background-color: #333; height: 1px; }
+            `,
+            corporate: `
+                h1 { color: #1b3a5c; border-bottom: 3px solid #1b3a5c; padding-bottom: 0.3em; font-size: 1.8em; }
+                h2 { color: #2c5f8a; border-left: 4px solid #2c5f8a; padding-left: 0.6em; border-bottom: none; }
+                h3 { color: #3a7ab5; }
+                table th { background-color: #1b3a5c; color: #ffffff; border-color: #1b3a5c; }
+                table td { border-color: #ccd6e0; }
+                table tr:nth-child(2n) { background-color: #eef3f8; }
+                blockquote { border-left-color: #2c5f8a; background: rgba(44, 95, 138, 0.04); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+                code { background-color: rgba(27, 58, 92, 0.08); color: #1b3a5c; }
+            `,
+            minimal: `
+                h1 { font-weight: 300; font-size: 2em; border-bottom: none; letter-spacing: -0.02em; }
+                h2 { font-weight: 400; font-size: 1.4em; border-bottom: none; color: #555; margin-top: 2em; }
+                h3 { font-weight: 600; font-size: 1.1em; border-bottom: none; color: #666; }
+                p { line-height: 1.85; }
+                table { border-collapse: collapse; }
+                table th, table td { border: none; border-bottom: 1px solid #e0e0e0; padding: 10px 16px; }
+                table th { font-weight: 600; text-align: left; color: #888; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.05em; }
+                table tr:nth-child(2n) { background-color: transparent; }
+                blockquote { border-left: 2px solid #ddd; color: #777; font-style: italic; }
+                code { background-color: rgba(0,0,0,0.04); border-radius: 3px; }
+                pre { border-radius: 4px; border: 1px solid #eee; }
+                hr { background-color: #eee; height: 1px; }
+            `
+        };
+
+        let currentDocTheme = 'github';
+        const customThemeStyleTag = document.getElementById('custom-theme-style');
+
+        function prefixCssSelectors(rawCss, prefix) {
+            let result = '';
+            let i = 0;
+            const css = rawCss.replace(/\/\*[\s\S]*?\*\//g, ''); // コメント除去
+
+            while (i < css.length) {
+                while (i < css.length && /\s/.test(css[i])) { result += css[i]; i++; }
+                if (i >= css.length) break;
+
+                if (css[i] === '@') {
+                    const atStart = i;
+                    while (i < css.length && css[i] !== '{' && css[i] !== ';') i++;
+                    if (i < css.length && css[i] === ';') {
+                        result += css.substring(atStart, i + 1);
+                        i++;
+                        continue;
+                    }
+                    if (i < css.length && css[i] === '{') {
+                        const atRule = css.substring(atStart, i);
+                        if (/^@(keyframes|font-face)/.test(atRule.trim())) {
+                            let depth = 1;
+                            let j = i + 1;
+                            while (j < css.length && depth > 0) {
+                                if (css[j] === '{') depth++;
+                                if (css[j] === '}') depth--;
+                                j++;
+                            }
+                            result += css.substring(atStart, j);
+                            i = j;
+                        } else {
+                            let depth = 1;
+                            let j = i + 1;
+                            while (j < css.length && depth > 0) {
+                                if (css[j] === '{') depth++;
+                                if (css[j] === '}') depth--;
+                                j++;
+                            }
+                            const innerCss = css.substring(i + 1, j - 1);
+                            result += atRule + '{' + prefixCssSelectors(innerCss, prefix) + '}';
+                            i = j;
+                        }
+                    }
+                    continue;
+                }
+
+                const selStart = i;
+                while (i < css.length && css[i] !== '{') i++;
+                if (i >= css.length) break;
+
+                const selectorBlock = css.substring(selStart, i).trim();
+                let depth = 1;
+                let j = i + 1;
+                while (j < css.length && depth > 0) {
+                    if (css[j] === '{') depth++;
+                    if (css[j] === '}') depth--;
+                    j++;
+                }
+                const body = css.substring(i, j);
+
+                const scopedSelectors = selectorBlock.split(',').map(s => {
+                    s = s.trim();
+                    if (!s) return s;
+                    return prefix + ' ' + s;
+                }).join(', ');
+
+                result += scopedSelectors + ' ' + body;
+                i = j;
+            }
+
+            return result;
+        }
+
+        function scopeCustomCss(rawCss) {
+            if (!rawCss || !rawCss.trim()) return '';
+            const docCss = prefixCssSelectors(rawCss, '#preview-content.markdown-body');
+            const slideCss = prefixCssSelectors(rawCss, '#preview-content .marp-slide-wrapper section');
+            return '/* === Document Mode === */\n' + docCss + '\n\n/* === Slide Mode === */\n' + slideCss;
+        }
+
+        function applyDocTheme(themeName, customCss) {
+            currentDocTheme = themeName;
+
+            let cssToApply = '';
+            if (themeName === 'custom' && customCss) {
+                cssToApply = scopeCustomCss(customCss);
+            } else if (PRESET_THEMES[themeName]) {
+                cssToApply = scopeCustomCss(PRESET_THEMES[themeName]);
+            }
+            
+            if(customThemeStyleTag) {
+                customThemeStyleTag.textContent = cssToApply;
+            }
+
+            document.querySelectorAll('#doc-theme-menu .doc-theme-menu-item[data-theme]').forEach(item => {
+                const isActive = item.getAttribute('data-theme') === themeName;
+                item.classList.toggle('active', isActive);
+                item.querySelector('.check-mark').textContent = isActive ? '✓' : '';
+            });
+
+            localStorage.setItem('lumina_doc_theme', themeName);
+            if (themeName === 'custom' && customCss) {
+                localStorage.setItem('lumina_custom_css', customCss);
+            }
+        }
+
+        function restoreDocTheme() {
+            const saved = localStorage.getItem('lumina_doc_theme') || 'github';
+            if (saved === 'custom') {
+                const css = localStorage.getItem('lumina_custom_css') || '';
+                applyDocTheme('custom', css);
+            } else {
+                applyDocTheme(saved);
+            }
+        }
+
+        // ── Theme dropdown toggle ──
+        document.getElementById('btn-doc-theme').addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.getElementById('doc-theme-menu').classList.toggle('show');
+        });
+
+        // Close dropdown on outside click
+        document.addEventListener('click', (e) => {
+            const dropdown = document.getElementById('doc-theme-dropdown');
+            if (!dropdown.contains(e.target)) {
+                document.getElementById('doc-theme-menu').classList.remove('show');
+            }
+        });
+
+        // ── Theme preset selection ──
+        document.querySelectorAll('#doc-theme-menu .doc-theme-menu-item[data-theme]').forEach(item => {
+            item.addEventListener('click', () => {
+                applyDocTheme(item.getAttribute('data-theme'));
+                document.getElementById('doc-theme-menu').classList.remove('show');
+            });
+        });
+
+        // ── Load CSS file ──
+        document.getElementById('btn-load-css-file').addEventListener('click', () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.css,text/css';
+            input.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    const css = ev.target.result;
+                    localStorage.setItem('lumina_custom_css', css);
+                    applyDocTheme('custom', css);
+                    document.getElementById('css-editor-textarea').value = css;
+                };
+                reader.readAsText(file);
+            });
+            input.click();
+            document.getElementById('doc-theme-menu').classList.remove('show');
+        });
+
+        // ── CSS Editor Modal ──
+        document.getElementById('btn-open-css-editor').addEventListener('click', () => {
+            const textarea = document.getElementById('css-editor-textarea');
+            const savedCss = localStorage.getItem('lumina_custom_css') || '';
+            textarea.value = savedCss;
+            document.getElementById('css-editor-overlay').classList.add('show');
+            document.getElementById('doc-theme-menu').classList.remove('show');
+            textarea.focus();
+        });
+
+        document.getElementById('btn-close-css-editor').addEventListener('click', () => {
+            document.getElementById('css-editor-overlay').classList.remove('show');
+        });
+
+        document.getElementById('btn-cancel-css-editor').addEventListener('click', () => {
+            document.getElementById('css-editor-overlay').classList.remove('show');
+        });
+
+        document.getElementById('btn-apply-css-editor').addEventListener('click', () => {
+            const css = document.getElementById('css-editor-textarea').value;
+            localStorage.setItem('lumina_custom_css', css);
+            applyDocTheme('custom', css);
+            document.getElementById('css-editor-overlay').classList.remove('show');
+            updateStatus('saved', 'カスタムテーマ適用');
+        });
+
+        // Close modal on overlay click
+        document.getElementById('css-editor-overlay').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) {
+                document.getElementById('css-editor-overlay').classList.remove('show');
+            }
+        });
+
+        // ── Template insertion ──
+        document.getElementById('btn-css-template').addEventListener('click', () => {
+            const template = `/* ── カスタムテーマ ──\n * このCSSはドキュメント・スライド両方に自動適用されます。\n * セレクタは自動的にプレビュー領域にスコーピングされるため、\n * h1, p, table 等をそのまま書けます。\n */\n\n/* 基本テキスト */\np, li, td, th {\n    font-family: 'Noto Sans JP', sans-serif;\n    font-size: 16px;\n    line-height: 1.8;\n}\n\n/* 見出し */\nh1 {\n    color: #1a365d;\n    border-bottom: 2px solid #2b6cb0;\n    padding-bottom: 0.3em;\n}\n\nh2 {\n    color: #2c5282;\n}\n\n/* テーブル */\ntable th {\n    background-color: #2b6cb0;\n    color: #ffffff;\n}\n\n/* コードブロック */\npre {\n    border-radius: 8px;\n}\n\ncode {\n    font-size: 85%;\n}\n\n/* 引用 */\nblockquote {\n    border-left-color: #2b6cb0;\n    background: rgba(43, 108, 176, 0.04);\n    padding: 0.5em 1em;\n    border-radius: 0 6px 6px 0;\n}`;
+            const textarea = document.getElementById('css-editor-textarea');
+            if (textarea.value.trim() && !confirm('現在の内容をテンプレートで置き換えますか？')) return;
+            textarea.value = template;
+            textarea.focus();
+        });
+
+        // ── Reset custom theme ──
+        document.getElementById('btn-reset-theme').addEventListener('click', () => {
+            localStorage.removeItem('lumina_custom_css');
+            document.getElementById('css-editor-textarea').value = '';
+            applyDocTheme('github');
+            document.getElementById('doc-theme-menu').classList.remove('show');
+            updateStatus('saved', 'テーマをリセット');
+        });
+
+        // ── Restore theme on startup ──
+        restoreDocTheme();
 
         // ── Helper: Get sanitized document title for use in filenames ──
         function getDocTitle() {
@@ -2831,8 +3386,15 @@ paginate: true
                 updateStatus('saving', 'Word出力生成中...');
 
                 const exportContainer = document.createElement('div');
+                exportContainer.id = 'preview-content';
                 exportContainer.style.colorScheme = 'light';
                 exportContainer.innerHTML = previewContainer.innerHTML;
+
+                if (customThemeStyleTag && customThemeStyleTag.textContent) {
+                    const themeStyle = document.createElement('style');
+                    themeStyle.textContent = customThemeStyleTag.textContent;
+                    exportContainer.prepend(themeStyle);
+                }
 
                 const wrapper = document.createElement('div');
                 wrapper.style.position = 'absolute';
@@ -3198,6 +3760,10 @@ paginate: true
                     } else {
                         scopedCss = marpCss.replace(/\bsection\b/g, '.slide section');
                     }
+                    
+                    if (customThemeStyleTag && customThemeStyleTag.textContent) {
+                        scopedCss += '\n\n/* Custom Theme */\n' + customThemeStyleTag.textContent.replace(/#preview-content\.markdown-body/g, 'body').replace(/#preview-content \.marp-slide-wrapper/g, '#slideshow .slide');
+                    }
 
                     content = `<!DOCTYPE html>
 <html lang="ja">
@@ -3551,10 +4117,11 @@ ${slidesHtml}
             visibility: visible !important;
             opacity: 1 !important;
         }
+        ${customThemeStyleTag && customThemeStyleTag.textContent ? customThemeStyleTag.textContent : ''}
     </style>
 </head>
 <body>
-    <div class="markdown-body">${previewContainer.innerHTML}</div>
+    <div id="preview-content" class="markdown-body">${previewContainer.innerHTML}</div>
     <script>
         function cleanupMermaidAttributes() {
             document.querySelectorAll('.mermaid-container [textLength], .mermaid-container [lengthAdjust]').forEach(el => {
