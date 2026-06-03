@@ -572,6 +572,7 @@
         /* Mermaid Text & Font Protection (Prevent white-out and font size mismatch by themes) */
         .mermaid-container,
         div.marpit .mermaid-container {
+            background-color: #ffffff;
             font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif !important;
         }
 
@@ -585,7 +586,6 @@
         div.marpit svg[data-marpit-svg] .mermaid-container tspan,
         .marp-slide-wrapper section .mermaid-container text,
         .marp-slide-wrapper section .mermaid-container tspan {
-            fill: #333333 !important;
             font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif !important;
             dominant-baseline: auto !important;
             alignment-baseline: auto !important;
@@ -613,9 +613,7 @@
         .marp-slide-wrapper section .mermaid-container foreignObject,
         .marp-slide-wrapper section .mermaid-container foreignObject div,
         .marp-slide-wrapper section .mermaid-container .nodeLabel {
-            color: #333333 !important;
-            fill: #333333 !important;
-            background-color: transparent !important;
+            background-color: transparent;
             visibility: visible !important;
             opacity: 1 !important;
         }
@@ -1119,6 +1117,11 @@
         .css-editor-footer .btn-group {
             display: flex;
             gap: 8px;
+        }
+
+        /* ── CodeMirror Error Line Highlight ── */
+        .cm-error-line {
+            background-color: rgba(248, 81, 73, 0.15) !important;
         }
     </style>
 </head>
@@ -2109,23 +2112,8 @@ paginate: true
             });
 
             if (window.mermaid) {
-                mermaid.initialize({
-                    startOnLoad: false,
-                    theme: 'base',
-                    securityLevel: 'loose',
-                    flowchart: {
-                        htmlLabels: false,
-                        useMaxWidth: true
-                    },
-                    themeVariables: {
-                        primaryColor: '#f8f9fa',
-                        primaryBorderColor: '#888888',
-                        primaryTextColor: '#333333',
-                        lineColor: '#666666',
-                        fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif',
-                        fontSize: '14px'
-                    }
-                });
+                const savedTheme = localStorage.getItem('lumina_doc_theme') || 'github';
+                initMermaid(savedTheme);
             }
 
             // Mode Switcher Logic
@@ -2458,24 +2446,14 @@ paginate: true
 
                 const editorInfo = editor.getScrollInfo();
 
-                // Base64画像などの非常に長い折り返し行による高さのズレを防ぐため、行数ベースで割合を計算
-                const topVisibleLine = editor.lineAtHeight(editorInfo.top, "local");
-                const bottomVisibleLine = editor.lineAtHeight(editorInfo.top + editorInfo.clientHeight, "local");
-                const visibleLinesCount = Math.max(1, bottomVisibleLine - topVisibleLine);
-                const totalLines = editor.lineCount();
-
-                let percentage;
-                if (editorInfo.top >= editorInfo.height - editorInfo.clientHeight - 10) {
-                    percentage = 1.0;
-                } else if (editorInfo.top <= 10) {
-                    percentage = 0.0;
+                let percentage = editorInfo.top / (editorInfo.height - editorInfo.clientHeight);
+                const scrollableHeight = previewContainer.scrollHeight - previewContainer.clientHeight;
+                
+                if (editorInfo.top + editorInfo.clientHeight >= editorInfo.height - 10) {
+                    previewContainer.scrollTop = scrollableHeight;
                 } else {
-                    percentage = topVisibleLine / Math.max(1, totalLines - visibleLinesCount);
-                    percentage = Math.max(0, Math.min(1, percentage));
+                    previewContainer.scrollTop = percentage * scrollableHeight;
                 }
-
-                const targetScrollTop = percentage * (previewContainer.scrollHeight - previewContainer.clientHeight);
-                previewContainer.scrollTop = targetScrollTop;
             });
 
             // Sync Preview -> Editor
@@ -2490,20 +2468,14 @@ paginate: true
                 if (scrollableHeight <= 0) return;
 
                 let percentage = previewContainer.scrollTop / scrollableHeight;
-                percentage = Math.max(0, Math.min(1, percentage));
-
                 const editorInfo = editor.getScrollInfo();
-
-                // ピクセルベースではなく、行数ベースでのターゲット位置を計算
-                const topVisibleLine = editor.lineAtHeight(editorInfo.top, "local");
-                const bottomVisibleLine = editor.lineAtHeight(editorInfo.top + editorInfo.clientHeight, "local");
-                const visibleLinesCount = Math.max(1, bottomVisibleLine - topVisibleLine);
-                const totalLines = editor.lineCount();
-
-                const targetLine = Math.floor(percentage * Math.max(0, totalLines - visibleLinesCount));
-                const targetHeight = editor.heightAtLine(targetLine, "local");
-
-                editor.scrollTo(editorInfo.left, targetHeight);
+                
+                if (previewContainer.scrollTop + previewContainer.clientHeight >= previewContainer.scrollHeight - 10) {
+                    editor.scrollTo(editorInfo.left, editorInfo.height);
+                } else {
+                    const targetHeight = percentage * (editorInfo.height - editorInfo.clientHeight);
+                    editor.scrollTo(editorInfo.left, targetHeight);
+                }
             });
         }
 
@@ -2534,6 +2506,64 @@ paginate: true
         // Update Preview Panel
         async function updatePreview(markdownText) {
             try {
+                // エディタ内のすべての Mermaid ブロックの位置をスキャンして記録し、パースエラーを検出する
+                if (window.mermaid) {
+                    // 既存のエラー行ハイライトをクリア
+                    if (window.activeErrorLines) {
+                        window.activeErrorLines.forEach(line => {
+                            editor.removeLineClass(line, "background", "cm-error-line");
+                        });
+                    }
+                    window.activeErrorLines = [];
+
+                    const doc = editor.getDoc();
+                    const lineCount = doc.lineCount();
+                    const mermaidBlocksInDoc = [];
+                    let currentBlock = null;
+
+                    for (let i = 0; i < lineCount; i++) {
+                        const lineText = doc.getLine(i);
+                        if (lineText.trim().startsWith('```mermaid')) {
+                            currentBlock = { start: i, codeLines: [] };
+                        } else if (currentBlock && lineText.trim().startsWith('```')) {
+                            currentBlock.end = i;
+                            mermaidBlocksInDoc.push(currentBlock);
+                            currentBlock = null;
+                        } else if (currentBlock) {
+                            currentBlock.codeLines.push(lineText);
+                        }
+                    }
+
+                    for (const block of mermaidBlocksInDoc) {
+                        const code = block.codeLines.join('\n');
+                        try {
+                            await mermaid.parse(code);
+                        } catch (err) {
+                            console.warn('Mermaid parse validation error:', err);
+                            let errorOffset = 0;
+                            
+                            // エラーオブジェクトから行番号を探す
+                            if (err.hash && typeof err.hash.line === 'number') {
+                                errorOffset = err.hash.line - 1;
+                            } else if (err.loc && typeof err.loc.first_line === 'number') {
+                                errorOffset = err.loc.first_line - 1;
+                            } else {
+                                const msg = err.message || '';
+                                const lineMatch = msg.match(/(?:line|行)\s*(\d+)/i) || msg.match(/(\d+):/);
+                                if (lineMatch) {
+                                    errorOffset = parseInt(lineMatch[1], 10) - 1;
+                                }
+                            }
+
+                            const actualLine = block.start + 1 + errorOffset;
+                            if (actualLine < lineCount) {
+                                editor.addLineClass(actualLine, "background", "cm-error-line");
+                                window.activeErrorLines.push(actualLine);
+                            }
+                        }
+                    }
+                }
+
                 const isMarpDetected = /^---\s*\n[\s\S]*?marp:\s*true[\s\S]*?\n---/.test(markdownText);
 
                 const slideBtn = document.querySelector('.mode-btn[data-mode="slide"]');
@@ -2589,7 +2619,6 @@ paginate: true
                         div.marpit svg[data-marpit-svg] .mermaid-container tspan,
                         .marp-slide-wrapper section .mermaid-container text,
                         .marp-slide-wrapper section .mermaid-container tspan {
-                            fill: #333333 !important;
                             font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif !important;
                             dominant-baseline: auto !important;
                             alignment-baseline: auto !important;
@@ -2607,8 +2636,6 @@ paginate: true
                         .marp-slide-wrapper section .mermaid-container foreignObject,
                         .marp-slide-wrapper section .mermaid-container foreignObject div,
                         .marp-slide-wrapper section .mermaid-container .nodeLabel {
-                            color: #333333 !important;
-                            fill: #333333 !important;
                             background-color: transparent !important;
                             visibility: visible !important;
                             opacity: 1 !important;
@@ -2664,9 +2691,13 @@ paginate: true
                     for (let i = 0; i < mermaidBlocks.length; i++) {
                         const block = mermaidBlocks[i];
                         try {
-                            const code = block.textContent;
-                            const id = 'mermaid-diagram-' + Math.random().toString(36).substr(2, 9);
-                            const { svg } = await mermaid.render(id, code);
+                            let code = block.textContent;
+                            const diagramId = 'mermaid-diagram-' + Math.random().toString(36).substr(2, 9);
+                            
+                            // 独自スタイルのインライン直接注入（DOMハック）は行わず、
+                            // MermaidのネイティブのSVGレンダリング機能と設定のみを使用する
+                            const { svg } = await mermaid.render(diagramId, code);
+                            
                             // SVG文字列からtextLengthとlengthAdjustを正規表現で完全に除去（DOM操作では効かないケースがあるため文字列レベルで処理）
                             const cleanSvg = svg.replace(/\s+textLength="[^"]*"/g, '').replace(/\s+lengthAdjust="[^"]*"/g, '');
                             const container = document.createElement('div');
@@ -2683,22 +2714,28 @@ paginate: true
                                 el.style.setProperty('dominant-baseline', 'auto', 'important');
                                 el.style.setProperty('alignment-baseline', 'auto', 'important');
                                 el.style.setProperty('baseline-shift', 'normal', 'important');
-                                el.style.setProperty('fill', '#333333', 'important');
                             });
                             // HTMLベースのMermaidラベル（foreignObject内の要素）に対するインラインスタイルの強制注入
                             container.querySelectorAll('foreignObject, foreignObject div, foreignObject span, .nodeLabel, .edgeLabel, .label').forEach(el => {
-                                el.style.setProperty('color', '#333333', 'important');
-                                el.style.setProperty('fill', '#333333', 'important');
                                 el.style.setProperty('background-color', 'transparent', 'important');
                                 el.style.setProperty('visibility', 'visible', 'important');
                                 el.style.setProperty('opacity', '1', 'important');
                             });
                         } catch (err) {
                             console.error('Mermaid render error:', err);
-                            // Provide visual feedback for the error in preview
-                            block.style.color = '#ff6b6b';
+                            // プレビュー側でもエラー内容とエラーメッセージを表示する
+                            const errorDiv = document.createElement('div');
+                            errorDiv.className = 'mermaid-error-preview';
+                            errorDiv.style.cssText = 'color: #f85149; background: rgba(248, 81, 73, 0.1); border: 1px solid rgba(248, 81, 73, 0.2); padding: 1rem; border-radius: 6px; font-family: monospace; font-size: 0.9em; margin: 1.5rem 0; white-space: pre-wrap; text-align: left;';
+                            errorDiv.innerHTML = `<strong>Mermaid 描画エラー:</strong>\n${DOMPurify.sanitize(err.message || String(err))}`;
+                            block.parentNode.replaceWith(errorDiv);
                         }
                     }
+                }
+
+                // Mermaid レンダリング完了後にカスタムテーマスタイルをDOMの末尾に移動（詳細度競合で最優先にするため）
+                if (typeof customThemeStyleTag !== 'undefined' && customThemeStyleTag) {
+                    document.head.appendChild(customThemeStyleTag);
                 }
             } catch (e) {
                 console.error("Preview rendering error:", e);
@@ -2806,7 +2843,37 @@ paginate: true
         // 🎨 Document Theme Engine
         // ══════════════════════════════════════
         const PRESET_THEMES = {
-            github: '', // Default — no override CSS needed
+            github: `
+                .mermaid-container,
+                .mermaid-container text,
+                .mermaid-container tspan,
+                .mermaid-container .nodeLabel,
+                .mermaid-container .edgeLabel {
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+                    color: #24292f !important;
+                    fill: #24292f !important;
+                }
+                .mermaid-container .node rect,
+                .mermaid-container .node circle,
+                .mermaid-container .node polygon,
+                .mermaid-container .node path,
+                .mermaid-container .node ellipse,
+                .mermaid-container .node .label-container,
+                .mermaid-container .node .basic {
+                    stroke: #d0d7de !important;
+                    stroke-width: 1.5px !important;
+                }
+                .mermaid-container .flowchart-link,
+                .mermaid-container .edgePath .path {
+                    stroke: #57606a !important;
+                }
+                .mermaid-container .marker,
+                .mermaid-container .arrowheadPath,
+                .mermaid-container marker path {
+                    fill: #57606a !important;
+                    stroke: #57606a !important;
+                }
+            `,
             academic: `
                 h1 { font-family: 'Noto Serif JP', 'Georgia', serif; border-bottom: 2px solid #333; padding-bottom: 0.3em; }
                 h2 { font-family: 'Noto Serif JP', 'Georgia', serif; border-bottom: 1px solid #999; padding-bottom: 0.2em; }
@@ -2816,6 +2883,38 @@ paginate: true
                 table th { background-color: #f0f0f0; font-weight: 700; }
                 code { font-size: 80%; }
                 hr { background-color: #333; height: 1px; }
+
+                /* Mermaidグラフのカスタム (Academic) */
+                .mermaid-container,
+                .mermaid-container text,
+                .mermaid-container tspan,
+                .mermaid-container .nodeLabel,
+                .mermaid-container .edgeLabel {
+                    font-family: 'Noto Serif JP', 'Georgia', serif !important;
+                    color: #333333 !important;
+                    fill: #333333 !important;
+                }
+                .mermaid-container .node rect,
+                .mermaid-container .node circle,
+                .mermaid-container .node polygon,
+                .mermaid-container .node path,
+                .mermaid-container .node ellipse,
+                .mermaid-container .node .label-container,
+                .mermaid-container .node .basic {
+                    stroke: #333333 !important;
+                    stroke-width: 1.5px !important;
+                    fill: #ffffff !important;
+                }
+                .mermaid-container .flowchart-link,
+                .mermaid-container .edgePath .path {
+                    stroke: #333333 !important;
+                }
+                .mermaid-container .marker,
+                .mermaid-container .arrowheadPath,
+                .mermaid-container marker path {
+                    fill: #333333 !important;
+                    stroke: #333333 !important;
+                }
             `,
             corporate: `
                 h1 { color: #1b3a5c; border-bottom: 3px solid #1b3a5c; padding-bottom: 0.3em; font-size: 1.8em; }
@@ -2826,6 +2925,38 @@ paginate: true
                 table tr:nth-child(2n) { background-color: #eef3f8; }
                 blockquote { border-left-color: #2c5f8a; background: rgba(44, 95, 138, 0.04); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
                 code { background-color: rgba(27, 58, 92, 0.08); color: #1b3a5c; }
+
+                /* Mermaidグラフのカスタム (Corporate) */
+                .mermaid-container,
+                .mermaid-container text,
+                .mermaid-container tspan,
+                .mermaid-container .nodeLabel,
+                .mermaid-container .edgeLabel {
+                    font-family: 'Noto Sans JP', 'Helvetica Neue', Arial, sans-serif !important;
+                    color: #1b3a5c !important;
+                    fill: #1b3a5c !important;
+                }
+                .mermaid-container .node rect,
+                .mermaid-container .node circle,
+                .mermaid-container .node polygon,
+                .mermaid-container .node path,
+                .mermaid-container .node ellipse,
+                .mermaid-container .node .label-container,
+                .mermaid-container .node .basic {
+                    stroke: #225f99 !important;
+                    stroke-width: 2px !important;
+                    fill: #f0f8ff !important;
+                }
+                .mermaid-container .flowchart-link,
+                .mermaid-container .edgePath .path {
+                    stroke: #3182ce !important;
+                }
+                .mermaid-container .marker,
+                .mermaid-container .arrowheadPath,
+                .mermaid-container marker path {
+                    fill: #3182ce !important;
+                    stroke: #3182ce !important;
+                }
             `,
             minimal: `
                 h1 { font-weight: 300; font-size: 2em; border-bottom: none; letter-spacing: -0.02em; }
@@ -2840,6 +2971,38 @@ paginate: true
                 code { background-color: rgba(0,0,0,0.04); border-radius: 3px; }
                 pre { border-radius: 4px; border: 1px solid #eee; }
                 hr { background-color: #eee; height: 1px; }
+
+                /* Mermaidグラフのカスタム (Minimal) */
+                .mermaid-container,
+                .mermaid-container text,
+                .mermaid-container tspan,
+                .mermaid-container .nodeLabel,
+                .mermaid-container .edgeLabel {
+                    font-family: 'Noto Sans JP', sans-serif !important;
+                    color: #333333 !important;
+                    fill: #333333 !important;
+                }
+                .mermaid-container .node rect,
+                .mermaid-container .node circle,
+                .mermaid-container .node polygon,
+                .mermaid-container .node path,
+                .mermaid-container .node ellipse,
+                .mermaid-container .node .label-container,
+                .mermaid-container .node .basic {
+                    stroke: #e0e0e0 !important;
+                    stroke-width: 1px !important;
+                    fill: #fafafa !important;
+                }
+                .mermaid-container .flowchart-link,
+                .mermaid-container .edgePath .path {
+                    stroke: #cccccc !important;
+                }
+                .mermaid-container .marker,
+                .mermaid-container .arrowheadPath,
+                .mermaid-container marker path {
+                    fill: #cccccc !important;
+                    stroke: #cccccc !important;
+                }
             `
         };
 
@@ -2925,6 +3088,64 @@ paginate: true
             return '/* === Document Mode === */\n' + docCss + '\n\n/* === Slide Mode === */\n' + slideCss;
         }
 
+        // ===== Mermaidテーマ初期化（テーマ連動対応） =====
+        function initMermaid(themeName) {
+            if (!window.mermaid) return;
+
+            const vars = {
+                github: {
+                    primaryColor: '#f8f9fa',
+                    primaryBorderColor: '#d0d7de',
+                    primaryTextColor: '#24292f',
+                    lineColor: '#57606a'
+                },
+                academic: {
+                    primaryColor: '#ffffff',
+                    primaryBorderColor: '#333333',
+                    primaryTextColor: '#333333',
+                    lineColor: '#333333'
+                },
+                corporate: {
+                    primaryColor: '#f4f7fa',
+                    primaryBorderColor: '#1b3a5c',
+                    primaryTextColor: '#1b3a5c',
+                    lineColor: '#2c5f8a'
+                },
+                minimal: {
+                    primaryColor: '#fafafa',
+                    primaryBorderColor: '#e0e0e0',
+                    primaryTextColor: '#333333',
+                    lineColor: '#cccccc'
+                },
+                custom: {
+                    primaryColor: '#f8f9fa',
+                    primaryBorderColor: '#d0d7de',
+                    primaryTextColor: '#24292f',
+                    lineColor: '#57606a'
+                }
+            };
+
+            const activeVars = vars[themeName] || vars.github;
+
+            mermaid.initialize({
+                startOnLoad: false,
+                theme: 'default',
+                securityLevel: 'loose',
+                flowchart: {
+                    htmlLabels: false,
+                    useMaxWidth: true
+                },
+                themeVariables: {
+                    primaryColor: activeVars.primaryColor,
+                    primaryBorderColor: activeVars.primaryBorderColor,
+                    primaryTextColor: activeVars.primaryTextColor,
+                    lineColor: activeVars.lineColor,
+                    fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif',
+                    fontSize: '14px'
+                }
+            });
+        }
+
         function applyDocTheme(themeName, customCss) {
             currentDocTheme = themeName;
 
@@ -2935,14 +3156,31 @@ paginate: true
                 cssToApply = scopeCustomCss(PRESET_THEMES[themeName]);
             }
             
-            if(customThemeStyleTag) {
+            if (customThemeStyleTag) {
                 customThemeStyleTag.textContent = cssToApply;
+                document.head.appendChild(customThemeStyleTag);
             }
 
+            // Mermaid用グローバルスタイルDOMクリア（初期化時のスタイル重複衝突を避けるため）
+            document.querySelectorAll('style[id^="mermaid"]').forEach(el => el.remove());
+            document.querySelectorAll('style[id^="dmermaid"]').forEach(el => el.remove());
+
+            // Mermaidのテーマを更新
+            initMermaid(themeName);
+            
+            // プレビューの再描画
+            if (window.editor) {
+                updatePreview(editor.getValue());
+            }
+
+            // メニューのactive表示切り替え
             document.querySelectorAll('#doc-theme-menu .doc-theme-menu-item[data-theme]').forEach(item => {
                 const isActive = item.getAttribute('data-theme') === themeName;
                 item.classList.toggle('active', isActive);
-                item.querySelector('.check-mark').textContent = isActive ? '✓' : '';
+                const check = item.querySelector('.check-mark');
+                if (check) {
+                    check.textContent = isActive ? '✓' : '';
+                }
             });
 
             localStorage.setItem('lumina_doc_theme', themeName);
@@ -2961,97 +3199,209 @@ paginate: true
             }
         }
 
-        // ── Theme dropdown toggle ──
-        document.getElementById('btn-doc-theme').addEventListener('click', (e) => {
-            e.stopPropagation();
-            document.getElementById('doc-theme-menu').classList.toggle('show');
-        });
+        // ── テーマ選択メニュー関連のイベントリスナー ──
+        
+        // テーマメニューのトグル表示
+        const btnDocTheme = document.getElementById('btn-doc-theme');
+        const docThemeMenu = document.getElementById('doc-theme-menu');
+        if (btnDocTheme && docThemeMenu) {
+            btnDocTheme.addEventListener('click', (e) => {
+                e.stopPropagation();
+                docThemeMenu.classList.toggle('show');
+            });
+        }
 
-        // Close dropdown on outside click
-        document.addEventListener('click', (e) => {
-            const dropdown = document.getElementById('doc-theme-dropdown');
-            if (!dropdown.contains(e.target)) {
-                document.getElementById('doc-theme-menu').classList.remove('show');
+        // メニュー外クリックで閉じる
+        document.addEventListener('click', () => {
+            if (docThemeMenu) {
+                docThemeMenu.classList.remove('show');
             }
         });
 
-        // ── Theme preset selection ──
+        // 各テーマの切り替え
         document.querySelectorAll('#doc-theme-menu .doc-theme-menu-item[data-theme]').forEach(item => {
             item.addEventListener('click', () => {
-                applyDocTheme(item.getAttribute('data-theme'));
-                document.getElementById('doc-theme-menu').classList.remove('show');
+                const theme = item.getAttribute('data-theme');
+                applyDocTheme(theme);
             });
         });
 
-        // ── Load CSS file ──
-        document.getElementById('btn-load-css-file').addEventListener('click', () => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.css,text/css';
-            input.addEventListener('change', (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                    const css = ev.target.result;
-                    localStorage.setItem('lumina_custom_css', css);
-                    applyDocTheme('custom', css);
-                    document.getElementById('css-editor-textarea').value = css;
+        // CSSファイルのロード
+        const btnLoadCssFile = document.getElementById('btn-load-css-file');
+        if (btnLoadCssFile) {
+            btnLoadCssFile.addEventListener('click', () => {
+                const fileInput = document.createElement('input');
+                fileInput.type = 'file';
+                fileInput.accept = '.css';
+                fileInput.onchange = e => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = event => {
+                        const css = event.target.result;
+                        applyDocTheme('custom', css);
+                        updateStatus('saved', `CSSファイルを読み込みました (${file.name})`);
+                    };
+                    reader.readAsText(file);
                 };
-                reader.readAsText(file);
+                fileInput.click();
+                if (docThemeMenu) {
+                    docThemeMenu.classList.remove('show');
+                }
             });
-            input.click();
-            document.getElementById('doc-theme-menu').classList.remove('show');
-        });
+        }
 
-        // ── CSS Editor Modal ──
-        document.getElementById('btn-open-css-editor').addEventListener('click', () => {
-            const textarea = document.getElementById('css-editor-textarea');
-            const savedCss = localStorage.getItem('lumina_custom_css') || '';
-            textarea.value = savedCss;
-            document.getElementById('css-editor-overlay').classList.add('show');
-            document.getElementById('doc-theme-menu').classList.remove('show');
-            textarea.focus();
-        });
+        // CSSエディタを開く
+        const btnOpenCssEditor = document.getElementById('btn-open-css-editor');
+        if (btnOpenCssEditor) {
+            btnOpenCssEditor.addEventListener('click', () => {
+                const currentCss = localStorage.getItem('lumina_custom_css') || '';
+                const textarea = document.getElementById('css-editor-textarea');
+                if (textarea) {
+                    textarea.value = currentCss;
+                }
+                const overlay = document.getElementById('css-editor-overlay');
+                if (overlay) {
+                    overlay.classList.add('show');
+                }
+                if (docThemeMenu) {
+                    docThemeMenu.classList.remove('show');
+                }
+            });
+        }
 
-        document.getElementById('btn-close-css-editor').addEventListener('click', () => {
-            document.getElementById('css-editor-overlay').classList.remove('show');
-        });
-
-        document.getElementById('btn-cancel-css-editor').addEventListener('click', () => {
-            document.getElementById('css-editor-overlay').classList.remove('show');
-        });
-
-        document.getElementById('btn-apply-css-editor').addEventListener('click', () => {
-            const css = document.getElementById('css-editor-textarea').value;
-            localStorage.setItem('lumina_custom_css', css);
-            applyDocTheme('custom', css);
-            document.getElementById('css-editor-overlay').classList.remove('show');
-            updateStatus('saved', 'カスタムテーマ適用');
-        });
-
-        // Close modal on overlay click
-        document.getElementById('css-editor-overlay').addEventListener('click', (e) => {
-            if (e.target === e.currentTarget) {
+        // CSSエディタの閉じるボタン
+        const btnCloseCssEditor = document.getElementById('btn-close-css-editor');
+        if (btnCloseCssEditor) {
+            btnCloseCssEditor.addEventListener('click', () => {
                 document.getElementById('css-editor-overlay').classList.remove('show');
-            }
-        });
+            });
+        }
 
-        // ── Template insertion ──
-        document.getElementById('btn-css-template').addEventListener('click', () => {
-            const template = `/* ── カスタムテーマ ──\n * このCSSはドキュメント・スライド両方に自動適用されます。\n * セレクタは自動的にプレビュー領域にスコーピングされるため、\n * h1, p, table 等をそのまま書けます。\n */\n\n/* 基本テキスト */\np, li, td, th {\n    font-family: 'Noto Sans JP', sans-serif;\n    font-size: 16px;\n    line-height: 1.8;\n}\n\n/* 見出し */\nh1 {\n    color: #1a365d;\n    border-bottom: 2px solid #2b6cb0;\n    padding-bottom: 0.3em;\n}\n\nh2 {\n    color: #2c5282;\n}\n\n/* テーブル */\ntable th {\n    background-color: #2b6cb0;\n    color: #ffffff;\n}\n\n/* コードブロック */\npre {\n    border-radius: 8px;\n}\n\ncode {\n    font-size: 85%;\n}\n\n/* 引用 */\nblockquote {\n    border-left-color: #2b6cb0;\n    background: rgba(43, 108, 176, 0.04);\n    padding: 0.5em 1em;\n    border-radius: 0 6px 6px 0;\n}`;
-            const textarea = document.getElementById('css-editor-textarea');
-            if (textarea.value.trim() && !confirm('現在の内容をテンプレートで置き換えますか？')) return;
-            textarea.value = template;
-            textarea.focus();
-        });
+        // CSSエディタのキャンセルボタン
+        const btnCancelCssEditor = document.getElementById('btn-cancel-css-editor');
+        if (btnCancelCssEditor) {
+            btnCancelCssEditor.addEventListener('click', () => {
+                document.getElementById('css-editor-overlay').classList.remove('show');
+            });
+        }
+
+        // CSSエディタの適用ボタン
+        const btnApplyCssEditor = document.getElementById('btn-apply-css-editor');
+        if (btnApplyCssEditor) {
+            btnApplyCssEditor.addEventListener('click', () => {
+                const textarea = document.getElementById('css-editor-textarea');
+                if (textarea) {
+                    const css = textarea.value;
+                    applyDocTheme('custom', css);
+                    document.getElementById('css-editor-overlay').classList.remove('show');
+                    updateStatus('saved', 'カスタムテーマ適用');
+                }
+            });
+        }
+
+        // モーダルの外枠クリックで閉じる
+        const cssEditorOverlay = document.getElementById('css-editor-overlay');
+        if (cssEditorOverlay) {
+            cssEditorOverlay.addEventListener('click', (e) => {
+                if (e.target === e.currentTarget) {
+                    cssEditorOverlay.classList.remove('show');
+                }
+            });
+        }
+
+        // ── テンプレート挿入 ──
+        const btnCssTemplate = document.getElementById('btn-css-template');
+        if (btnCssTemplate) {
+            btnCssTemplate.addEventListener('click', () => {
+                // 現在アクティブなテーマ（customの場合はgithubをフォールバック）をコピーする
+                const themeToCopy = currentDocTheme === 'custom' ? 'github' : currentDocTheme;
+                const baseStyle = PRESET_THEMES[themeToCopy] || '';
+                
+                // 各テーマ固有のプロパティ値（フォントや見出し色などをテーマに合わせて動的差し替え）
+                const themeProps = {
+                    github: {
+                        font: "'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif",
+                        size: "16px",
+                        color: "#24292f",
+                        h1Color: "#0f172a",
+                        h1Border: "1px solid #d0d7de",
+                        h2Color: "#1f2328",
+                        tableBg: "#f6f8fa",
+                        tableColor: "#24292f",
+                        quoteBorder: "#d0d7de"
+                    },
+                    academic: {
+                        font: "'Noto Serif JP', 'Georgia', serif",
+                        size: "15px",
+                        color: "#333333",
+                        h1Color: "#111111",
+                        h1Border: "2px solid #333333",
+                        h2Color: "#333333",
+                        tableBg: "#f0f0f0",
+                        tableColor: "#111111",
+                        quoteBorder: "#666666"
+                    },
+                    corporate: {
+                        font: "'Noto Sans JP', 'Helvetica Neue', Arial, sans-serif",
+                        size: "16px",
+                        color: "#24292f",
+                        h1Color: "#1b3a5c",
+                        h1Border: "3px solid #1b3a5c",
+                        h2Color: "#2c5f8a",
+                        tableBg: "#1b3a5c",
+                        tableColor: "#ffffff",
+                        quoteBorder: "#2c5f8a"
+                    },
+                    minimal: {
+                        font: "'Noto Sans JP', sans-serif",
+                        size: "15px",
+                        color: "#333333",
+                        h1Color: "#333333",
+                        h1Border: "none",
+                        h2Color: "#555555",
+                        tableBg: "transparent",
+                        tableColor: "#888888",
+                        quoteBorder: "#dddddd"
+                    }
+                };
+
+                const props = themeProps[themeToCopy] || themeProps.github;
+
+                // 各テーマに対応するMermaid枠線・接続線・フォント・テキスト色のカスタムCSSコード例を記述
+                let mermaidCustomCss = '';
+                if (themeToCopy === 'academic') {
+                    mermaidCustomCss = `\n\n/* ── Mermaidグラフのカスタム (Academic) ── */\n.mermaid-container,\n.mermaid-container text,\n.mermaid-container tspan,\n.mermaid-container .nodeLabel,\n.mermaid-container .edgeLabel {\n    font-family: 'Noto Serif JP', 'Georgia', serif !important;\n    color: #333333 !important;\n    fill: #333333 !important;\n}\n.mermaid-container .node rect,\n.mermaid-container .node circle,\n.mermaid-container .node polygon,\n.mermaid-container .node path,\n.mermaid-container .node ellipse,\n.mermaid-container .node .label-container,\n.mermaid-container .node .basic {\n    stroke: #333333 !important;\n    stroke-width: 1.5px !important;\n    fill: #ffffff !important;\n}\n.mermaid-container .flowchart-link,\n.mermaid-container .edgePath .path {\n    stroke: #333333 !important;\n}\n.mermaid-container .marker,\n.mermaid-container .arrowheadPath,\n.mermaid-container marker path {\n    fill: #333333 !important;\n    stroke: #333333 !important;\n}`;
+                } else if (themeToCopy === 'corporate') {
+                    mermaidCustomCss = `\n\n/* ── Mermaidグラフのカスタム (Corporate) ── */\n.mermaid-container,\n.mermaid-container text,\n.mermaid-container tspan,\n.mermaid-container .nodeLabel,\n.mermaid-container .edgeLabel {\n    font-family: 'Noto Sans JP', 'Helvetica Neue', Arial, sans-serif !important;\n    color: #1b3a5c !important;\n    fill: #1b3a5c !important;\n}\n.mermaid-container .node rect,\n.mermaid-container .node circle,\n.mermaid-container .node polygon,\n.mermaid-container .node path,\n.mermaid-container .node ellipse,\n.mermaid-container .node .label-container,\n.mermaid-container .node .basic {\n    stroke: #225f99 !important;\n    stroke-width: 2px !important;\n    fill: #f0f8ff !important;\n}\n.mermaid-container .flowchart-link,\n.mermaid-container .edgePath .path {\n    stroke: #3182ce !important;\n}\n.mermaid-container .marker,\n.mermaid-container .arrowheadPath,\n.mermaid-container marker path {\n    fill: #3182ce !important;\n    stroke: #3182ce !important;\n}`;
+                } else if (themeToCopy === 'minimal') {
+                    mermaidCustomCss = `\n\n/* ── Mermaidグラフのカスタム (Minimal) ── */\n.mermaid-container,\n.mermaid-container text,\n.mermaid-container tspan,\n.mermaid-container .nodeLabel,\n.mermaid-container .edgeLabel {\n    font-family: 'Noto Sans JP', sans-serif !important;\n    color: #333333 !important;\n    fill: #333333 !important;\n}\n.mermaid-container .node rect,\n.mermaid-container .node circle,\n.mermaid-container .node polygon,\n.mermaid-container .node path,\n.mermaid-container .node ellipse,\n.mermaid-container .node .label-container,\n.mermaid-container .node .basic {\n    stroke: #e0e0e0 !important;\n    stroke-width: 1px !important;\n    fill: #fafafa !important;\n}\n.mermaid-container .flowchart-link,\n.mermaid-container .edgePath .path {\n    stroke: #cccccc !important;\n}\n.mermaid-container .marker,\n.mermaid-container .arrowheadPath,\n.mermaid-container marker path {\n    fill: #cccccc !important;\n    stroke: #cccccc !important;\n}`;
+                } else {
+                    mermaidCustomCss = `\n\n/* ── Mermaidグラフのカスタム (Github) ── */\n.mermaid-container,\n.mermaid-container text,\n.mermaid-container tspan,\n.mermaid-container .nodeLabel,\n.mermaid-container .edgeLabel {\n    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;\n    color: #24292f !important;\n    fill: #24292f !important;\n}\n.mermaid-container .node rect,\n.mermaid-container .node circle,\n.mermaid-container .node polygon,\n.mermaid-container .node path,\n.mermaid-container .node ellipse,\n.mermaid-container .node .label-container,\n.mermaid-container .node .basic {\n    stroke: #d0d7de !important;\n    stroke-width: 1.5px !important;\n}\n.mermaid-container .flowchart-link,\n.mermaid-container .edgePath .path {\n    stroke: #57606a !important;\n}\n.mermaid-container .marker,\n.mermaid-container .arrowheadPath,\n.mermaid-container marker path {\n    fill: #57606a !important;\n    stroke: #57606a !important;\n}`;
+                }
+
+                const template = `/* ── カスタムテーマ (ベース: ${themeToCopy}) ──\n * このCSSはドキュメント・スライド両方に自動適用されます。\n * セレクタは自動的にプレビュー領域にスコーピングされるため、\n * h1, p, table 等をそのまま書けます。\n */\n\n/* ── 基本テキストとフォント ── */\np, li, td, th, dd, dt {\n    font-family: ${props.font};\n    font-size: ${props.size};\n    line-height: 1.8;\n    color: ${props.color};\n}\n\n/* ── 見出し ── */\nh1 {\n    font-size: 2em;\n    color: ${props.h1Color};\n    border-bottom: ${props.h1Border};\n    padding-bottom: 0.3em;\n}\n\nh2 {\n    font-size: 1.5em;\n    color: ${props.h2Color};\n    border-bottom: 1px solid #e2e8f0;\n    padding-bottom: 0.2em;\n}\n\n/* ── テーブル ── */\ntable th {\n    background-color: ${props.tableBg};\n    color: ${props.tableColor};\n}\n\n/* ── 引用 ── */\nblockquote {\n    border-left: 4px solid ${props.quoteBorder};\n    background: rgba(43, 108, 176, 0.04);\n    padding: 0.5em 1em;\n    border-radius: 0 6px 6px 0;\n}\n\n/* ── 引用内の文字 ── */\nblockquote p {\n    font-family: ${props.font};\n    color: ${props.color};\n}\n\n/* ── コード ── */\npre {\n    background-color: #f6f8fa;\n    border-radius: 8px;\n}\ncode {\n    font-size: 85%;\n}\n\n/* ── 選択中テーマ (${themeToCopy}) のベース設定 ── */\n${baseStyle.trim()}${mermaidCustomCss}`;
+
+                const textarea = document.getElementById('css-editor-textarea');
+                if (textarea) {
+                    if (textarea.value.trim() && !confirm('現在の内容をテンプレートで置き換えますか？')) return;
+                    textarea.value = template;
+                    textarea.focus();
+                }
+            });
+        }
 
         // ── Reset custom theme ──
         document.getElementById('btn-reset-theme').addEventListener('click', () => {
             localStorage.removeItem('lumina_custom_css');
-            document.getElementById('css-editor-textarea').value = '';
+            const textarea = document.getElementById('css-editor-textarea');
+            if (textarea) {
+                textarea.value = '';
+            }
             applyDocTheme('github');
-            document.getElementById('doc-theme-menu').classList.remove('show');
+            if (docThemeMenu) {
+                docThemeMenu.classList.remove('show');
+            }
             updateStatus('saved', 'テーマをリセット');
         });
 
@@ -3920,7 +4270,6 @@ paginate: true
         svg[data-marpit-svg] .mermaid-container tspan,
         .slide section .mermaid-container text,
         .slide section .mermaid-container tspan {
-            fill: #333333 !important;
             font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif !important;
             dominant-baseline: auto !important;
             alignment-baseline: auto !important;
@@ -3942,8 +4291,6 @@ paginate: true
         .slide section .mermaid-container foreignObject,
         .slide section .mermaid-container foreignObject div,
         .slide section .mermaid-container .nodeLabel {
-            color: #333333 !important;
-            fill: #333333 !important;
             background-color: transparent !important;
             visibility: visible !important;
             opacity: 1 !important;
@@ -4042,15 +4389,12 @@ ${slidesHtml}
                 el.removeAttribute('lengthAdjust');
             });
             document.querySelectorAll('.mermaid-container text, .mermaid-container tspan').forEach(el => {
-                el.style.setProperty('fill', '#333333', 'important');
-                el.style.setProperty('dominant-baseline', 'auto', 'important');
+                el.style.setProperty('dominant-baseline', 'auto', '');
             });
             document.querySelectorAll('.mermaid-container foreignObject, .mermaid-container foreignObject div, .mermaid-container foreignObject span, .mermaid-container .nodeLabel, .mermaid-container .edgeLabel, .mermaid-container .label').forEach(el => {
-                el.style.setProperty('color', '#333333', 'important');
-                el.style.setProperty('fill', '#333333', 'important');
-                el.style.setProperty('background-color', 'transparent', 'important');
-                el.style.setProperty('visibility', 'visible', 'important');
-                el.style.setProperty('opacity', '1', 'important');
+                el.style.setProperty('background-color', 'transparent', '');
+                el.style.setProperty('visibility', 'visible', '');
+                el.style.setProperty('opacity', '1', '');
             });
         }
         cleanupMermaidAttributes();
@@ -4129,12 +4473,9 @@ ${slidesHtml}
                 el.removeAttribute('lengthAdjust');
             });
             document.querySelectorAll('.mermaid-container text, .mermaid-container tspan').forEach(el => {
-                el.style.setProperty('fill', '#333333', 'important');
                 el.style.setProperty('dominant-baseline', 'auto', 'important');
             });
             document.querySelectorAll('.mermaid-container foreignObject, .mermaid-container foreignObject div, .mermaid-container foreignObject span, .mermaid-container .nodeLabel, .mermaid-container .edgeLabel, .mermaid-container .label').forEach(el => {
-                el.style.setProperty('color', '#333333', 'important');
-                el.style.setProperty('fill', '#333333', 'important');
                 el.style.setProperty('background-color', 'transparent', 'important');
                 el.style.setProperty('visibility', 'visible', 'important');
                 el.style.setProperty('opacity', '1', 'important');
@@ -4191,6 +4532,10 @@ ${slidesHtml}
                         scopedCss = marpCss.replace(/div\.marpit\s*>\s*svg/g, '#slideshow.marpit .slide > svg');
                     } else {
                         scopedCss = marpCss.replace(/\bsection\b/g, '.slide section');
+                    }
+                    
+                    if (customThemeStyleTag && customThemeStyleTag.textContent) {
+                        scopedCss += '\n\n/* Custom Theme */\n' + customThemeStyleTag.textContent.replace(/#preview-content\.markdown-body/g, 'body').replace(/#preview-content \.marp-slide-wrapper/g, '#slideshow .slide');
                     }
 
                     content = `<!DOCTYPE html>
@@ -4318,10 +4663,9 @@ ${slidesHtml}
         setTimeout(updateScale, 50);
         function cleanupMermaidAttributes() {
             document.querySelectorAll('.mermaid-container [textLength], .mermaid-container [lengthAdjust]').forEach(el => { el.removeAttribute('textLength'); el.removeAttribute('lengthAdjust'); });
-            document.querySelectorAll('.mermaid-container text, .mermaid-container tspan').forEach(el => { el.style.setProperty('fill', '#333333', 'important'); el.style.setProperty('dominant-baseline', 'auto', 'important'); });
+            document.querySelectorAll('.mermaid-container text, .mermaid-container tspan').forEach(el => { el.style.setProperty('dominant-baseline', 'auto', ''); });
             document.querySelectorAll('.mermaid-container foreignObject, .mermaid-container foreignObject div, .mermaid-container foreignObject span, .mermaid-container .nodeLabel, .mermaid-container .edgeLabel, .mermaid-container .label').forEach(el => {
-                el.style.setProperty('color', '#333333', 'important'); el.style.setProperty('fill', '#333333', 'important');
-                el.style.setProperty('background-color', 'transparent', 'important'); el.style.setProperty('visibility', 'visible', 'important'); el.style.setProperty('opacity', '1', 'important');
+                el.style.setProperty('background-color', 'transparent', ''); el.style.setProperty('visibility', 'visible', ''); el.style.setProperty('opacity', '1', '');
             });
         }
         cleanupMermaidAttributes();
@@ -4354,25 +4698,25 @@ ${slidesHtml}
         th { background: #fff; font-weight: 600; } tr:nth-child(2n) { background: #f6f8fa; }
         .mermaid-container, .markdown-body .mermaid-container { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif !important; }
         .mermaid-container text, .mermaid-container tspan, .markdown-body .mermaid-container text, .markdown-body .mermaid-container tspan {
-            fill: #333333 !important; font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif !important;
+            fill: #333333; font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif !important;
             dominant-baseline: auto !important; alignment-baseline: auto !important; baseline-shift: normal !important;
         }
         .mermaid-container foreignObject, .mermaid-container foreignObject div, .mermaid-container foreignObject span,
         .mermaid-container .nodeLabel, .mermaid-container .edgeLabel, .mermaid-container .label,
         .markdown-body .mermaid-container foreignObject, .markdown-body .mermaid-container foreignObject div, .markdown-body .mermaid-container .nodeLabel {
-            color: #333333 !important; fill: #333333 !important; background-color: transparent !important; visibility: visible !important; opacity: 1 !important;
+            color: #333333; fill: #333333; background-color: transparent; visibility: visible !important; opacity: 1 !important;
         }
+        ${customThemeStyleTag && customThemeStyleTag.textContent ? customThemeStyleTag.textContent : ''}
     </style>
 </head>
 <body>
-    <div class="markdown-body">${previewContainer.innerHTML}</div>
+    <div id="preview-content" class="markdown-body">${previewContainer.innerHTML}</div>
     <script>
         function cleanupMermaidAttributes() {
             document.querySelectorAll('.mermaid-container [textLength], .mermaid-container [lengthAdjust]').forEach(el => { el.removeAttribute('textLength'); el.removeAttribute('lengthAdjust'); });
-            document.querySelectorAll('.mermaid-container text, .mermaid-container tspan').forEach(el => { el.style.setProperty('fill', '#333333', 'important'); el.style.setProperty('dominant-baseline', 'auto', 'important'); });
+            document.querySelectorAll('.mermaid-container text, .mermaid-container tspan').forEach(el => { el.style.setProperty('dominant-baseline', 'auto', ''); });
             document.querySelectorAll('.mermaid-container foreignObject, .mermaid-container foreignObject div, .mermaid-container foreignObject span, .mermaid-container .nodeLabel, .mermaid-container .edgeLabel, .mermaid-container .label').forEach(el => {
-                el.style.setProperty('color', '#333333', 'important'); el.style.setProperty('fill', '#333333', 'important');
-                el.style.setProperty('background-color', 'transparent', 'important'); el.style.setProperty('visibility', 'visible', 'important'); el.style.setProperty('opacity', '1', 'important');
+                el.style.setProperty('background-color', 'transparent', ''); el.style.setProperty('visibility', 'visible', ''); el.style.setProperty('opacity', '1', '');
             });
         }
         cleanupMermaidAttributes();
