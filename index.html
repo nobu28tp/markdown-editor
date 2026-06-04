@@ -2272,11 +2272,8 @@ paginate: true
 
                 const content = editor.getValue();
 
-                // プレビューの更新をデバウンス（重いパース処理を遅延させてタイピングを軽くする）
-                if (previewTimeout) clearTimeout(previewTimeout);
-                previewTimeout = setTimeout(() => {
-                    updatePreview(content);
-                }, 300);
+                // プレビューの更新をリアルタイム（即時）に実行
+                updatePreview(content);
 
                 // Trigger Auto-save debounce
                 triggerAutoSave(content);
@@ -2499,9 +2496,7 @@ paginate: true
             });
             resizeObserver.observe(previewContainer);
 
-            // 4. Scroll Synchronization & Cursor Tracking
-            let syncTimer = null;
-            let lastScrollSource = null;
+            // 4. Scroll Synchronization (One-way editor to preview tracking)
             let lastCursorLine = -1;
 
             function scrollToLineInPreview(lineNum, smooth = false) {
@@ -2523,10 +2518,6 @@ paginate: true
                 });
                 
                 if (closestTarget) {
-                    lastScrollSource = 'editor';
-                    clearTimeout(syncTimer);
-                    syncTimer = setTimeout(() => { lastScrollSource = null; }, 150);
-                    
                     const containerRect = previewContainer.getBoundingClientRect();
                     const targetRect = closestTarget.getBoundingClientRect();
                     const targetTop = targetRect.top - containerRect.top + previewContainer.scrollTop;
@@ -2538,14 +2529,8 @@ paginate: true
                 }
             }
 
-            // Sync Editor -> Preview
+            // Sync Editor Scroll -> Preview
             editor.on('scroll', () => {
-                if (lastScrollSource === 'preview') return;
-                lastScrollSource = 'editor';
-
-                clearTimeout(syncTimer);
-                syncTimer = setTimeout(() => { lastScrollSource = null; }, 150);
-
                 const scrollInfo = editor.getScrollInfo();
                 
                 if (scrollInfo.top + scrollInfo.clientHeight >= scrollInfo.height - 10) {
@@ -2563,8 +2548,6 @@ paginate: true
 
             // Sync Editor Cursor -> Preview
             editor.on('cursorActivity', () => {
-                if (lastScrollSource === 'preview') return;
-                
                 const cursor = editor.getDoc().getCursor();
                 const cursorLine = cursor.line;
                 
@@ -2572,59 +2555,6 @@ paginate: true
                     lastCursorLine = cursorLine;
                     scrollToLineInPreview(cursorLine, true);
                 }
-            });
-
-            function getVisibleLineInPreview() {
-                if (!previewContainer) return 0;
-                
-                const targets = Array.from(previewContainer.querySelectorAll('[data-line]'));
-                if (targets.length === 0) return 0;
-                
-                const containerRect = previewContainer.getBoundingClientRect();
-                let closestTarget = null;
-                let closestDist = Infinity;
-                
-                for (let i = 0; i < targets.length; i++) {
-                    const target = targets[i];
-                    const targetRect = target.getBoundingClientRect();
-                    const dist = Math.abs(targetRect.top - containerRect.top);
-                    
-                    if (dist < closestDist) {
-                        closestDist = dist;
-                        closestTarget = target;
-                    }
-                }
-                
-                if (closestTarget) {
-                    return parseInt(closestTarget.getAttribute('data-line'), 10);
-                }
-                return 0;
-            }
-
-            // Sync Preview -> Editor
-            previewContainer.addEventListener('scroll', () => {
-                if (lastScrollSource === 'editor') return;
-                lastScrollSource = 'preview';
-
-                clearTimeout(syncTimer);
-                syncTimer = setTimeout(() => { lastScrollSource = null; }, 150);
-
-                const scrollableHeight = previewContainer.scrollHeight - previewContainer.clientHeight;
-                if (scrollableHeight <= 0) return;
-
-                if (previewContainer.scrollTop <= 2) {
-                    editor.scrollTo(null, 0);
-                    return;
-                }
-                if (previewContainer.scrollTop + previewContainer.clientHeight >= previewContainer.scrollHeight - 10) {
-                    const editorInfo = editor.getScrollInfo();
-                    editor.scrollTo(editorInfo.left, editorInfo.height);
-                    return;
-                }
-
-                const visibleLine = getVisibleLineInPreview();
-                const tcoords = editor.charCoords({line: visibleLine, ch: 0}, 'local');
-                editor.scrollTo(null, tcoords.top);
             });
         }
 
