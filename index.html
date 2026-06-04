@@ -2273,7 +2273,16 @@ paginate: true
             let isTyping = false;
             let typingTimer = null;
 
-            editor.on('keydown', () => {
+            editor.on('keydown', (cm, event) => {
+                const key = event.key;
+                const ignoreKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End'];
+                
+                if (ignoreKeys.includes(key)) {
+                    isTyping = false;
+                    clearTimeout(typingTimer);
+                    return;
+                }
+
                 isTyping = true;
                 clearTimeout(typingTimer);
                 typingTimer = setTimeout(() => {
