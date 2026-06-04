@@ -2069,12 +2069,26 @@ paginate: true
                 const prevLine = i > 0 ? lines[i-1].trim() : '';
                 const prevIsList = /^(?:[*+-]|\d+\.)\s/.test(prevLine);
                 const prevIsTable = prevLine.startsWith('|');
+                const prevIsQuote = prevLine.startsWith('>');
+                const prevIsHeader = prevLine.startsWith('#');
+                const prevIsCodeBlockEnd = prevLine.startsWith('```');
 
                 const isNewList = isList && !prevIsList;
                 const isNewTable = isTable && !prevIsTable;
-                const isNewParagraph = !isEmpty && !isHeader && !isList && !isQuote && !isTable && (i === 0 || prevLine === '');
+                const isNewQuote = isQuote && !prevIsQuote;
 
-                const isBlockStart = isHeader || isNewList || isQuote || isNewTable || isNewParagraph;
+                const isNormalText = !isEmpty && !isHeader && !isList && !isQuote && !isTable;
+                const isNewParagraph = isNormalText && (
+                    i === 0 || 
+                    prevLine === '' || 
+                    prevIsList || 
+                    prevIsTable || 
+                    prevIsQuote || 
+                    prevIsHeader ||
+                    prevIsCodeBlockEnd
+                );
+
+                const isBlockStart = isHeader || isNewList || isNewQuote || isNewTable || isNewParagraph;
 
                 if (isBlockStart) {
                     newLines.push(`\n<div class="line-marker" data-line="${i}"></div>\n`);
@@ -2258,6 +2272,14 @@ paginate: true
             // 3. Set Event Listeners
             let isTyping = false;
             let typingTimer = null;
+
+            editor.on('keydown', () => {
+                isTyping = true;
+                clearTimeout(typingTimer);
+                typingTimer = setTimeout(() => {
+                    isTyping = false;
+                }, 1000);
+            });
 
             editor.on('change', (cm, changeObj) => {
                 isTyping = true;
@@ -2833,6 +2855,13 @@ paginate: true
                 // Mermaid レンダリング完了後にカスタムテーマスタイルをDOMの末尾に移動（詳細度競合で最優先にするため）
                 if (typeof customThemeStyleTag !== 'undefined' && customThemeStyleTag) {
                     document.head.appendChild(customThemeStyleTag);
+                }
+
+                // すべてのパース・描画完了後にスクロール位置を再度確実に復元（遅延復元を含む）
+                if (previewContainer) {
+                    previewContainer.scrollTop = savedScrollTop;
+                    setTimeout(() => { previewContainer.scrollTop = savedScrollTop; }, 100);
+                    setTimeout(() => { previewContainer.scrollTop = savedScrollTop; }, 300);
                 }
             } catch (e) {
                 console.error("Preview rendering error:", e);
