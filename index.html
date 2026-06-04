@@ -1182,6 +1182,10 @@
                     <i data-lucide="save"></i>
                     <span>Markdown保存</span>
                 </button>
+                <button class="btn btn-outline" id="btn-split-save" style="border-color: rgba(88, 166, 255, 0.4); margin-left: 0.25rem;" title="指定コメント箇所でファイルを自動分割して保存">
+                    <i data-lucide="git-branch"></i>
+                    <span>分割保存</span>
+                </button>
                 <button class="btn btn-secondary" id="btn-export-word">
                     <i data-lucide="file-text"></i>
                     <span>Word出力</span>
@@ -1579,6 +1583,23 @@ paginate: true
 - 項目1
 - **太字**
 - *斜体*</pre>
+                </div>
+
+                <h3 style="margin: 1.5rem 0.75rem 0.5rem; font-size: 1.1em; color: var(--text-primary);">📁 フォルダ連携・分割保存と結合機能</h3>
+                <div style="margin: 0.75rem; font-size: 0.875rem; color: var(--text-secondary); line-height: 1.6;">
+                    <p>OneDriveやSharePoint等の共有フォルダで複数人が衝突（競合コピーの発生）を避けながら同時に共同編集するための機能です。</p>
+                    <strong style="color: var(--text-primary);">🛠️ 使用ルール・書き方</strong>
+                    <ol style="margin-top: 0.5rem; padding-left: 1.2rem;">
+                        <li><strong>分割の指定</strong>: 分割して別ファイルにしたい部分の直前に、<code>&lt;!-- split: ファイル名.md --&gt;</code> というコメント行を記述します。
+                            <pre style="margin-top: 0.3rem; background: rgba(0,0,0,0.3); padding: 0.5rem; border-radius: 4px; font-size: 0.85em; color: #a5d6ff;">&lt;!-- split: 01_はじめに.md --&gt;
+# 1. はじめに
+セクション1のテキストをここに書きます。</pre>
+                        </li>
+                        <li><strong>分割保存の実行</strong>: フォルダ連携した状態で「分割保存」ボタンをクリックすると、指定した各ファイル（例: <code>01_はじめに.md</code> 等）と、結合用のインデックスファイル（元のファイル名）に自動分割されて保存されます。</li>
+                        <li><strong>結合読み込み（インデックスファイル）</strong>:
+                            目次ファイルに自動生成される <code>&lt;!-- include: ファイル名.md --&gt;</code> の指示に基づき、ファイルを開いた際に同一フォルダ内の分割ファイルを自動結合して1つの連続したドキュメントとして画面に読み込みます。
+                        </li>
+                    </ol>
                 </div>
             </div>
         </div>
@@ -2377,6 +2398,7 @@ paginate: true
             document.getElementById('btn-new').addEventListener('click', handleNewFile);
             document.getElementById('btn-open').addEventListener('click', handleOpenFile);
             document.getElementById('btn-save-md').addEventListener('click', handleSaveMd);
+            document.getElementById('btn-split-save').addEventListener('click', handleSplitSave);
             document.getElementById('btn-export-word').addEventListener('click', handleExportWord);
             document.getElementById('btn-export-pdf').addEventListener('click', handleExportPdf);
             document.getElementById('btn-export-html').addEventListener('click', handleExportHtml);
@@ -2972,7 +2994,7 @@ paginate: true
         }
 
         // ── App Version ──
-        const APP_VERSION = '5.3.1';
+        const APP_VERSION = '5.4.1';
 
         // ══════════════════════════════════════
         // 🎨 Document Theme Engine
@@ -3582,6 +3604,89 @@ paginate: true
             } catch (e) {
                 console.error(e);
                 alert("保存中にエラーが発生しました。");
+            }
+        }
+
+        // 自動分割保存
+        async function handleSplitSave() {
+            if (!activeLocalDirectoryHandle) {
+                alert("分割保存を使用するには、まず「フォルダ連携」を行ってフォルダを選択してください。");
+                return;
+            }
+
+            const content = editor.getValue();
+            const lines = content.split('\n');
+            const parts = [];
+            let currentPart = { filename: '', contentLines: [] };
+            const mainContentLines = [];
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                const trimmed = line.trim();
+
+                if (trimmed.startsWith('<!-- split:') && trimmed.endsWith('-->')) {
+                    if (currentPart.filename) {
+                        parts.push(currentPart);
+                    }
+                    const match = trimmed.match(/<!--\s*split:\s*([^\s]+)\s*-->/);
+                    const filename = match ? match[1].trim() : `part_${parts.length + 1}.md`;
+                    currentPart = { filename: filename, contentLines: [] };
+                    
+                    mainContentLines.push(`<!-- include: ${filename} -->`);
+                } else {
+                    if (currentPart.filename) {
+                        currentPart.contentLines.push(line);
+                    } else {
+                        mainContentLines.push(line);
+                    }
+                }
+            }
+            if (currentPart.filename) {
+                parts.push(currentPart);
+            }
+
+            if (parts.length === 0) {
+                alert("ドキュメント内に分割指定 <!-- split: ファイル名.md --> が見つかりません。ヘルプを参照して記述してください。");
+                return;
+            }
+
+            try {
+                updateStatus('saving', 'ファイルを自動分割して保存中...');
+                
+                // 1. 各分割ファイルを保存
+                for (const part of parts) {
+                    const fileHandle = await activeLocalDirectoryHandle.getFileHandle(part.filename, { create: true });
+                    if (await verifyLocalPermission(fileHandle, true)) {
+                        const writable = await fileHandle.createWritable();
+                        await writable.write(part.contentLines.join('\n'));
+                        await writable.close();
+                    }
+                }
+
+                // 2. メインファイルを保存
+                let mainHandle = activeLocalFileHandle;
+                if (!mainHandle) {
+                    mainHandle = await activeLocalDirectoryHandle.getFileHandle('index.md', { create: true });
+                    activeLocalFileHandle = mainHandle;
+                    document.getElementById('local-file-name').value = mainHandle.name;
+                }
+                
+                if (await verifyLocalPermission(mainHandle, true)) {
+                    const writable = await mainHandle.createWritable();
+                    await writable.write(mainContentLines.join('\n'));
+                    await writable.close();
+                }
+
+                updateStatus('saved', `自動分割保存が完了しました（計 ${parts.length + 1} ファイル）`);
+                
+                // ディレクトリ一覧を再ロード
+                if (typeof fetchLocalDir === 'function') {
+                    await fetchLocalDir(currentLocalBrowsePath);
+                }
+            } catch (err) {
+                console.error("Split save failed:", err);
+                alert("分割保存中にエラーが発生しました: " + err.message);
+                updateStatus('error', '分割保存失敗');
             }
         }
 
@@ -5800,6 +5905,46 @@ ${slidesHtml}
             showLocalStatus('📂 ファイルを選択しました: ' + fileName, '#58a6ff');
         }
 
+        async function resolveIncludes(text, dirHandle) {
+            if (!dirHandle) return text;
+            const lines = text.split('\n');
+            const newLines = [];
+            const encoding = document.getElementById('encoding-select').value || 'UTF-8';
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                const trimmed = line.trim();
+
+                if (trimmed.startsWith('<!-- include:') && trimmed.endsWith('-->')) {
+                    const match = trimmed.match(/<!--\s*include:\s*([^\s]+)\s*-->/);
+                    if (match) {
+                        const filename = match[1].trim();
+                        try {
+                            const subFileHandle = await dirHandle.getFileHandle(filename);
+                            if (await verifyLocalPermission(subFileHandle, false)) {
+                                const subFile = await subFileHandle.getFile();
+                                const subText = await new Promise((resolveFile) => {
+                                    const reader = new FileReader();
+                                    reader.onload = (e) => resolveFile(e.target.result);
+                                    reader.readAsText(subFile, encoding);
+                                });
+                                newLines.push(`<!-- split: ${filename} -->`);
+                                newLines.push(subText);
+                                continue;
+                            }
+                        } catch (err) {
+                            console.warn(`Failed to include file: ${filename}`, err);
+                            newLines.push(`<!-- include-failed: ${filename} (${err.message}) -->`);
+                            newLines.push(line);
+                            continue;
+                        }
+                    }
+                }
+                newLines.push(line);
+            }
+            return newLines.join('\n');
+        }
+
         // 選択されたローカルファイルを読み込む
         async function loadSelectedLocalFile() {
             if (!activeLocalFileHandle) {
@@ -5819,9 +5964,11 @@ ${slidesHtml}
                         reader.readAsText(file, encoding);
                     });
 
-                    editor.setValue(text);
-                    updatePreview(text);
-                    localStorage.setItem('lumina_autosave', text);
+                    const mergedText = await resolveIncludes(text, activeLocalDirectoryHandle);
+
+                    editor.setValue(mergedText);
+                    updatePreview(mergedText);
+                    localStorage.setItem('lumina_autosave', mergedText);
                     
                     // ドキュメントタイトル入力欄にファイル名（拡張子なし）をセット
                     const docTitleInput = document.getElementById('doc-title-input');
