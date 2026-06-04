@@ -2256,7 +2256,16 @@ paginate: true
             tryAutoConnectLocalFolder();
 
             // 3. Set Event Listeners
+            let isTyping = false;
+            let typingTimer = null;
+
             editor.on('change', (cm, changeObj) => {
+                isTyping = true;
+                clearTimeout(typingTimer);
+                typingTimer = setTimeout(() => {
+                    isTyping = false;
+                }, 1000); // 1秒間キー入力がなければタイピング終了とみなす
+
                 // Base64画像データの行を検知して非表示ウィジェットに置き換える
                 if (changeObj && changeObj.text) {
                     const doc = cm.getDoc();
@@ -2531,6 +2540,7 @@ paginate: true
 
             // Sync Editor Scroll -> Preview
             editor.on('scroll', () => {
+                if (isTyping) return;
                 const scrollInfo = editor.getScrollInfo();
                 
                 if (scrollInfo.top + scrollInfo.clientHeight >= scrollInfo.height - 10) {
@@ -2548,6 +2558,7 @@ paginate: true
 
             // Sync Editor Cursor -> Preview
             editor.on('cursorActivity', () => {
+                if (isTyping) return;
                 const cursor = editor.getDoc().getCursor();
                 const cursorLine = cursor.line;
                 
@@ -2584,6 +2595,7 @@ paginate: true
 
         // Update Preview Panel
         async function updatePreview(markdownText) {
+            const savedScrollTop = previewContainer ? previewContainer.scrollTop : 0;
             try {
                 // エディタ内のすべての Mermaid ブロックの位置をスキャンして記録し、パースエラーを検出する
                 if (window.mermaid) {
@@ -2747,6 +2759,7 @@ paginate: true
 
                     previewContainer.innerHTML = cleanHtml;
                     applyLineMarkers(previewContainer);
+                    previewContainer.scrollTop = savedScrollTop;
 
                     previewContainer.classList.add('marp-mode');
                     previewContainer.classList.remove('markdown-body');
@@ -2763,6 +2776,7 @@ paginate: true
                     });
                     previewContainer.innerHTML = cleanHtml;
                     applyLineMarkers(previewContainer);
+                    previewContainer.scrollTop = savedScrollTop;
                     marpStyleTag.textContent = '';
                     previewContainer.classList.remove('marp-mode');
                     previewContainer.classList.add('markdown-body');
