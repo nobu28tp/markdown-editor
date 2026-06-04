@@ -2035,6 +2035,73 @@ paginate: true
             };
         }
 
+        function injectLineMarkers(markdownText) {
+            if (!markdownText) return '';
+            const lines = markdownText.split('\n');
+            let inCodeBlock = false;
+            const newLines = [];
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                const trimmed = line.trim();
+
+                // コードブロックの判定
+                if (trimmed.startsWith('```')) {
+                    inCodeBlock = !inCodeBlock;
+                    if (inCodeBlock) {
+                        newLines.push(`\n<div class="line-marker" data-line="${i}"></div>\n`);
+                    }
+                    newLines.push(line);
+                    continue;
+                }
+
+                if (inCodeBlock) {
+                    newLines.push(line);
+                    continue;
+                }
+
+                const isHeader = trimmed.startsWith('#');
+                const isList = /^(?:[*+-]|\d+\.)\s/.test(trimmed);
+                const isQuote = trimmed.startsWith('>');
+                const isTable = trimmed.startsWith('|');
+                const isEmpty = trimmed === '';
+
+                const prevLine = i > 0 ? lines[i-1].trim() : '';
+                const prevIsList = /^(?:[*+-]|\d+\.)\s/.test(prevLine);
+                const prevIsTable = prevLine.startsWith('|');
+
+                const isNewList = isList && !prevIsList;
+                const isNewTable = isTable && !prevIsTable;
+                const isNewParagraph = !isEmpty && !isHeader && !isList && !isQuote && !isTable && (i === 0 || prevLine === '');
+
+                const isBlockStart = isHeader || isNewList || isQuote || isNewTable || isNewParagraph;
+
+                if (isBlockStart) {
+                    newLines.push(`\n<div class="line-marker" data-line="${i}"></div>\n`);
+                }
+                newLines.push(line);
+            }
+            return newLines.join('\n');
+        }
+
+        function applyLineMarkers(container) {
+            if (!container) return;
+            const markers = container.querySelectorAll('.line-marker');
+            markers.forEach(marker => {
+                const line = marker.getAttribute('data-line');
+                let nextEl = marker.nextElementSibling;
+                
+                while (nextEl && nextEl.classList.contains('line-marker')) {
+                    nextEl = nextEl.nextElementSibling;
+                }
+                
+                if (nextEl) {
+                    nextEl.setAttribute('data-line', line);
+                }
+                marker.remove();
+            });
+        }
+
         // ウィジェット作成関数（非表示になったBase64データの代わりに見せるUI）
         function createHiddenWidget(isInline = false) {
             const widget = document.createElement('span');
@@ -2432,9 +2499,44 @@ paginate: true
             });
             resizeObserver.observe(previewContainer);
 
-            // 4. Scroll Synchronization
+            // 4. Scroll Synchronization & Cursor Tracking
             let syncTimer = null;
             let lastScrollSource = null;
+            let lastCursorLine = -1;
+
+            function scrollToLineInPreview(lineNum, smooth = false) {
+                if (!previewContainer) return;
+                
+                const targets = Array.from(previewContainer.querySelectorAll('[data-line]'));
+                if (targets.length === 0) return;
+                
+                let closestTarget = null;
+                let closestLineDiff = Infinity;
+                
+                targets.forEach(target => {
+                    const targetLine = parseInt(target.getAttribute('data-line'), 10);
+                    const diff = lineNum - targetLine;
+                    if (diff >= 0 && diff < closestLineDiff) {
+                        closestLineDiff = diff;
+                        closestTarget = target;
+                    }
+                });
+                
+                if (closestTarget) {
+                    lastScrollSource = 'editor';
+                    clearTimeout(syncTimer);
+                    syncTimer = setTimeout(() => { lastScrollSource = null; }, 150);
+                    
+                    const containerRect = previewContainer.getBoundingClientRect();
+                    const targetRect = closestTarget.getBoundingClientRect();
+                    const targetTop = targetRect.top - containerRect.top + previewContainer.scrollTop;
+                    
+                    previewContainer.scrollTo({
+                        top: targetTop,
+                        behavior: smooth ? 'smooth' : 'auto'
+                    });
+                }
+            }
 
             // Sync Editor -> Preview
             editor.on('scroll', () => {
@@ -2442,19 +2544,62 @@ paginate: true
                 lastScrollSource = 'editor';
 
                 clearTimeout(syncTimer);
-                syncTimer = setTimeout(() => { lastScrollSource = null; }, 50);
+                syncTimer = setTimeout(() => { lastScrollSource = null; }, 150);
 
-                const editorInfo = editor.getScrollInfo();
-
-                let percentage = editorInfo.top / (editorInfo.height - editorInfo.clientHeight);
-                const scrollableHeight = previewContainer.scrollHeight - previewContainer.clientHeight;
+                const scrollInfo = editor.getScrollInfo();
                 
-                if (editorInfo.top + editorInfo.clientHeight >= editorInfo.height - 10) {
-                    previewContainer.scrollTop = scrollableHeight;
-                } else {
-                    previewContainer.scrollTop = percentage * scrollableHeight;
+                if (scrollInfo.top + scrollInfo.clientHeight >= scrollInfo.height - 10) {
+                    previewContainer.scrollTop = previewContainer.scrollHeight - previewContainer.clientHeight;
+                    return;
+                }
+                if (scrollInfo.top <= 2) {
+                    previewContainer.scrollTop = 0;
+                    return;
+                }
+
+                const topChar = editor.coordsChar({ left: 0, top: scrollInfo.top }, 'local');
+                scrollToLineInPreview(topChar.line, false);
+            });
+
+            // Sync Editor Cursor -> Preview
+            editor.on('cursorActivity', () => {
+                if (lastScrollSource === 'preview') return;
+                
+                const cursor = editor.getDoc().getCursor();
+                const cursorLine = cursor.line;
+                
+                if (cursorLine !== lastCursorLine) {
+                    lastCursorLine = cursorLine;
+                    scrollToLineInPreview(cursorLine, true);
                 }
             });
+
+            function getVisibleLineInPreview() {
+                if (!previewContainer) return 0;
+                
+                const targets = Array.from(previewContainer.querySelectorAll('[data-line]'));
+                if (targets.length === 0) return 0;
+                
+                const containerRect = previewContainer.getBoundingClientRect();
+                let closestTarget = null;
+                let closestDist = Infinity;
+                
+                for (let i = 0; i < targets.length; i++) {
+                    const target = targets[i];
+                    const targetRect = target.getBoundingClientRect();
+                    const dist = Math.abs(targetRect.top - containerRect.top);
+                    
+                    if (dist < closestDist) {
+                        closestDist = dist;
+                        closestTarget = target;
+                    }
+                }
+                
+                if (closestTarget) {
+                    return parseInt(closestTarget.getAttribute('data-line'), 10);
+                }
+                return 0;
+            }
 
             // Sync Preview -> Editor
             previewContainer.addEventListener('scroll', () => {
@@ -2462,20 +2607,24 @@ paginate: true
                 lastScrollSource = 'preview';
 
                 clearTimeout(syncTimer);
-                syncTimer = setTimeout(() => { lastScrollSource = null; }, 50);
+                syncTimer = setTimeout(() => { lastScrollSource = null; }, 150);
 
                 const scrollableHeight = previewContainer.scrollHeight - previewContainer.clientHeight;
                 if (scrollableHeight <= 0) return;
 
-                let percentage = previewContainer.scrollTop / scrollableHeight;
-                const editorInfo = editor.getScrollInfo();
-                
-                if (previewContainer.scrollTop + previewContainer.clientHeight >= previewContainer.scrollHeight - 10) {
-                    editor.scrollTo(editorInfo.left, editorInfo.height);
-                } else {
-                    const targetHeight = percentage * (editorInfo.height - editorInfo.clientHeight);
-                    editor.scrollTo(editorInfo.left, targetHeight);
+                if (previewContainer.scrollTop <= 2) {
+                    editor.scrollTo(null, 0);
+                    return;
                 }
+                if (previewContainer.scrollTop + previewContainer.clientHeight >= previewContainer.scrollHeight - 10) {
+                    const editorInfo = editor.getScrollInfo();
+                    editor.scrollTo(editorInfo.left, editorInfo.height);
+                    return;
+                }
+
+                const visibleLine = getVisibleLineInPreview();
+                const tcoords = editor.charCoords({line: visibleLine, ch: 0}, 'local');
+                editor.scrollTo(null, tcoords.top);
             });
         }
 
@@ -2584,7 +2733,8 @@ paginate: true
                 const engineIndicator = document.getElementById('engine-indicator');
 
                 if (shouldRenderSlide) {
-                    const marpResult = renderWithMarp(markdownText);
+                    const markedTextWithMarkers = injectLineMarkers(markdownText);
+                    const marpResult = renderWithMarp(markedTextWithMarkers);
                     const { css, slides, source } = marpResult;
 
                     // Update Engine Indicator
@@ -2657,8 +2807,8 @@ paginate: true
                     if (source !== 'marp-core') {
                         cleanHtml = DOMPurify.sanitize(slidesHtml, {
                             USE_PROFILES: { html: true, svg: true },
-                            ADD_TAGS: ['section', 'style', 'svg', 'foreignObject', 'path', 'g', 'figure', 'figcaption'],
-                            ADD_ATTR: ['id', 'data-theme', 'style', 'class', 'viewBox', 'data-marpit-svg', 'data-marpit-pagination', 'data-marpit-pagination-total', 'data-marpit-advanced-background', 'data-marpit-advanced-background-container', 'data-marpit-advanced-background-direction', 'data-marpit-advanced-background-split', 'data-bg-image', 'data-color', 'width', 'height', 'd', 'fill', 'xmlns'],
+                            ADD_TAGS: ['section', 'style', 'svg', 'foreignObject', 'path', 'g', 'figure', 'figcaption', 'div'],
+                            ADD_ATTR: ['id', 'data-theme', 'style', 'class', 'viewBox', 'data-marpit-svg', 'data-marpit-pagination', 'data-marpit-pagination-total', 'data-marpit-advanced-background', 'data-marpit-advanced-background-container', 'data-marpit-advanced-background-direction', 'data-marpit-advanced-background-split', 'data-bg-image', 'data-color', 'width', 'height', 'd', 'fill', 'xmlns', 'data-line'],
                             FORBID_TAGS: ['script'],
                             FORBID_ATTR: ['onerror', 'onclick', 'onload']
                         });
@@ -2666,6 +2816,7 @@ paginate: true
                     }
 
                     previewContainer.innerHTML = cleanHtml;
+                    applyLineMarkers(previewContainer);
 
                     previewContainer.classList.add('marp-mode');
                     previewContainer.classList.remove('markdown-body');
@@ -2674,12 +2825,14 @@ paginate: true
                     if (engineIndicator) {
                         engineIndicator.style.display = 'none';
                     }
-                    const rawHtml = marked.parse(markdownText);
+                    const markedTextWithMarkers = injectLineMarkers(markdownText);
+                    const rawHtml = marked.parse(markedTextWithMarkers);
                     const cleanHtml = DOMPurify.sanitize(rawHtml, {
-                        ADD_TAGS: ['iframe', 'input'],
-                        ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'target', 'type', 'checked', 'disabled', 'start']
+                        ADD_TAGS: ['iframe', 'input', 'div'],
+                        ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'target', 'type', 'checked', 'disabled', 'start', 'data-line']
                     });
                     previewContainer.innerHTML = cleanHtml;
+                    applyLineMarkers(previewContainer);
                     marpStyleTag.textContent = '';
                     previewContainer.classList.remove('marp-mode');
                     previewContainer.classList.add('markdown-body');
