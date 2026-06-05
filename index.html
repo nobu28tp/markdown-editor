@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Markdown Editor (Ver.5.3.1)</title>
+    <title>Markdown Editor (Ver.5.4.1)</title>
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1133,7 +1133,7 @@
             <div class="header-left">
                 <div class="logo">
                     <i data-lucide="pen-tool"></i>
-                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.3.1)</span>
+                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.4.1)</span>
                     </h1>
                 </div>
                 <div class="status-indicator" id="save-status">
@@ -3577,26 +3577,30 @@ paginate: true
         async function handleSaveMd() {
             const content = editor.getValue();
 
-            // ローカルフォルダ連携中で、かつ現在ファイルを開いている場合、直接上書き
-            if (activeLocalDirectoryHandle && activeLocalFileHandle) {
+            // File System Access API (showSaveFilePicker) が利用可能なら、保存場所を選択させる
+            if (window.showSaveFilePicker) {
                 try {
-                    updateStatus('saving', 'ローカルファイルに上書き中...');
-                    if (await verifyLocalPermission(activeLocalFileHandle, true)) {
-                        const writable = await activeLocalFileHandle.createWritable();
-                        await writable.write(content);
-                        await writable.close();
-                        updateStatus('saved', `ローカルに直接上書き保存しました (${activeLocalFileHandle.name})`);
-                        // リスト表示を更新
-                        if (typeof fetchLocalDir === 'function') {
-                            await fetchLocalDir(currentLocalBrowsePath);
-                        }
-                        return;
-                    }
+                    const fileHandle = await window.showSaveFilePicker({
+                        suggestedName: getDocTitle() + '.md',
+                        types: [{
+                            description: 'Markdownファイル',
+                            accept: { 'text/markdown': ['.md'] }
+                        }]
+                    });
+                    updateStatus('saving', '保存中...');
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(content);
+                    await writable.close();
+                    updateStatus('saved', `保存しました (${fileHandle.name})`);
+                    return;
                 } catch (err) {
-                    console.error("Local fast-save failed, falling back to download:", err);
+                    // ユーザーがキャンセルした場合は何もしない
+                    if (err.name === 'AbortError') return;
+                    console.error("showSaveFilePicker failed, falling back to download:", err);
                 }
             }
 
+            // フォールバック: 従来のダウンロード方式
             const blob = new Blob([content], { type: 'text/markdown' });
             try {
                 triggerDownload(blob, getDocTitle() + '.md');
@@ -6012,7 +6016,8 @@ ${slidesHtml}
                 return;
             }
 
-            showLocalStatus('📤 ローカルファイルを保存中...', '#58a6ff');
+            // indexファイル（include指示を含むファイル）の上書き保護
+            // 分割保存で生成されたインデックスファイルを通常保存で上書きすると結合読み込みが壊れるため、ブロックする
             try {
                 let dirHandle = activeLocalDirectoryHandle;
                 if (currentLocalBrowsePath) {
@@ -6020,6 +6025,21 @@ ${slidesHtml}
                     for (const part of parts) {
                         dirHandle = await dirHandle.getDirectoryHandle(part);
                     }
+                }
+
+                // 既存ファイルが存在する場合、その中身にinclude指示が含まれていないかチェック
+                try {
+                    const existingHandle = await dirHandle.getFileHandle(fileName, { create: false });
+                    if (await verifyLocalPermission(existingHandle, false)) {
+                        const existingFile = await existingHandle.getFile();
+                        const existingText = await existingFile.text();
+                        if (/<!--\s*include:\s*[^\s]+\s*-->/.test(existingText)) {
+                            showLocalStatus('🚫 このファイルは分割保存で生成されたインデックスファイルです。通常の保存で上書きすると結合読み込みが壊れるため、保存をブロックしました。「分割保存」ボタンを使用してください。', '#f85149');
+                            return;
+                        }
+                    }
+                } catch (notFoundErr) {
+                    // ファイルが存在しない場合は新規作成なので問題なし
                 }
 
                 const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
