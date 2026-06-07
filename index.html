@@ -160,6 +160,7 @@
             border-bottom: 1px solid var(--border-color);
             z-index: 100;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            position: relative;
         }
 
         .header-left {
@@ -411,9 +412,8 @@
 
             .header-left {
                 gap: 0.5rem;
-                flex-wrap: nowrap;
+                flex-wrap: wrap;
                 min-width: 0;
-                overflow: hidden;
             }
 
             .logo h1 {
@@ -433,15 +433,23 @@
             .doc-title-wrap {
                 flex-basis: 100%;
                 order: 10;
+                margin-left: 0;
+                border-left: none;
+                padding-left: 0;
+                display: flex;
+                width: 100%;
             }
 
             .doc-title-wrap label {
                 font-size: 0.75rem !important;
+                white-space: nowrap;
             }
 
             .doc-title-wrap input {
                 font-size: 0.8rem !important;
                 padding: 4px 8px !important;
+                flex: 1;
+                min-width: 0;
             }
 
             .header-right {
@@ -471,8 +479,9 @@
             }
 
             .hamburger-menu {
-                min-width: 280px;
-                right: -0.5rem;
+                min-width: 300px;
+                right: 0.75rem;
+                left: auto;
             }
 
             .split-view {
@@ -513,13 +522,36 @@
             }
 
             .hamburger-menu {
-                min-width: calc(100vw - 1rem);
-                right: -0.25rem;
+                left: 0.5rem;
+                right: 0.5rem;
+                width: auto;
+                min-width: 0;
+            }
+
+            .hamburger-menu-row {
+                flex-direction: column;
+                gap: 0.5rem;
             }
 
             .hamburger-menu-item {
-                font-size: 0.75rem !important;
-                padding: 0.35rem 0.5rem !important;
+                width: 100%;
+                flex: 1 1 100% !important;
+                font-size: 0.85rem !important;
+                padding: 0.5rem 0.8rem !important;
+                box-sizing: border-box;
+            }
+
+            /* テーマ選択ドロップダウンの全幅化 */
+            .doc-theme-dropdown {
+                width: 100%;
+                display: block;
+            }
+
+            .doc-theme-menu {
+                width: 100%;
+                min-width: 0;
+                left: 0;
+                right: 0;
             }
         }
 
