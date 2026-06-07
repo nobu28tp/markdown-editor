@@ -158,7 +158,7 @@
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
             border-bottom: 1px solid var(--border-color);
-            z-index: 10;
+            z-index: 100;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
 
@@ -245,6 +245,7 @@
             align-items: center;
             flex-wrap: wrap;
             gap: 0.75rem;
+            position: relative;
         }
 
         .btn {
@@ -305,6 +306,221 @@
 
         .btn-secondary:hover {
             background: var(--btn-secondary-hover);
+        }
+
+        /* --- Hamburger Menu --- */
+        .hamburger-btn {
+            position: relative;
+            padding: 0.5rem;
+            z-index: 102;
+        }
+
+        .hamburger-btn i {
+            width: 20px;
+            height: 20px;
+        }
+
+        .hamburger-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 0.25rem;
+            background: var(--pane-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4), 0 2px 10px rgba(0, 0, 0, 0.2);
+            padding: 0.5rem;
+            z-index: 101;
+            min-width: 320px;
+            max-height: 80vh;
+            overflow-y: auto;
+            animation: hamburgerSlideIn 0.2s ease;
+        }
+
+        .hamburger-menu.active {
+            display: block;
+        }
+
+        @keyframes hamburgerSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .hamburger-menu-section {
+            padding: 0.25rem 0.25rem;
+        }
+
+        .hamburger-menu-label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 0.15rem 0.5rem 0.35rem;
+        }
+
+        .hamburger-menu-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            padding: 0.2rem 0;
+        }
+
+        .hamburger-menu-item {
+            flex: 1 1 auto;
+            min-width: 0;
+            justify-content: center;
+            font-size: 0.8rem !important;
+            padding: 0.4rem 0.6rem !important;
+        }
+
+        .hamburger-menu-divider {
+            height: 1px;
+            background: var(--border-color);
+            margin: 0.25rem 0.25rem;
+        }
+
+        /* ハンバーガーメニュー背景オーバーレイ */
+        .hamburger-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 99;
+        }
+
+        .hamburger-overlay.active {
+            display: block;
+        }
+
+        /* --- Responsive: Mobile / Tablet --- */
+        @media (max-width: 768px) {
+            .glass-header {
+                padding: 0.5rem 0.75rem;
+                gap: 0.5rem;
+            }
+
+            .header-left {
+                gap: 0.5rem;
+                flex-wrap: nowrap;
+                min-width: 0;
+                overflow: hidden;
+            }
+
+            .logo h1 {
+                font-size: 0.95rem;
+            }
+
+            .logo i {
+                width: 18px;
+                height: 18px;
+            }
+
+            .status-indicator {
+                font-size: 0.75rem;
+                padding: 2px 6px;
+            }
+
+            .doc-title-wrap {
+                flex-basis: 100%;
+                order: 10;
+            }
+
+            .doc-title-wrap label {
+                font-size: 0.75rem !important;
+            }
+
+            .doc-title-wrap input {
+                font-size: 0.8rem !important;
+                padding: 4px 8px !important;
+            }
+
+            .header-right {
+                gap: 0.35rem;
+            }
+
+            .header-right > .btn > span {
+                display: none;
+            }
+
+            .header-right > .btn {
+                padding: 0.4rem;
+            }
+
+            .header-right > .btn i {
+                width: 18px;
+                height: 18px;
+            }
+
+            .mode-switcher {
+                gap: 0 !important;
+            }
+
+            .mode-btn {
+                padding: 4px 10px !important;
+                font-size: 0.75rem !important;
+            }
+
+            .hamburger-menu {
+                min-width: 280px;
+                right: -0.5rem;
+            }
+
+            .split-view {
+                flex-direction: column !important;
+            }
+
+            .pane {
+                min-width: 0 !important;
+                width: 100% !important;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .glass-header {
+                padding: 0.35rem 0.5rem;
+                gap: 0.35rem;
+            }
+
+            .logo h1 {
+                font-size: 0.85rem;
+            }
+
+            .logo h1 span {
+                display: none;
+            }
+
+            .status-indicator {
+                display: none;
+            }
+
+            .header-right > .btn {
+                padding: 0.35rem;
+            }
+
+            .header-right > .btn i {
+                width: 16px;
+                height: 16px;
+            }
+
+            .hamburger-menu {
+                min-width: calc(100vw - 1rem);
+                right: -0.25rem;
+            }
+
+            .hamburger-menu-item {
+                font-size: 0.75rem !important;
+                padding: 0.35rem 0.5rem !important;
+            }
         }
 
         /* --- Modal (Help / Cheat Sheet) --- */
@@ -1150,118 +1366,159 @@
                 </div>
             </div>
             <div class="header-right">
+                <!-- 常に表示するボタン群 -->
                 <button class="btn btn-outline" id="btn-toggle-preview" title="プレビューの表示/非表示">
                     <i data-lucide="layout-panel-left"></i>
                     <span>プレビュー切替</span>
                 </button>
-                <div style="width: 1px; background-color: var(--border-color); margin: 0 0.5rem;"></div>
                 <button class="btn btn-outline" id="btn-help" title="Markdownの書き方">
                     <i data-lucide="help-circle"></i>
                     <span>ヘルプ</span>
                 </button>
-                <div style="width: 1px; background-color: var(--border-color); margin: 0 0.5rem;"></div>
                 <button class="btn btn-outline" id="btn-new">
                     <i data-lucide="file-plus"></i>
                     <span>新規作成</span>
                 </button>
-                <div class="encoding-selector-wrap" style="display: flex; align-items: center; gap: 0.4rem; background: rgba(0, 0, 0, 0.2); border: 1px solid var(--border-color); border-radius: 6px; padding: 0 0.5rem; height: 38px; box-sizing: border-box;">
-                    <label for="encoding-select" style="cursor: pointer; display: flex; align-items: center; color: var(--text-secondary);" title="読み込み時の文字コード">
-                        <i data-lucide="languages" style="width: 16px; height: 16px;"></i>
-                    </label>
-                    <select id="encoding-select" style="background: transparent; border: none; color: var(--text-primary); font-size: 0.875rem; font-family: var(--font-ui); cursor: pointer; outline: none; padding-right: 0.5rem; height: 100%;">
-                        <option value="UTF-8" style="background: var(--pane-bg); color: var(--text-primary);">UTF-8 (推奨)</option>
-                        <option value="Shift_JIS" style="background: var(--pane-bg); color: var(--text-primary);">Shift_JIS</option>
-                        <option value="EUC-JP" style="background: var(--pane-bg); color: var(--text-primary);">EUC-JP</option>
-                    </select>
-                </div>
-                <button class="btn btn-outline" id="btn-open">
-                    <i data-lucide="folder-open"></i>
-                    <span>開く</span>
+
+                <!-- ハンバーガーメニューボタン -->
+                <button class="btn btn-outline hamburger-btn" id="btn-hamburger" title="メニュー">
+                    <i data-lucide="menu"></i>
                 </button>
-                <button class="btn btn-primary" id="btn-save-md">
-                    <i data-lucide="save"></i>
-                    <span>Markdown保存</span>
-                </button>
-                <button class="btn btn-outline" id="btn-split-save" style="border-color: rgba(88, 166, 255, 0.4); margin-left: 0.25rem;" title="指定コメント箇所でファイルを自動分割して保存">
-                    <i data-lucide="git-branch"></i>
-                    <span>分割保存</span>
-                </button>
-                <button class="btn btn-secondary" id="btn-export-word">
-                    <i data-lucide="file-text"></i>
-                    <span>Word出力</span>
-                </button>
-                <button class="btn btn-secondary" id="btn-export-pdf"
-                    style="background: #da3633; border-color: rgba(255, 255, 255, 0.1);">
-                    <i data-lucide="file-down"></i>
-                    <span>PDF出力</span>
-                </button>
-                <button class="btn btn-secondary" id="btn-export-html"
-                    style="background: #e36209; border-color: rgba(255, 255, 255, 0.1);">
-                    <i data-lucide="globe"></i>
-                    <span>HTML出力</span>
-                </button>
-                <button class="btn btn-secondary" id="btn-preview-html"
-                    style="background: #8957e5; border-color: rgba(255, 255, 255, 0.1);" title="HTMLを別タブでプレビュー表示">
-                    <i data-lucide="eye"></i>
-                    <span>HTMLプレビュー</span>
-                </button>
-                <div class="doc-theme-dropdown" id="doc-theme-dropdown">
-                    <button class="btn btn-outline" id="btn-doc-theme" style="border-color: rgba(163, 113, 247, 0.4);" title="ドキュメントテーマを選択">
-                        <i data-lucide="palette"></i>
-                        <span>テーマ</span>
-                    </button>
-                    <div class="doc-theme-menu" id="doc-theme-menu">
-                        <button class="doc-theme-menu-item active" data-theme="github">
-                            <span class="check-mark">✓</span>
-                            <span>📄 GitHub（デフォルト）</span>
-                        </button>
-                        <button class="doc-theme-menu-item" data-theme="academic">
-                            <span class="check-mark"></span>
-                            <span>📚 アカデミック（論文風）</span>
-                        </button>
-                        <button class="doc-theme-menu-item" data-theme="corporate">
-                            <span class="check-mark"></span>
-                            <span>💼 コーポレート（ビジネス）</span>
-                        </button>
-                        <button class="doc-theme-menu-item" data-theme="minimal">
-                            <span class="check-mark"></span>
-                            <span>✨ ミニマル</span>
-                        </button>
-                        <div class="doc-theme-menu-divider"></div>
-                        <button class="doc-theme-menu-item" id="btn-load-css-file">
-                            <span class="check-mark"></span>
-                            <span>📂 CSSファイルを読み込む...</span>
-                        </button>
-                        <button class="doc-theme-menu-item" id="btn-open-css-editor">
-                            <span class="check-mark"></span>
-                            <span>✏️ カスタムCSSを編集...</span>
-                        </button>
-                        <div class="doc-theme-menu-divider"></div>
-                        <button class="doc-theme-menu-item" id="btn-reset-theme" style="color: #f85149;">
-                            <span class="check-mark"></span>
-                            <span>🗑️ カスタムテーマを削除</span>
-                        </button>
+
+                <!-- ハンバーガーメニュー ドロップダウン -->
+                <div class="hamburger-menu" id="hamburger-menu">
+                    <div class="hamburger-menu-section">
+                        <div class="hamburger-menu-label">ファイル操作</div>
+                        <div class="hamburger-menu-row">
+                            <div class="encoding-selector-wrap" style="display: flex; align-items: center; gap: 0.4rem; background: rgba(0, 0, 0, 0.2); border: 1px solid var(--border-color); border-radius: 6px; padding: 0 0.5rem; height: 38px; box-sizing: border-box;">
+                                <label for="encoding-select" style="cursor: pointer; display: flex; align-items: center; color: var(--text-secondary);" title="読み込み時の文字コード">
+                                    <i data-lucide="languages" style="width: 16px; height: 16px;"></i>
+                                </label>
+                                <select id="encoding-select" style="background: transparent; border: none; color: var(--text-primary); font-size: 0.875rem; font-family: var(--font-ui); cursor: pointer; outline: none; padding-right: 0.5rem; height: 100%;">
+                                    <option value="UTF-8" style="background: var(--pane-bg); color: var(--text-primary);">UTF-8 (推奨)</option>
+                                    <option value="Shift_JIS" style="background: var(--pane-bg); color: var(--text-primary);">Shift_JIS</option>
+                                    <option value="EUC-JP" style="background: var(--pane-bg); color: var(--text-primary);">EUC-JP</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="hamburger-menu-row">
+                            <button class="btn btn-outline hamburger-menu-item" id="btn-open">
+                                <i data-lucide="folder-open"></i>
+                                <span>開く</span>
+                            </button>
+                            <button class="btn btn-primary hamburger-menu-item" id="btn-save-md">
+                                <i data-lucide="save"></i>
+                                <span>Markdown保存</span>
+                            </button>
+                        </div>
+                        <div class="hamburger-menu-row">
+                            <button class="btn btn-outline hamburger-menu-item" id="btn-split-save" style="border-color: rgba(88, 166, 255, 0.4);" title="指定コメント箇所でファイルを自動分割して保存">
+                                <i data-lucide="git-branch"></i>
+                                <span>分割保存</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="hamburger-menu-divider"></div>
+                    <div class="hamburger-menu-section">
+                        <div class="hamburger-menu-label">エクスポート</div>
+                        <div class="hamburger-menu-row">
+                            <button class="btn btn-secondary hamburger-menu-item" id="btn-export-word">
+                                <i data-lucide="file-text"></i>
+                                <span>Word出力</span>
+                            </button>
+                            <button class="btn btn-secondary hamburger-menu-item" id="btn-export-pdf"
+                                style="background: #da3633; border-color: rgba(255, 255, 255, 0.1);">
+                                <i data-lucide="file-down"></i>
+                                <span>PDF出力</span>
+                            </button>
+                        </div>
+                        <div class="hamburger-menu-row">
+                            <button class="btn btn-secondary hamburger-menu-item" id="btn-export-html"
+                                style="background: #e36209; border-color: rgba(255, 255, 255, 0.1);">
+                                <i data-lucide="globe"></i>
+                                <span>HTML出力</span>
+                            </button>
+                            <button class="btn btn-secondary hamburger-menu-item" id="btn-preview-html"
+                                style="background: #8957e5; border-color: rgba(255, 255, 255, 0.1);" title="HTMLを別タブでプレビュー表示">
+                                <i data-lucide="eye"></i>
+                                <span>HTMLプレビュー</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="hamburger-menu-divider"></div>
+                    <div class="hamburger-menu-section">
+                        <div class="hamburger-menu-label">テーマ・表示</div>
+                        <div class="hamburger-menu-row">
+                            <div class="doc-theme-dropdown" id="doc-theme-dropdown">
+                                <button class="btn btn-outline hamburger-menu-item" id="btn-doc-theme" style="border-color: rgba(163, 113, 247, 0.4);" title="ドキュメントテーマを選択">
+                                    <i data-lucide="palette"></i>
+                                    <span>テーマ</span>
+                                </button>
+                                <div class="doc-theme-menu" id="doc-theme-menu">
+                                    <button class="doc-theme-menu-item active" data-theme="github">
+                                        <span class="check-mark">✓</span>
+                                        <span>📄 GitHub（デフォルト）</span>
+                                    </button>
+                                    <button class="doc-theme-menu-item" data-theme="academic">
+                                        <span class="check-mark"></span>
+                                        <span>📚 アカデミック（論文風）</span>
+                                    </button>
+                                    <button class="doc-theme-menu-item" data-theme="corporate">
+                                        <span class="check-mark"></span>
+                                        <span>💼 コーポレート（ビジネス）</span>
+                                    </button>
+                                    <button class="doc-theme-menu-item" data-theme="minimal">
+                                        <span class="check-mark"></span>
+                                        <span>✨ ミニマル</span>
+                                    </button>
+                                    <div class="doc-theme-menu-divider"></div>
+                                    <button class="doc-theme-menu-item" id="btn-load-css-file">
+                                        <span class="check-mark"></span>
+                                        <span>📂 CSSファイルを読み込む...</span>
+                                    </button>
+                                    <button class="doc-theme-menu-item" id="btn-open-css-editor">
+                                        <span class="check-mark"></span>
+                                        <span>✏️ カスタムCSSを編集...</span>
+                                    </button>
+                                    <div class="doc-theme-menu-divider"></div>
+                                    <button class="doc-theme-menu-item" id="btn-reset-theme" style="color: #f85149;">
+                                        <span class="check-mark"></span>
+                                        <span>🗑️ カスタムテーマを削除</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <button class="btn btn-outline hamburger-menu-item" id="btn-theme-toggle" style="border-color: var(--accent-color);" title="テーマ切り替え (ライト/ダーク)">
+                                <i data-lucide="sun"></i>
+                                <span>ライトモード</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="hamburger-menu-divider"></div>
+                    <div class="hamburger-menu-section">
+                        <div class="hamburger-menu-label">連携</div>
+                        <div class="hamburger-menu-row">
+                            <button class="btn btn-outline hamburger-menu-item" id="btn-open-exporter" title="Mermaid Exporter を別タブで開く">
+                                <i data-lucide="external-link"></i>
+                                <span>Mermaid Exporter</span>
+                            </button>
+                        </div>
+                        <div class="hamburger-menu-row">
+                            <button class="btn btn-outline hamburger-menu-item" id="btn-local-sync" style="border-color: rgba(46, 160, 67, 0.4);" title="ローカルのdocumentフォルダと連携する">
+                                <i data-lucide="folder"></i>
+                                <span>フォルダ連携</span>
+                            </button>
+                            <button class="btn btn-outline hamburger-menu-item" id="btn-github-sync" style="border-color: rgba(88, 166, 255, 0.4);" title="GitHubリポジトリと連携する">
+                                <i data-lucide="github"></i>
+                                <span>GitHub連携</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
-                <div style="width: 1px; background-color: var(--border-color); margin: 0 0.5rem;"></div>
-                <button class="btn btn-outline" id="btn-open-exporter" title="Mermaid Exporter を別タブで開く">
-                    <i data-lucide="external-link"></i>
-                    <span>Mermaid Exporter</span>
-                </button>
-                <button class="btn btn-outline" id="btn-local-sync" style="border-color: rgba(46, 160, 67, 0.4);" title="ローカルのdocumentフォルダと連携する">
-                    <i data-lucide="folder"></i>
-                    <span>フォルダ連携</span>
-                </button>
-                <button class="btn btn-outline" id="btn-github-sync" style="border-color: rgba(88, 166, 255, 0.4);" title="GitHubリポジトリと連携する">
-                    <i data-lucide="github"></i>
-                    <span>GitHub連携</span>
-                </button>
-                <button class="btn btn-outline" id="btn-theme-toggle" style="border-color: var(--accent-color);" title="テーマ切り替え (ライト/ダーク)">
-                    <i data-lucide="sun"></i>
-                    <span>ライトモード</span>
-                </button>
             </div>
         </header>
+
+        <!-- ハンバーガーメニュー背景オーバーレイ -->
+        <div class="hamburger-overlay" id="hamburger-overlay"></div>
 
         <!-- Main Content (Split View) -->
         <main class="split-view">
@@ -2452,6 +2709,44 @@ paginate: true
             document.getElementById('btn-local-folder-connect').addEventListener('click', connectLocalFolder);
             document.getElementById('btn-local-file-load').addEventListener('click', loadSelectedLocalFile);
             document.getElementById('btn-local-file-save').addEventListener('click', saveActiveLocalFile);
+
+            // ハンバーガーメニューの開閉
+            const hamburgerBtn = document.getElementById('btn-hamburger');
+            const hamburgerMenu = document.getElementById('hamburger-menu');
+            const hamburgerOverlay = document.getElementById('hamburger-overlay');
+
+            function toggleHamburger() {
+                const isActive = hamburgerMenu.classList.toggle('active');
+                hamburgerOverlay.classList.toggle('active', isActive);
+            }
+
+            function closeHamburger() {
+                hamburgerMenu.classList.remove('active');
+                hamburgerOverlay.classList.remove('active');
+            }
+
+            hamburgerBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleHamburger();
+            });
+
+            hamburgerOverlay.addEventListener('click', closeHamburger);
+
+            // Escキーでメニューを閉じる
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && hamburgerMenu.classList.contains('active')) {
+                    closeHamburger();
+                }
+            });
+
+            // メニュー内のボタンクリック時にメニューを閉じる（テーマメニュー以外）
+            hamburgerMenu.querySelectorAll('.btn:not(#btn-doc-theme)').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    // テーマメニューを開くボタンの場合は閉じない
+                    if (btn.id === 'btn-doc-theme') return;
+                    closeHamburger();
+                });
+            });
 
             // Pane toggles
             document.getElementById('btn-toggle-preview').addEventListener('click', () => {
@@ -6016,6 +6311,21 @@ ${slidesHtml}
                 return;
             }
 
+            // エディタ内のテキストに include / split コメントが含まれていないかチェック（インデックスファイル保護）
+            if (/<!--\s*(include|split):\s*[^\s]+\s*-->/.test(content)) {
+                showLocalStatus('🚫 分割用インデックスファイルの通常保存はブロックされました。「分割保存」ボタンを使用してください。', '#f85149');
+                alert('🚫 このファイルには分割用コメント（<!-- include:... --> または <!-- split:... -->）が含まれています。\n通常の保存で上書きすると結合・分割構造が壊れるため、保存をブロックしました。\n分割ファイルの変更を保存する場合は、ヘッダーの「分割保存」ボタンを使用してください。');
+                return;
+            }
+
+            // 保存確認ダイアログの表示
+            const relativePath = currentLocalBrowsePath ? `${currentLocalBrowsePath}/${fileName}` : fileName;
+            const confirmSave = confirm(`ファイルを連携フォルダに保存しますか？\n\n連携フォルダ: ${activeLocalDirectoryHandle.name}\n保存パス: ${relativePath}\n\n※既存ファイルがある場合は上書きされます。よろしければ「OK」を押してください。`);
+            if (!confirmSave) {
+                showLocalStatus('保存がキャンセルされました', '#8b949e');
+                return;
+            }
+
             // indexファイル（include指示を含むファイル）の上書き保護
             // 分割保存で生成されたインデックスファイルを通常保存で上書きすると結合読み込みが壊れるため、ブロックする
             try {
@@ -6027,14 +6337,15 @@ ${slidesHtml}
                     }
                 }
 
-                // 既存ファイルが存在する場合、その中身にinclude指示が含まれていないかチェック
+                // 既存ファイルが存在する場合、その中身にinclude指示が含まれていないかダブルチェック
                 try {
                     const existingHandle = await dirHandle.getFileHandle(fileName, { create: false });
                     if (await verifyLocalPermission(existingHandle, false)) {
                         const existingFile = await existingHandle.getFile();
                         const existingText = await existingFile.text();
-                        if (/<!--\s*include:\s*[^\s]+\s*-->/.test(existingText)) {
-                            showLocalStatus('🚫 このファイルは分割保存で生成されたインデックスファイルです。通常の保存で上書きすると結合読み込みが壊れるため、保存をブロックしました。「分割保存」ボタンを使用してください。', '#f85149');
+                        if (/<!--\s*(include|split):\s*[^\s]+\s*-->/.test(existingText)) {
+                            showLocalStatus('🚫 保存先の既存ファイルがインデックスファイルであるため、保存をブロックしました。', '#f85149');
+                            alert('🚫 上書きしようとしている既存ファイルは分割用のインデックスファイルです。\n通常の保存で上書きすると結合・分割の読み込みが壊れるため、保存をブロックしました。\n「分割保存」ボタンを使用してください。');
                             return;
                         }
                     }
