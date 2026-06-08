@@ -334,8 +334,7 @@
             padding: 0.5rem;
             z-index: 101;
             min-width: 320px;
-            max-height: 80vh;
-            overflow-y: auto;
+            overflow: visible;
             animation: hamburgerSlideIn 0.2s ease;
         }
 
@@ -482,6 +481,24 @@
                 min-width: 300px;
                 right: 0.75rem;
                 left: auto;
+                max-height: 75vh;
+                overflow-y: auto;
+            }
+
+            /* モバイル・タブレット時はテーマ選択をアコーディオンにする */
+            .doc-theme-dropdown {
+                width: 100%;
+                display: block;
+                position: relative;
+            }
+
+            .doc-theme-menu {
+                position: static;
+                width: 100%;
+                min-width: 0;
+                box-shadow: none;
+                margin-top: 0.5rem;
+                background: rgba(0, 0, 0, 0.15);
             }
 
             .split-view {
@@ -526,6 +543,8 @@
                 right: 0.5rem;
                 width: auto;
                 min-width: 0;
+                max-height: 70vh;
+                overflow-y: auto;
             }
 
             .hamburger-menu-row {
@@ -548,10 +567,12 @@
             }
 
             .doc-theme-menu {
+                position: static;
                 width: 100%;
                 min-width: 0;
-                left: 0;
-                right: 0;
+                box-shadow: none;
+                margin-top: 0.5rem;
+                background: rgba(0, 0, 0, 0.15);
             }
         }
 
