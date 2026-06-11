@@ -2085,8 +2085,9 @@ paginate: true
         const statusText = document.getElementById('status-text');
 
         let editor; // CodeMirror instance
-        let saveTimeout = null;
+        let autosaveInterval = null;
         let previewTimeout = null;
+        let hasUnsavedChanges = false;
         let previewMode = 'doc'; // 'doc' or 'slide'
 
         // ============================================================
@@ -2593,6 +2594,7 @@ paginate: true
                 editor.setValue(defaultText);
                 updatePreview(defaultText);
             }
+            hasUnsavedChanges = false;
 
             // エクスポートボタンの状態を初期化
             updateExportButtonState();
@@ -2641,14 +2643,19 @@ paginate: true
                     }
                 }
 
-                const content = editor.getValue();
+                hasUnsavedChanges = true;
+                updateStatus('normal', '編集中...');
 
-                // プレビューの更新をリアルタイム（即時）に実行
-                updatePreview(content);
-
-                // Trigger Auto-save debounce
-                triggerAutoSave(content);
+                // Debounce preview rendering by 300ms to keep editor typing smooth
+                if (previewTimeout) clearTimeout(previewTimeout);
+                previewTimeout = setTimeout(() => {
+                    const content = editor.getValue();
+                    updatePreview(content);
+                }, 300);
             });
+
+            // Start autosave timer (every 5 minutes)
+            startAutosaveTimer();
 
             // Handle Image Pasting
             editor.on('paste', (cm, event) => {
@@ -3247,28 +3254,37 @@ paginate: true
             }
         }
 
-        // Auto Save Logic
-        function triggerAutoSave(content) {
-            updateStatus('saving', '保存中...');
+        // Auto Save Logic (Periodic every 5 minutes)
+        function startAutosaveTimer() {
+            if (autosaveInterval) clearInterval(autosaveInterval);
+            autosaveInterval = setInterval(() => {
+                performAutosave();
+            }, 300000); // 5 minutes (300,000 ms)
+        }
 
-            // Clear previous timeout
-            if (saveTimeout) clearTimeout(saveTimeout);
+        function performAutosave() {
+            if (!hasUnsavedChanges) return;
 
-            // Set 2 seconds debounce
-            saveTimeout = setTimeout(() => {
+            updateStatus('saving', '自動保存中...');
+            const content = editor.getValue();
+
+            // Simulate slight delay to show the saving status indicator to the user
+            setTimeout(() => {
                 try {
                     localStorage.setItem('lumina_autosave', content);
-                    updateStatus('saved', '保存済み');
+                    hasUnsavedChanges = false;
+                    
+                    const now = new Date();
+                    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    updateStatus('saved', `自動保存完了 (${timeStr})`);
 
-                    // Revert to normal state after a while
                     setTimeout(() => {
-                        if (statusIndicator.className.includes('saved')) {
+                        if (!hasUnsavedChanges) {
                             updateStatus('normal', '変更なし');
                         }
                     }, 3000);
                 } catch (e) {
                     console.error("Auto-save failed:", e);
-                    // LocalStorageの容量制限（約5MB）に引っかかった場合
                     if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
                         updateStatus('error', '容量超過エラー');
                         alert("ブラウザの保存容量（約5MB）を超えました。画像が多すぎます。\\n不要な画像を削除するか、ファイルをMDとして保存してから新規作成してください。");
@@ -3276,7 +3292,7 @@ paginate: true
                         updateStatus('error', '保存エラー');
                     }
                 }
-            }, 2000);
+            }, 500);
         }
 
         // Update Header Status UI
@@ -3289,7 +3305,7 @@ paginate: true
 
         // Create New File (Clear everything)
         function handleNewFile() {
-            if (editor.getValue().trim() !== '') {
+            if (hasUnsavedChanges && editor.getValue().trim() !== '') {
                 const confirmClear = confirm("編集中の内容は破棄されます。新規作成しますか？\n（必要であれば先に保存してください）");
                 if (!confirmClear) return;
             }
@@ -3297,6 +3313,7 @@ paginate: true
             editor.setValue('');
             updatePreview('');
             localStorage.removeItem('lumina_autosave');
+            hasUnsavedChanges = false;
             updateStatus('normal', '新規作成しました');
         }
 
@@ -3320,6 +3337,7 @@ paginate: true
                     updatePreview(content);
                     // Instantly save to local storage as well
                     localStorage.setItem('lumina_autosave', content);
+                    hasUnsavedChanges = false;
                     updateStatus('saved', `ファイルを開きました (${encoding})`);
                 };
                 reader.readAsText(file, encoding);
@@ -3939,6 +3957,10 @@ paginate: true
                     const writable = await fileHandle.createWritable();
                     await writable.write(content);
                     await writable.close();
+                    
+                    localStorage.setItem('lumina_autosave', content);
+                    hasUnsavedChanges = false;
+                    
                     updateStatus('saved', `保存しました (${fileHandle.name})`);
                     return;
                 } catch (err) {
@@ -3952,6 +3974,10 @@ paginate: true
             const blob = new Blob([content], { type: 'text/markdown' });
             try {
                 triggerDownload(blob, getDocTitle() + '.md');
+                
+                localStorage.setItem('lumina_autosave', content);
+                hasUnsavedChanges = false;
+                
                 updateStatus('saved', 'mdとして保存完了');
             } catch (e) {
                 console.error(e);
