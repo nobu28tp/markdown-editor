@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Markdown Editor (Ver.5.4.1)</title>
+    <title>Markdown Editor (Ver.5.4.2)</title>
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -19,6 +19,7 @@
     <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/addon/mode/overlay.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/mode/xml/xml.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/mode/gfm/gfm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.21/addon/search/searchcursor.js"></script>
 
     <!-- Marked (Markdown Parser) -->
     <script src="https://cdn.jsdelivr.net/npm/marked@18.0.3/lib/marked.umd.min.js"></script>
@@ -753,6 +754,106 @@
             flex-direction: column;
         }
 
+        /* Custom Floating Search Bar */
+        .custom-search-bar {
+            position: absolute;
+            top: 35px;
+            right: 20px;
+            background-color: var(--pane-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            display: none;
+            flex-direction: column;
+            gap: 6px;
+            padding: 8px 12px;
+            z-index: 1000;
+            animation: searchSlideIn 0.2s ease;
+        }
+        .custom-search-bar.active {
+            display: flex;
+        }
+        @keyframes searchSlideIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .search-row, .replace-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .search-inputs, .replace-inputs {
+            display: flex;
+            align-items: center;
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 4px 8px;
+        }
+        #search-input, #replace-input {
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            outline: none;
+            font-size: 0.85rem;
+            width: 150px;
+        }
+        #search-counter {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-family: var(--font-mono);
+            user-select: none;
+            margin-left: 5px;
+        }
+        .search-actions, .replace-actions {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .search-actions button, #search-toggle-replace {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .search-actions button:hover, #search-toggle-replace:hover {
+            color: var(--text-primary);
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        .search-actions button i, #search-toggle-replace i {
+            width: 16px;
+            height: 16px;
+            transition: transform 0.2s;
+        }
+        #search-toggle-replace.active i {
+            transform: rotate(90deg);
+        }
+        .replace-actions button {
+            background-color: var(--btn-secondary-bg);
+            color: white;
+            border: none;
+            font-size: 0.75rem;
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .replace-actions button:hover {
+            background-color: var(--btn-secondary-hover);
+        }
+        
+        /* Highlight Marks */
+        .search-highlight {
+            background-color: rgba(255, 223, 0, 0.35);
+            border-bottom: 2px solid gold;
+        }
+
         /* Dark mode override for CodeMirror */
         .CodeMirror {
             flex: 1;
@@ -1402,7 +1503,7 @@
             <div class="header-left">
                 <div class="logo">
                     <i data-lucide="pen-tool"></i>
-                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.4.1)</span>
+                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.4.2)</span>
                     </h1>
                 </div>
                 <div class="status-indicator" id="save-status">
@@ -1580,7 +1681,7 @@
                 <div class="pane-header">
                     <span>Editor</span>
                 </div>
-                <div class="editor-container" id="editor-container">
+                <div class="editor-container" id="editor-container" style="position: relative;">
                     <!-- CodeMirror will attach here -->
                     <textarea id="markdown-editor"></textarea>
                 </div>
@@ -2577,7 +2678,9 @@ paginate: true
                 mode: "gfm", // GitHub Flavored Markdown
                 lineNumbers: true,
                 lineWrapping: true,
-                extraKeys: { "Enter": "newlineAndIndentContinueMarkdownList" }
+                extraKeys: { 
+                    "Enter": "newlineAndIndentContinueMarkdownList"
+                }
             });
 
             // Set initial state of preview container
@@ -2656,6 +2759,24 @@ paginate: true
 
             // Start autosave timer (every 5 minutes)
             startAutosaveTimer();
+
+            // Prevent browser default Ctrl+F and Ctrl+H (History tab) in Chrome/Edge
+            window.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+                    const key = e.key.toLowerCase();
+                    if (key === 'f') {
+                        if (editor.hasFocus()) {
+                            e.preventDefault();
+                            openCustomSearch(false);
+                        }
+                    } else if (key === 'h') {
+                        if (editor.hasFocus()) {
+                            e.preventDefault();
+                            openCustomSearch(true);
+                        }
+                    }
+                }
+            });
 
             // Handle Image Pasting
             editor.on('paste', (cm, event) => {
@@ -3254,6 +3375,242 @@ paginate: true
             }
         }
 
+        // ============================================================
+        // Custom Search Bar Functionality
+        // ============================================================
+        let searchState = {
+            query: "",
+            matches: [],
+            currentIndex: -1
+        };
+        let searchMarkers = [];
+
+        function clearSearchMarkers() {
+            searchMarkers.forEach(m => m.clear());
+            searchMarkers = [];
+        }
+
+        function openCustomSearch(showReplace = false) {
+            let searchBar = document.getElementById('custom-search-bar');
+            const container = document.getElementById('editor-container');
+            
+            if (!searchBar) {
+                searchBar = document.createElement('div');
+                searchBar.id = 'custom-search-bar';
+                searchBar.className = 'custom-search-bar';
+                searchBar.innerHTML = `
+                    <div class="search-row">
+                        <button id="search-toggle-replace" title="置換を展開"><i data-lucide="chevron-right"></i></button>
+                        <div class="search-inputs">
+                            <input type="text" id="search-input" placeholder="検索...">
+                            <span id="search-counter">0/0</span>
+                        </div>
+                        <div class="search-actions">
+                            <button id="search-prev" title="前を検索"><i data-lucide="chevron-up"></i></button>
+                            <button id="search-next" title="次を検索"><i data-lucide="chevron-down"></i></button>
+                            <button id="search-close" title="閉じる"><i data-lucide="x"></i></button>
+                        </div>
+                    </div>
+                    <div class="replace-row" id="replace-row" style="display: none;">
+                        <div style="width: 24px;"></div> <!-- インデント調整用スペース -->
+                        <div class="replace-inputs">
+                            <input type="text" id="replace-input" placeholder="置換後の文字列...">
+                        </div>
+                        <div class="replace-actions">
+                            <button id="btn-replace-one" title="置換">置換</button>
+                            <button id="btn-replace-all" title="すべて置換">すべて置換</button>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(searchBar);
+                lucide.createIcons();
+                
+                // 検索インプットイベント
+                const input = document.getElementById('search-input');
+                input.addEventListener('input', () => updateSearch(input.value));
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (e.shiftKey) {
+                            findNextMatch(true);
+                        } else {
+                            findNextMatch(false);
+                        }
+                    } else if (e.key === 'Escape') {
+                        closeCustomSearch();
+                    }
+                });
+
+                // 置換インプットイベント
+                const replaceInput = document.getElementById('replace-input');
+                replaceInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        replaceCurrentMatch();
+                    } else if (e.key === 'Escape') {
+                        closeCustomSearch();
+                    }
+                });
+                
+                document.getElementById('search-prev').addEventListener('click', () => findNextMatch(true));
+                document.getElementById('search-next').addEventListener('click', () => findNextMatch(false));
+                document.getElementById('search-close').addEventListener('click', closeCustomSearch);
+                document.getElementById('search-toggle-replace').addEventListener('click', () => toggleReplaceRow());
+                document.getElementById('btn-replace-one').addEventListener('click', replaceCurrentMatch);
+                document.getElementById('btn-replace-all').addEventListener('click', replaceAllMatches);
+            }
+            
+            searchBar.classList.add('active');
+            toggleReplaceRow(showReplace);
+
+            const input = document.getElementById('search-input');
+            const selected = editor.getSelection();
+            if (selected && selected.indexOf('\n') === -1) {
+                input.value = selected;
+            }
+            
+            updateSearch(input.value);
+
+            if (showReplace) {
+                const replaceInput = document.getElementById('replace-input');
+                if (input.value) {
+                    replaceInput.focus();
+                    replaceInput.select();
+                } else {
+                    input.focus();
+                }
+            } else {
+                input.focus();
+                input.select();
+            }
+        }
+
+        function toggleReplaceRow(show) {
+            const replaceRow = document.getElementById('replace-row');
+            const toggleBtn = document.getElementById('search-toggle-replace');
+            if (!replaceRow) return;
+
+            if (show === undefined) {
+                show = replaceRow.style.display === 'none';
+            }
+            
+            if (show) {
+                replaceRow.style.display = 'flex';
+                toggleBtn.classList.add('active');
+            } else {
+                replaceRow.style.display = 'none';
+                toggleBtn.classList.remove('active');
+            }
+        }
+
+        function updateSearch(query) {
+            clearSearchMarkers();
+            searchState.query = query;
+            searchState.matches = [];
+            searchState.currentIndex = -1;
+
+            if (!query) {
+                document.getElementById('search-counter').innerText = '0/0';
+                return;
+            }
+
+            const cursor = editor.getSearchCursor(query, CodeMirror.Pos(0, 0), true);
+            
+            while (cursor.findNext()) {
+                const from = cursor.from();
+                const to = cursor.to();
+                searchState.matches.push({ from, to });
+                
+                const marker = editor.markText(from, to, { className: 'search-highlight' });
+                searchMarkers.push(marker);
+            }
+
+            const total = searchState.matches.length;
+            if (total > 0) {
+                const currentCursor = editor.getCursor();
+                let closestIndex = 0;
+                let minDiff = Infinity;
+                
+                for (let i = 0; i < total; i++) {
+                    const match = searchState.matches[i];
+                    const lineDiff = match.from.line - currentCursor.line;
+                    const chDiff = match.from.ch - currentCursor.ch;
+                    
+                    let diff = lineDiff * 1000 + chDiff;
+                    if (diff >= 0 && diff < minDiff) {
+                        minDiff = diff;
+                        closestIndex = i;
+                    }
+                }
+                
+                searchState.currentIndex = closestIndex;
+                selectMatch(closestIndex);
+            } else {
+                document.getElementById('search-counter').innerText = '0/0';
+            }
+        }
+
+        function selectMatch(index) {
+            const total = searchState.matches.length;
+            if (total === 0 || index < 0 || index >= total) return;
+
+            const match = searchState.matches[index];
+            editor.setSelection(match.from, match.to);
+            editor.scrollIntoView({ from: match.from, to: match.to }, 150);
+            
+            document.getElementById('search-counter').innerText = `${index + 1}/${total}`;
+        }
+
+        function findNextMatch(reverse) {
+            const total = searchState.matches.length;
+            if (total === 0) return;
+
+            if (reverse) {
+                searchState.currentIndex = (searchState.currentIndex - 1 + total) % total;
+            } else {
+                searchState.currentIndex = (searchState.currentIndex + 1) % total;
+            }
+            
+            selectMatch(searchState.currentIndex);
+        }
+
+        function replaceCurrentMatch() {
+            const total = searchState.matches.length;
+            if (total === 0 || searchState.currentIndex < 0) return;
+
+            const match = searchState.matches[searchState.currentIndex];
+            const replaceVal = document.getElementById('replace-input').value;
+            
+            editor.replaceRange(replaceVal, match.from, match.to);
+            updateSearch(searchState.query);
+        }
+
+        function replaceAllMatches() {
+            const total = searchState.matches.length;
+            if (total === 0) return;
+
+            const query = searchState.query;
+            const replaceVal = document.getElementById('replace-input').value;
+
+            editor.operation(() => {
+                for (let i = total - 1; i >= 0; i--) {
+                    const match = searchState.matches[i];
+                    editor.replaceRange(replaceVal, match.from, match.to);
+                }
+            });
+
+            updateSearch(query);
+        }
+
+        function closeCustomSearch() {
+            const searchBar = document.getElementById('custom-search-bar');
+            if (searchBar) {
+                searchBar.classList.remove('active');
+            }
+            clearSearchMarkers();
+            editor.focus();
+        }
+
         // Auto Save Logic (Periodic every 5 minutes)
         function startAutosaveTimer() {
             if (autosaveInterval) clearInterval(autosaveInterval);
@@ -3360,7 +3717,7 @@ paginate: true
         }
 
         // ── App Version ──
-        const APP_VERSION = '5.4.1';
+        const APP_VERSION = '5.4.2';
 
         // ══════════════════════════════════════
         // 🎨 Document Theme Engine
