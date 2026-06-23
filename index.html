@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Markdown Editor (Ver.5.5.1)</title>
+    <title>Markdown Editor (Ver.5.5.2)</title>
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1660,7 +1660,7 @@
             <div class="header-left">
                 <div class="logo">
                     <i data-lucide="pen-tool"></i>
-                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.5.1)</span>
+                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.5.2)</span>
                     </h1>
                 </div>
                 <div class="status-indicator" id="save-status">
@@ -3402,9 +3402,10 @@ paginate: true
                 const lineCount = editor.lineCount();
                 let headingsCount = 0;
                 let inCodeBlock = false;
+                let inCommentBlock = false;
 
                 for (let i = 0; i < lineCount; i++) {
-                    const lineText = editor.getLine(i).trim();
+                    let lineText = editor.getLine(i).trim();
                     
                     // コードブロック内は見出しパースをスキップ
                     if (lineText.startsWith('```')) {
@@ -3412,6 +3413,30 @@ paginate: true
                         continue;
                     }
                     if (inCodeBlock) continue;
+
+                    // HTMLコメント（<!-- ... -->）内は見出しパースをスキップ
+                    if (inCommentBlock) {
+                        if (lineText.includes('-->')) {
+                            inCommentBlock = false;
+                            // --> 以降の部分を取り出して判定継続
+                            lineText = lineText.split('-->')[1] || '';
+                        } else {
+                            continue;
+                        }
+                    } else {
+                        if (lineText.includes('<!--')) {
+                            if (lineText.includes('-->')) {
+                                // 1行内で完結するコメントを除去
+                                lineText = lineText.replace(/<!--[\s\S]*?-->/g, '').trim();
+                            } else {
+                                inCommentBlock = true;
+                                // <!-- 以前の部分を取り出して判定継続
+                                lineText = lineText.split('<!--')[0].trim();
+                            }
+                        }
+                    }
+
+                    if (!lineText) continue;
 
                     // 見出し（#）をパースする
                     const match = lineText.match(/^(#{1,6})\s+(.+)$/);
@@ -4480,7 +4505,7 @@ paginate: true
         }
 
         // ── App Version ──
-        const APP_VERSION = '5.5.1';
+        const APP_VERSION = '5.5.2';
 
         // ══════════════════════════════════════
         // 🎨 Document Theme Engine
