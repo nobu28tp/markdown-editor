@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Markdown Editor (Ver.5.5.6)</title>
+    <title>Markdown Editor (Ver.5.5.7)</title>
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -899,6 +899,33 @@
             color: var(--text-secondary);
             font-size: 0.78rem;
             border-bottom: 1px solid var(--border-color);
+        }
+
+        .proofread-filter {
+            display: flex;
+            gap: 0.35rem;
+            padding: 0.55rem 0.65rem;
+            border-bottom: 1px solid var(--border-color);
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .proofread-filter-btn {
+            flex: 1 1 0;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: transparent;
+            color: var(--text-secondary);
+            font-family: var(--font-ui);
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 0.32rem 0.2rem;
+            cursor: pointer;
+        }
+
+        .proofread-filter-btn.active {
+            border-color: var(--accent-color);
+            background: rgba(88, 166, 255, 0.14);
+            color: var(--accent-color);
         }
 
         .proofread-list {
@@ -1816,7 +1843,7 @@
             <div class="header-left">
                 <div class="logo">
                     <i data-lucide="pen-tool"></i>
-                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.5.6)</span>
+                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.5.7)</span>
                     </h1>
                 </div>
                 <div class="status-indicator" id="save-status">
@@ -2137,8 +2164,14 @@
                     </button>
                 </div>
                 <div class="proofread-summary" id="proofread-summary">校正コメントはまだありません</div>
+                <div class="proofread-filter" id="proofread-filter">
+                    <button class="proofread-filter-btn active" data-filter="all">すべて</button>
+                    <button class="proofread-filter-btn" data-filter="manual">手動</button>
+                    <button class="proofread-filter-btn" data-filter="rule">ルール</button>
+                    <button class="proofread-filter-btn" data-filter="ai">AI</button>
+                </div>
                 <div class="proofread-list" id="proofread-list">
-                    <div class="proofread-empty">「ルール校正」または「AI校正」を押すと、本文を変更せずにコメントだけを表示します。</div>
+                    <div class="proofread-empty">本文を選択して「コメント追加」を押すか、「ルール校正」「AI校正」を実行すると、ここにコメントが表示されます。</div>
                 </div>
             </aside>
         </main>
@@ -2603,6 +2636,7 @@ paginate: true
         let proofreadMarks = [];
         let activeProofreadId = null;
         let isApplyingProofreadChange = false;
+        let proofreadFilter = 'all';
 
         // ============================================================
         // App Constants (マジックナンバーの定数化)
@@ -2751,6 +2785,7 @@ paginate: true
             clearProofreadMarks();
             proofreadComments = comments;
             activeProofreadId = null;
+            if (options.filter) proofreadFilter = options.filter;
             refreshProofreadMarks();
 
             renderProofreadComments();
@@ -2773,16 +2808,34 @@ paginate: true
 
         function renderProofreadComments() {
             const openComments = proofreadComments.filter(comment => comment.status === 'open');
+            const manualCount = openComments.filter(comment => comment.source === 'manual').length;
+            const ruleCount = openComments.filter(comment => comment.source === 'rule').length;
+            const aiCount = openComments.filter(comment => ['openai', 'gemini', 'ai'].includes(comment.source)).length;
             proofreadSummary.textContent = openComments.length
-                ? `${openComments.length}件の校正コメントがあります`
+                ? `全${openComments.length}件 / 手動${manualCount} / ルール${ruleCount} / AI${aiCount}`
                 : '校正コメントはありません';
 
-            if (!proofreadComments.length) {
-                proofreadList.innerHTML = '<div class="proofread-empty">「ルール校正」または「AI校正」を押すと、本文を変更せずにコメントだけを表示します。</div>';
+            updateProofreadFilterButtons();
+
+            const visibleComments = openComments.filter(comment => {
+                if (proofreadFilter === 'all') return true;
+                if (proofreadFilter === 'manual') return comment.source === 'manual';
+                if (proofreadFilter === 'rule') return comment.source === 'rule';
+                if (proofreadFilter === 'ai') return ['openai', 'gemini', 'ai'].includes(comment.source);
+                return true;
+            });
+
+            if (!openComments.length) {
+                proofreadList.innerHTML = '<div class="proofread-empty">本文を選択して「コメント追加」を押すか、「ルール校正」「AI校正」を実行すると、ここにコメントが表示されます。</div>';
                 return;
             }
 
-            proofreadList.innerHTML = proofreadComments.map(comment => `
+            if (!visibleComments.length) {
+                proofreadList.innerHTML = `<div class="proofread-empty">${escapeHtml(getProofreadFilterLabel(proofreadFilter))}のコメントはありません。「すべて」に切り替えると他のコメントを確認できます。</div>`;
+                return;
+            }
+
+            proofreadList.innerHTML = visibleComments.map(comment => `
                 <article class="proofread-card ${comment.id === activeProofreadId ? 'active' : ''}" data-id="${comment.id}">
                     <div class="proofread-card-head">
                         <span class="proofread-badge">${escapeHtml(getProofreadCategoryLabel(comment.category))}</span>
@@ -2809,6 +2862,27 @@ paginate: true
                     if (button.dataset.action === 'delete') removeProofreadComment(id);
                 });
             });
+        }
+
+        function setProofreadFilter(filter) {
+            proofreadFilter = filter;
+            renderProofreadComments();
+        }
+
+        function updateProofreadFilterButtons() {
+            document.querySelectorAll('.proofread-filter-btn').forEach(button => {
+                button.classList.toggle('active', button.dataset.filter === proofreadFilter);
+            });
+        }
+
+        function getProofreadFilterLabel(filter) {
+            const labels = {
+                all: 'すべて',
+                manual: '手動',
+                rule: 'ルール',
+                ai: 'AI'
+            };
+            return labels[filter] || '選択中';
         }
 
         function getProofreadCategoryLabel(category) {
@@ -2874,12 +2948,19 @@ paginate: true
 
             proofreadComments.push(comment);
             activeProofreadId = comment.id;
+            proofreadFilter = 'manual';
             refreshProofreadMarks();
             renderProofreadComments();
             saveProofreadComments();
             openProofreadPane();
             focusProofreadComment(comment.id);
+            scrollProofreadCardIntoView(comment.id);
             updateStatus('saved', 'コメントを追加しました');
+        }
+
+        function scrollProofreadCardIntoView(id) {
+            const card = proofreadList.querySelector(`[data-id="${CSS.escape(id)}"]`);
+            if (card) card.scrollIntoView({ block: 'nearest' });
         }
 
         function focusProofreadComment(id) {
@@ -3006,7 +3087,7 @@ paginate: true
                 .map((comment, index) => normalizeProofreadComment(comment, index, 'rule', text, ignoredRanges))
                 .filter(Boolean);
 
-            setProofreadComments(normalized);
+            setProofreadComments(normalized, { filter: 'rule' });
             updateStatus('normal', normalized.length ? `ルール校正: ${normalized.length}件` : 'ルール校正: 指摘なし');
         }
 
@@ -3073,7 +3154,7 @@ paginate: true
                     .map((comment, index) => normalizeProofreadComment(comment, index, provider, targetText, ignoredRanges))
                     .filter(Boolean);
 
-                setProofreadComments(normalized);
+                setProofreadComments(normalized, { filter: 'ai' });
                 updateStatus('normal', normalized.length ? `AI校正: ${normalized.length}件 (${getProofreadSourceLabel(provider)})` : `AI校正: 指摘なし (${getProofreadSourceLabel(provider)})`);
             } catch (error) {
                 console.error('AI proofread failed:', error);
@@ -4020,6 +4101,9 @@ paginate: true
             document.getElementById('btn-rule-proofread').addEventListener('click', runRuleProofread);
             document.getElementById('btn-ai-proofread').addEventListener('click', runAiProofread);
             document.getElementById('btn-proofread-settings').addEventListener('click', configureAiProofread);
+            document.querySelectorAll('.proofread-filter-btn').forEach(button => {
+                button.addEventListener('click', () => setProofreadFilter(button.dataset.filter));
+            });
 
             // Mermaid Exporter を別タブで開く
             document.getElementById('btn-open-exporter').addEventListener('click', () => {
@@ -5372,7 +5456,7 @@ paginate: true
         }
 
         // ── App Version ──
-        const APP_VERSION = '5.5.6';
+        const APP_VERSION = '5.5.7';
 
         // ══════════════════════════════════════
         // 🎨 Document Theme Engine
