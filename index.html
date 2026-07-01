@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Markdown Editor (Ver.5.5.7)</title>
+    <title>Markdown Editor (Ver.5.5.8)</title>
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1843,7 +1843,7 @@
             <div class="header-left">
                 <div class="logo">
                     <i data-lucide="pen-tool"></i>
-                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.5.7)</span>
+                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.5.8)</span>
                     </h1>
                 </div>
                 <div class="status-indicator" id="save-status">
@@ -2704,16 +2704,12 @@ paginate: true
         }
 
         function normalizeProofreadComment(comment, index, source, text, ignoredRanges) {
-            let start = Number.isInteger(comment.start) ? comment.start : -1;
-            let end = Number.isInteger(comment.end) ? comment.end : -1;
             const selectedText = String(comment.selectedText || '').trim();
+            const preferredStart = Number.isInteger(comment.start) ? comment.start : -1;
+            const range = locateProofreadRange(text, selectedText, preferredStart);
+            if (!range) return null;
 
-            if ((start < 0 || end <= start) && selectedText) {
-                start = text.indexOf(selectedText);
-                end = start + selectedText.length;
-            }
-
-            if (start < 0 || end <= start || end > text.length) return null;
+            const { start, end } = range;
             if (overlapsIgnored(start, end, ignoredRanges)) return null;
 
             const actualText = text.slice(start, end);
@@ -2725,9 +2721,46 @@ paginate: true
                 category: ['typo', 'grammar', 'style', 'consistency', 'markdown', 'comment'].includes(comment.category) ? comment.category : 'style',
                 message: comment.message || '表現を確認してください。',
                 suggestion: comment.suggestion || '',
+                canApply: isProofreadSuggestionSafe(actualText, comment.suggestion || '', source),
                 source,
                 status: 'open'
             };
+        }
+
+        function locateProofreadRange(text, selectedText, preferredStart) {
+            if (!selectedText) return null;
+
+            if (preferredStart >= 0) {
+                const preferredEnd = preferredStart + selectedText.length;
+                if (text.slice(preferredStart, preferredEnd) === selectedText) {
+                    return { start: preferredStart, end: preferredEnd };
+                }
+            }
+
+            const matches = [];
+            let index = text.indexOf(selectedText);
+            while (index !== -1) {
+                matches.push(index);
+                index = text.indexOf(selectedText, index + Math.max(1, selectedText.length));
+            }
+
+            if (!matches.length) return null;
+            const bestStart = preferredStart >= 0
+                ? matches.reduce((best, current) => Math.abs(current - preferredStart) < Math.abs(best - preferredStart) ? current : best, matches[0])
+                : matches[0];
+            return { start: bestStart, end: bestStart + selectedText.length };
+        }
+
+        function isProofreadSuggestionSafe(selectedText, suggestion, source) {
+            if (!suggestion) return false;
+            if (!['openai', 'gemini', 'ai'].includes(source)) return true;
+
+            const trimmed = selectedText.trim();
+            if (!trimmed || trimmed.length < 2) return false;
+            if (/^[\s|:;,\-.]+$/.test(trimmed)) return false;
+            if (trimmed.includes('|') && trimmed.length < 12) return false;
+            if (/^[A-Za-z]{1,5}$/.test(trimmed) && /[ぁ-んァ-ヶ一-龠]/.test(suggestion)) return false;
+            return true;
         }
 
         function getProofreadTextHash(text) {
@@ -2845,7 +2878,8 @@ paginate: true
                     <div class="proofread-message">${escapeHtml(comment.message)}</div>
                     ${comment.suggestion ? `<div class="proofread-suggestion">修正案: ${escapeHtml(comment.suggestion)}</div>` : ''}
                     <div class="proofread-card-actions">
-                        ${comment.suggestion ? `<button class="proofread-mini-btn" data-action="apply" data-id="${comment.id}">承認して適用</button>` : ''}
+                        ${comment.suggestion && comment.canApply !== false ? `<button class="proofread-mini-btn" data-action="apply" data-id="${comment.id}">承認して適用</button>` : ''}
+                        ${comment.suggestion && comment.canApply === false ? `<span class="proofread-source">適用は手動確認</span>` : ''}
                         <button class="proofread-mini-btn" data-action="delete" data-id="${comment.id}">削除</button>
                     </div>
                 </article>
@@ -2942,6 +2976,7 @@ paginate: true
                 category: 'comment',
                 message: trimmedMessage,
                 suggestion: suggestion.trim(),
+                canApply: !!suggestion.trim(),
                 source: 'manual',
                 status: 'open'
             };
@@ -2997,6 +3032,12 @@ paginate: true
             const found = mark ? mark.find() : null;
             const from = found ? found.from : editor.posFromIndex(comment.start);
             const to = found ? found.to : editor.posFromIndex(comment.end);
+            const currentText = editor.getRange(from, to);
+            if (currentText !== comment.selectedText) {
+                alert('本文が変更されているか、指摘位置が一致しないため自動適用できません。該当箇所を確認してください。');
+                focusProofreadComment(id);
+                return;
+            }
             isApplyingProofreadChange = true;
             editor.replaceRange(comment.suggestion, from, to);
             isApplyingProofreadChange = false;
@@ -3141,6 +3182,8 @@ paginate: true
                 'Markdown記法、URL、コード、固有名詞を不用意に指摘しないでください。',
                 'comments配列の各要素は start, end, selectedText, category, message, suggestion を持つJSONオブジェクトにしてください。',
                 'start/endは入力文字列全体に対する0始まりの文字オフセットです。',
+                'selectedTextは入力本文からそのままコピーした完全一致文字列にしてください。Markdownの区切り記号や隣接文字を余計に含めないでください。',
+                'suggestionはselectedTextだけを置き換える修正案にしてください。文全体の書き換えや別の箇所の修正案は出さないでください。',
                 'categoryは typo, grammar, style, consistency, markdown のどれかにしてください。',
                 '確信度が低いものは出さないでください。'
             ].join('\n');
@@ -5456,7 +5499,7 @@ paginate: true
         }
 
         // ── App Version ──
-        const APP_VERSION = '5.5.7';
+        const APP_VERSION = '5.5.8';
 
         // ══════════════════════════════════════
         // 🎨 Document Theme Engine
