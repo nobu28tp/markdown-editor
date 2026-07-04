@@ -2637,6 +2637,7 @@ paginate: true
         let activeProofreadId = null;
         let isApplyingProofreadChange = false;
         let proofreadFilter = 'all';
+        let currentDocumentLength = 0;
 
         // ============================================================
         // App Constants (マジックナンバーの定数化)
@@ -2644,6 +2645,9 @@ paginate: true
         const SLIDE_WIDTH = 1280;
         const SLIDE_HEIGHT = 720;
         const PREVIEW_DEBOUNCE_MS = 300;
+        const LARGE_DOC_PREVIEW_DEBOUNCE_MS = 1200;
+        const LARGE_DOC_CHAR_THRESHOLD = 50000;
+        const WORD_COUNT_DEBOUNCE_MS = 500;
         const OUTLINE_DEBOUNCE_MS = 300;
         const AUTOSAVE_INTERVAL_MS = 300000; // 5 minutes
         const JPEG_QUALITY = 0.85;
@@ -2655,6 +2659,15 @@ paginate: true
             openai: 'gpt-4.1-mini',
             gemini: 'gemini-2.0-flash'
         };
+
+        function isPreviewPaneVisible() {
+            const previewPane = document.getElementById('preview-pane');
+            return previewPane && previewPane.style.display !== 'none';
+        }
+
+        function getPreviewDebounceMs() {
+            return currentDocumentLength > LARGE_DOC_CHAR_THRESHOLD ? LARGE_DOC_PREVIEW_DEBOUNCE_MS : PREVIEW_DEBOUNCE_MS;
+        }
 
         // ============================================================
         // Proofreading comments (Phase 1: local rules / Phase 2: BYO AI key)
@@ -3961,12 +3974,14 @@ paginate: true
             const savedContent = localStorage.getItem('lumina_autosave');
             if (savedContent) {
                 editor.setValue(savedContent);
+                currentDocumentLength = savedContent.length;
                 updatePreview(savedContent);
                 const restoredComments = restoreProofreadComments(savedContent);
                 updateStatus('saved', restoredComments ? '本文と校正コメントを復元しました' : '復元完了');
             } else {
                 const defaultText = `# Markdown Editorへようこそ\n\nここに入力し始めると、**リアルタイム**で右側にプレビューが表示されます。`;
                 editor.setValue(defaultText);
+                currentDocumentLength = defaultText.length;
                 updatePreview(defaultText);
             }
             hasUnsavedChanges = false;
@@ -3980,6 +3995,7 @@ paginate: true
             // 3. Set Event Listeners
             let isTyping = false;
             let typingTimer = null;
+            let wordCountTimeout = null;
 
             editor.on('keydown', (cm, event) => {
                 const key = event.key;
@@ -4005,6 +4021,14 @@ paginate: true
                     isTyping = false;
                 }, 1000); // 1秒間キー入力がなければタイピング終了とみなす
 
+                if (changeObj) {
+                    const removedText = (changeObj.removed || []).join('\n');
+                    const insertedText = (changeObj.text || []).join('\n');
+                    currentDocumentLength += insertedText.length - removedText.length;
+                } else {
+                    currentDocumentLength = cm.getValue().length;
+                }
+
                 // Base64画像データの行を検知して非表示ウィジェットに置き換える
                 if (changeObj && changeObj.text) {
                     const doc = cm.getDoc();
@@ -4026,14 +4050,19 @@ paginate: true
 
                 // Debounce preview rendering to keep editor typing smooth
                 if (previewTimeout) clearTimeout(previewTimeout);
-                previewTimeout = setTimeout(() => {
-                    const content = editor.getValue();
-                    updatePreview(content);
-                }, PREVIEW_DEBOUNCE_MS);
+                if (isPreviewPaneVisible()) {
+                    previewTimeout = setTimeout(() => {
+                        const content = editor.getValue();
+                        updatePreview(content);
+                    }, getPreviewDebounceMs());
+                }
             });
 
             // ワードカウント更新
-            editor.on('change', updateWordCount);
+            editor.on('change', () => {
+                if (wordCountTimeout) clearTimeout(wordCountTimeout);
+                wordCountTimeout = setTimeout(updateWordCount, WORD_COUNT_DEBOUNCE_MS);
+            });
             // 目次更新
             editor.on('change', () => {
                 const outlinePane = document.getElementById('outline-pane');
@@ -4243,9 +4272,11 @@ paginate: true
                 if (previewPane.style.display === 'none') {
                     previewPane.style.display = 'flex';
                     btnIcon.setAttribute('data-lucide', 'layout-panel-left');
+                    updatePreview(editor.getValue());
                 } else {
                     previewPane.style.display = 'none';
                     btnIcon.setAttribute('data-lucide', 'layout-panel-split');
+                    if (previewTimeout) clearTimeout(previewTimeout);
                 }
                 lucide.createIcons({ root: document.getElementById('btn-toggle-preview') });
                 // エディタのサイズが変化したため再描画
@@ -4361,12 +4392,15 @@ paginate: true
             // ワードカウントの更新関数
             function updateWordCount() {
                 if (!editor) return;
-                const text = editor.getValue();
-                const charCount = text.length;
+                const charCount = currentDocumentLength;
                 
                 // 英語の単語数カウント
-                const words = text.trim().split(/\s+/).filter(w => w.length > 0);
-                const wordCount = words.length;
+                let wordCountText = '-';
+                if (charCount <= LARGE_DOC_CHAR_THRESHOLD) {
+                    const text = editor.getValue();
+                    const words = text.trim().split(/\s+/).filter(w => w.length > 0);
+                    wordCountText = words.length.toLocaleString();
+                }
                 
                 const lineCount = editor.lineCount();
                 
@@ -4379,7 +4413,7 @@ paginate: true
                 const statReading = document.getElementById('stat-reading');
                 
                 if (statChars) statChars.textContent = `${charCount.toLocaleString()} 文字`;
-                if (statWords) statWords.textContent = `${wordCount.toLocaleString()} words`;
+                if (statWords) statWords.textContent = `${wordCountText} words`;
                 if (statLines) statLines.textContent = `${lineCount.toLocaleString()} 行`;
                 if (statReading) statReading.textContent = `約 ${readingTime} 分`;
             }
@@ -4927,10 +4961,11 @@ paginate: true
 
         // Update Preview Panel
         async function updatePreview(markdownText) {
+            if (!isPreviewPaneVisible()) return;
             const savedScrollTop = previewContainer ? previewContainer.scrollTop : 0;
             try {
                 // エディタ内のすべての Mermaid ブロックの位置をスキャンして記録し、パースエラーを検出する
-                if (window.mermaid) {
+                if (window.mermaid && markdownText.includes('```mermaid')) {
                     // 既存のエラー行ハイライトをクリア
                     if (window.activeErrorLines) {
                         window.activeErrorLines.forEach(line => {
@@ -4985,6 +5020,11 @@ paginate: true
                             }
                         }
                     }
+                } else if (window.activeErrorLines) {
+                    window.activeErrorLines.forEach(line => {
+                        editor.removeLineClass(line, "background", "cm-error-line");
+                    });
+                    window.activeErrorLines = [];
                 }
 
                 const isMarpDetected = /^---\s*\n[\s\S]*?marp:\s*true[\s\S]*?\n---/.test(markdownText);
@@ -5448,6 +5488,7 @@ paginate: true
             }
 
             editor.setValue('');
+            currentDocumentLength = 0;
             updatePreview('');
             clearProofreadComments();
             localStorage.removeItem('lumina_autosave');
@@ -5472,6 +5513,7 @@ paginate: true
                 reader.onload = (event) => {
                     const content = event.target.result;
                     editor.setValue(content);
+                    currentDocumentLength = content.length;
                     updatePreview(content);
                     const restoredComments = restoreOrClearProofreadComments(content);
                     // Instantly save to local storage as well
@@ -7494,6 +7536,7 @@ ${slidesHtml}
                 }
                 const text = await res.text();
                 editor.setValue(text);
+                currentDocumentLength = text.length;
                 updatePreview(text);
                 localStorage.setItem('lumina_autosave', text);
                 saveGitHubSettings();
@@ -8130,6 +8173,7 @@ ${slidesHtml}
                     const mergedText = await resolveIncludes(text, activeLocalDirectoryHandle);
 
                     editor.setValue(mergedText);
+                    currentDocumentLength = mergedText.length;
                     updatePreview(mergedText);
                     const restoredComments = restoreOrClearProofreadComments(mergedText);
                     localStorage.setItem('lumina_autosave', mergedText);
