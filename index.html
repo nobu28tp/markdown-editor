@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Markdown Editor (Ver.5.5.8)</title>
+    <title>Markdown Editor (Ver.5.5.9)</title>
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1843,7 +1843,7 @@
             <div class="header-left">
                 <div class="logo">
                     <i data-lucide="pen-tool"></i>
-                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.5.8)</span>
+                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.5.9)</span>
                     </h1>
                 </div>
                 <div class="status-indicator" id="save-status">
@@ -5541,7 +5541,7 @@ paginate: true
         }
 
         // ── App Version ──
-        const APP_VERSION = '5.5.8';
+        const APP_VERSION = '5.5.9';
 
         // ══════════════════════════════════════
         // 🎨 Document Theme Engine
@@ -6682,6 +6682,10 @@ paginate: true
             }
         }
 
+        function cleanupPdfCaptureRoots() {
+            document.querySelectorAll('[data-pdf-capture-root="true"]').forEach(node => node.remove());
+        }
+
         async function replaceSvgsWithPngs(root) {
             const svgs = Array.from(root.querySelectorAll('svg'));
             for (const svg of svgs) {
@@ -6751,7 +6755,8 @@ paginate: true
         async function renderMarpSlideToCanvas(origWrapper, slideW, slideH, captureCss) {
             const captureRoot = document.createElement('div');
             captureRoot.className = 'marpit pdf-capture';
-            captureRoot.style.cssText = `position:fixed;left:-10000px;top:0;width:${slideW}px;height:${slideH}px;overflow:hidden;z-index:-9999;color-scheme:light;`;
+            captureRoot.dataset.pdfCaptureRoot = 'true';
+            captureRoot.style.cssText = `position:absolute;left:0;top:0;width:${slideW}px;height:${slideH}px;overflow:hidden;z-index:-1;pointer-events:none;color-scheme:light;background:#ffffff;`;
 
             const styleTag = document.createElement('style');
             styleTag.textContent = captureCss;
@@ -6785,7 +6790,11 @@ paginate: true
                     useCORS: true,
                     allowTaint: false,
                     backgroundColor: '#ffffff',
-                    logging: false
+                    logging: false,
+                    windowWidth: slideW,
+                    windowHeight: slideH,
+                    scrollX: 0,
+                    scrollY: 0
                 });
             } finally {
                 document.body.removeChild(captureRoot);
@@ -6835,91 +6844,225 @@ paginate: true
             pdf.save(title + '.pdf');
         }
 
-        async function exportDocumentModePdf(title) {
-            const pageWidth = 595.28;
-            const pageHeight = 841.89;
-            const renderWidth = 794;
+        const PDF_TEXT_FONT_NAME = 'NotoSansJP';
+        const PDF_TEXT_FONT_FILE = 'NotoSansJP-VF.ttf';
+        const PDF_TEXT_FONT_URLS = [
+            './NotoSansJP-VF.ttf',
+            'https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/Variable/TTF/Subset/NotoSansJP-VF.ttf'
+        ];
+        let cachedPdfTextFontBase64 = null;
 
-            const wrapper = document.createElement('div');
-            wrapper.style.cssText = `position:fixed;left:-10000px;top:0;width:${renderWidth}px;background:#ffffff;color:#24292f;z-index:-9999;color-scheme:light;`;
+        function arrayBufferToBase64(buffer) {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            const chunkSize = 0x8000;
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+                binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+            }
+            return btoa(binary);
+        }
 
-            const styleTag = document.createElement('style');
-            styleTag.textContent = `
-                .pdf-document-capture {
-                    width: ${renderWidth}px;
-                    min-height: 1123px;
-                    padding: 76px 57px;
-                    background: #ffffff !important;
-                    color: #24292f !important;
-                    font-family: "Meiryo", "Yu Gothic", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
-                    font-size: 14px;
-                    line-height: 1.65;
-                    overflow-wrap: break-word;
+        async function loadPdfTextFont(pdf) {
+            let lastError = null;
+            if (!cachedPdfTextFontBase64) {
+                for (const fontUrl of PDF_TEXT_FONT_URLS) {
+                    try {
+                        const response = await fetch(fontUrl, { mode: 'cors', cache: 'force-cache' });
+                        if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+                        cachedPdfTextFontBase64 = arrayBufferToBase64(await response.arrayBuffer());
+                        break;
+                    } catch (err) {
+                        lastError = err;
+                    }
                 }
-                .pdf-document-capture h1,
-                .pdf-document-capture h2,
-                .pdf-document-capture h3,
-                .pdf-document-capture h4,
-                .pdf-document-capture h5,
-                .pdf-document-capture h6 { color: #111827 !important; page-break-after: avoid; }
-                .pdf-document-capture pre,
-                .pdf-document-capture code { background: #f6f8fa !important; color: #24292f !important; }
-                .pdf-document-capture pre { white-space: pre-wrap; word-break: break-word; }
-                .pdf-document-capture img,
-                .pdf-document-capture svg,
-                .pdf-document-capture iframe { max-width: 100% !important; height: auto !important; }
-                .pdf-document-capture table { width: 100%; border-collapse: collapse; table-layout: fixed; word-break: break-word; }
-                .pdf-document-capture th,
-                .pdf-document-capture td { border: 1px solid #d0d7de; padding: 6px 10px; }
-                .pdf-document-capture blockquote { border-left: 4px solid #d0d7de; color: #57606a; padding-left: 16px; margin-left: 0; }
-                ${customThemeStyleTag && customThemeStyleTag.textContent ? customThemeStyleTag.textContent : ''}
-            `;
-            wrapper.appendChild(styleTag);
+            }
 
-            const exportContainer = document.createElement('div');
-            exportContainer.id = 'preview-content';
-            exportContainer.className = 'markdown-body pdf-document-capture';
-            exportContainer.innerHTML = previewContainer.innerHTML;
-            wrapper.appendChild(exportContainer);
-            document.body.appendChild(wrapper);
+            if (!cachedPdfTextFontBase64) {
+                throw new Error('日本語テキストPDF用フォントを読み込めませんでした。ネットワーク接続を確認してください。');
+            }
 
             try {
-                await replaceSvgsWithPngs(exportContainer);
-                if (document.fonts && document.fonts.ready) {
-                    await document.fonts.ready;
-                }
-
-                const canvas = await html2canvas(exportContainer, {
-                    width: renderWidth,
-                    height: exportContainer.scrollHeight,
-                    scale: 2,
-                    useCORS: true,
-                    allowTaint: false,
-                    backgroundColor: '#ffffff',
-                    logging: false,
-                    windowWidth: renderWidth,
-                    windowHeight: exportContainer.scrollHeight
-                });
-
-                const jsPDF = window.jspdf.jsPDF;
-                const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4', compress: true });
-                const pageHeightPx = Math.floor(canvas.width * (pageHeight / pageWidth));
-                let sourceY = 0;
-                let pageIndex = 0;
-
-                while (sourceY < canvas.height) {
-                    const sliceHeight = Math.min(pageHeightPx, canvas.height - sourceY);
-                    if (pageIndex > 0) pdf.addPage('a4', 'portrait');
-                    const targetHeight = pageHeight * (sliceHeight / pageHeightPx);
-                    addCanvasPageToPdf(pdf, canvas, sourceY, sliceHeight, pageWidth, pageHeight, targetHeight);
-                    sourceY += sliceHeight;
-                    pageIndex++;
-                }
-
-                pdf.save(title + '.pdf');
-            } finally {
-                document.body.removeChild(wrapper);
+                pdf.addFileToVFS(PDF_TEXT_FONT_FILE, cachedPdfTextFontBase64);
+                pdf.addFont(PDF_TEXT_FONT_FILE, PDF_TEXT_FONT_NAME, 'normal');
+                pdf.setFont(PDF_TEXT_FONT_NAME, 'normal');
+            } catch (err) {
+                throw new Error('日本語フォントをPDFに登録できませんでした: ' + (err.message || lastError?.message || err));
             }
+        }
+
+        function normalizePdfText(text) {
+            return (text || '')
+                .replace(/\u200b/g, '')
+                .replace(/\u00a0/g, ' ')
+                .replace(/[ \t]+\n/g, '\n')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+        }
+
+        function getDirectText(node) {
+            return Array.from(node.childNodes)
+                .filter(child => child.nodeType === Node.TEXT_NODE || (child.nodeType === Node.ELEMENT_NODE && !isPdfBlockElement(child)))
+                .map(child => normalizePdfText(child.innerText || child.textContent || ''))
+                .filter(Boolean)
+                .join(' ');
+        }
+
+        function isPdfBlockElement(node) {
+            if (!node || node.nodeType !== Node.ELEMENT_NODE) return false;
+            return /^(H[1-6]|P|UL|OL|LI|PRE|BLOCKQUOTE|TABLE|IMG|HR)$/.test(node.tagName);
+        }
+
+        function collectPdfTextBlocks(root) {
+            const blocks = [];
+
+            function walk(node) {
+                if (!node || node.nodeType !== Node.ELEMENT_NODE) return;
+                if (node.matches('.marp-page-number, .page-number, script, style')) return;
+
+                const tag = node.tagName;
+                if (/^H[1-6]$/.test(tag)) {
+                    const text = normalizePdfText(node.innerText);
+                    if (text) blocks.push({ type: 'heading', level: Number(tag.slice(1)), text });
+                    return;
+                }
+                if (tag === 'P') {
+                    const text = normalizePdfText(node.innerText);
+                    if (text) blocks.push({ type: 'paragraph', text });
+                    return;
+                }
+                if (tag === 'UL' || tag === 'OL') {
+                    Array.from(node.children).filter(child => child.tagName === 'LI').forEach((li, index) => {
+                        const text = normalizePdfText(li.innerText);
+                        if (text) blocks.push({ type: 'list', marker: tag === 'OL' ? `${index + 1}.` : '-', text });
+                    });
+                    return;
+                }
+                if (tag === 'PRE') {
+                    const text = normalizePdfText(node.innerText);
+                    if (text) blocks.push({ type: 'code', text });
+                    return;
+                }
+                if (tag === 'BLOCKQUOTE') {
+                    const text = normalizePdfText(node.innerText);
+                    if (text) blocks.push({ type: 'quote', text });
+                    return;
+                }
+                if (tag === 'TABLE') {
+                    const rows = Array.from(node.querySelectorAll('tr')).map(row =>
+                        Array.from(row.children).map(cell => normalizePdfText(cell.innerText))
+                    ).filter(row => row.some(Boolean));
+                    if (rows.length) blocks.push({ type: 'table', rows });
+                    return;
+                }
+                if (tag === 'IMG') {
+                    const alt = normalizePdfText(node.getAttribute('alt') || node.getAttribute('title') || '');
+                    blocks.push({ type: 'paragraph', text: alt ? `[画像: ${alt}]` : '[画像]' });
+                    return;
+                }
+                if (tag === 'HR') {
+                    blocks.push({ type: 'rule' });
+                    return;
+                }
+
+                const directText = getDirectText(node);
+                if (directText && !Array.from(node.children).some(isPdfBlockElement)) {
+                    blocks.push({ type: 'paragraph', text: directText });
+                    return;
+                }
+
+                Array.from(node.children).forEach(walk);
+            }
+
+            Array.from(root.children).forEach(walk);
+            return blocks;
+        }
+
+        function exportPdfTextBlocks(pdf, blocks) {
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+            const margin = 48;
+            const contentWidth = pageWidth - margin * 2;
+            let y = margin;
+
+            function ensureSpace(height) {
+                if (y + height > pageHeight - margin) {
+                    pdf.addPage();
+                    pdf.setFont(PDF_TEXT_FONT_NAME, 'normal');
+                    y = margin;
+                }
+            }
+
+            function writeWrapped(text, options = {}) {
+                const fontSize = options.fontSize || 11;
+                const lineHeight = options.lineHeight || fontSize * 1.55;
+                const indent = options.indent || 0;
+                const before = options.before || 0;
+                const after = options.after ?? lineHeight * 0.45;
+                const maxWidth = contentWidth - indent;
+                const lines = pdf.splitTextToSize(text, maxWidth);
+
+                ensureSpace(before + Math.max(lineHeight, lines.length * lineHeight));
+                y += before;
+                pdf.setFontSize(fontSize);
+                if (options.color) pdf.setTextColor(...options.color);
+                else pdf.setTextColor(31, 35, 40);
+                pdf.text(lines, margin + indent, y, { baseline: 'top' });
+                y += lines.length * lineHeight + after;
+            }
+
+            blocks.forEach(block => {
+                if (block.type === 'heading') {
+                    const sizes = { 1: 20, 2: 16, 3: 14, 4: 12, 5: 11, 6: 11 };
+                    writeWrapped(block.text, {
+                        fontSize: sizes[block.level] || 12,
+                        lineHeight: (sizes[block.level] || 12) * 1.45,
+                        before: block.level <= 2 ? 10 : 6,
+                        after: 7,
+                        color: [17, 24, 39]
+                    });
+                    if (block.level <= 2) {
+                        ensureSpace(6);
+                        pdf.setDrawColor(208, 215, 222);
+                        pdf.line(margin, y, pageWidth - margin, y);
+                        y += 10;
+                    }
+                } else if (block.type === 'list') {
+                    writeWrapped(`${block.marker} ${block.text}`, { fontSize: 10.5, indent: 12, after: 3 });
+                } else if (block.type === 'code') {
+                    writeWrapped(block.text, { fontSize: 9, lineHeight: 13, before: 4, after: 8, color: [36, 41, 47] });
+                } else if (block.type === 'quote') {
+                    pdf.setDrawColor(208, 215, 222);
+                    pdf.line(margin, y + 2, margin, y + 20);
+                    writeWrapped(block.text, { fontSize: 10.5, indent: 14, color: [87, 96, 106] });
+                } else if (block.type === 'table') {
+                    block.rows.forEach(row => {
+                        writeWrapped(row.join('  |  '), { fontSize: 9.5, lineHeight: 13, after: 2 });
+                    });
+                    y += 8;
+                } else if (block.type === 'rule') {
+                    ensureSpace(12);
+                    pdf.setDrawColor(208, 215, 222);
+                    pdf.line(margin, y, pageWidth - margin, y);
+                    y += 12;
+                } else {
+                    writeWrapped(block.text, { fontSize: 11 });
+                }
+            });
+        }
+
+        async function exportDocumentModePdf(title) {
+            const jsPDF = window.jspdf.jsPDF;
+            const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4', compress: true, putOnlyUsedFonts: true });
+            await loadPdfTextFont(pdf);
+
+            const blocks = collectPdfTextBlocks(previewContainer);
+            if (blocks.length === 0) {
+                throw new Error('PDFに出力するテキストが見つかりません。プレビューを表示した状態で再実行してください。');
+            }
+
+            pdf.setProperties({ title });
+            exportPdfTextBlocks(pdf, blocks);
+            pdf.save(title + '.pdf');
         }
 
         // Export as .pdf (direct canvas/PDF engine)
@@ -6927,6 +7070,7 @@ paginate: true
             try {
                 updateStatus('saving', 'PDF生成を準備中...');
                 ensurePdfExportLibraries();
+                cleanupPdfCaptureRoots();
 
                 const isSlideMode = previewContainer.classList.contains('marp-mode');
                 const title = getDocTitle();
