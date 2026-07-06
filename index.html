@@ -6682,27 +6682,6 @@ paginate: true
             }
         }
 
-        function assertCanvasHasVisibleContent(canvas) {
-            const ctx = canvas.getContext('2d', { willReadFrequently: true });
-            if (!ctx) return;
-
-            const width = canvas.width;
-            const height = canvas.height;
-            const stepX = Math.max(1, Math.floor(width / 48));
-            const stepY = Math.max(1, Math.floor(height / 48));
-
-            for (let y = 0; y < height; y += stepY) {
-                for (let x = 0; x < width; x += stepX) {
-                    const [r, g, b, a] = ctx.getImageData(x, y, 1, 1).data;
-                    if (a > 0 && (r < 245 || g < 245 || b < 245)) {
-                        return;
-                    }
-                }
-            }
-
-            throw new Error('PDF生成用のキャプチャが白紙になりました。プレビューを表示した状態で再実行してください。');
-        }
-
         async function replaceSvgsWithPngs(root) {
             const svgs = Array.from(root.querySelectorAll('svg'));
             for (const svg of svgs) {
@@ -6772,7 +6751,7 @@ paginate: true
         async function renderMarpSlideToCanvas(origWrapper, slideW, slideH, captureCss) {
             const captureRoot = document.createElement('div');
             captureRoot.className = 'marpit pdf-capture';
-            captureRoot.style.cssText = `position:absolute;left:0;top:0;width:${slideW}px;height:${slideH}px;overflow:hidden;z-index:2147483647;pointer-events:none;color-scheme:light;background:#ffffff;`;
+            captureRoot.style.cssText = `position:fixed;left:-10000px;top:0;width:${slideW}px;height:${slideH}px;overflow:hidden;z-index:-9999;color-scheme:light;`;
 
             const styleTag = document.createElement('style');
             styleTag.textContent = captureCss;
@@ -6799,21 +6778,15 @@ paginate: true
 
             try {
                 await replaceSvgsWithPngs(wrapperDiv);
-                const canvas = await html2canvas(captureRoot, {
+                return await html2canvas(captureRoot, {
                     width: slideW,
                     height: slideH,
                     scale: 2,
                     useCORS: true,
                     allowTaint: false,
                     backgroundColor: '#ffffff',
-                    logging: false,
-                    windowWidth: slideW,
-                    windowHeight: slideH,
-                    scrollX: 0,
-                    scrollY: 0
+                    logging: false
                 });
-                assertCanvasHasVisibleContent(canvas);
-                return canvas;
             } finally {
                 document.body.removeChild(captureRoot);
             }
@@ -6868,7 +6841,7 @@ paginate: true
             const renderWidth = 794;
 
             const wrapper = document.createElement('div');
-            wrapper.style.cssText = `position:absolute;left:0;top:0;width:${renderWidth}px;background:#ffffff;color:#24292f;z-index:2147483647;pointer-events:none;color-scheme:light;`;
+            wrapper.style.cssText = `position:fixed;left:-10000px;top:0;width:${renderWidth}px;background:#ffffff;color:#24292f;z-index:-9999;color-scheme:light;`;
 
             const styleTag = document.createElement('style');
             styleTag.textContent = `
@@ -6925,11 +6898,8 @@ paginate: true
                     backgroundColor: '#ffffff',
                     logging: false,
                     windowWidth: renderWidth,
-                    windowHeight: exportContainer.scrollHeight,
-                    scrollX: 0,
-                    scrollY: 0
+                    windowHeight: exportContainer.scrollHeight
                 });
-                assertCanvasHasVisibleContent(canvas);
 
                 const jsPDF = window.jspdf.jsPDF;
                 const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4', compress: true });
