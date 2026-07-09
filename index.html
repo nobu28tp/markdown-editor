@@ -1801,6 +1801,71 @@
             margin: 0 4px;
         }
 
+        .image-insert-wrap {
+            position: relative;
+        }
+
+        .image-insert-menu {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            z-index: 40;
+            min-width: 180px;
+            padding: 4px;
+            background: var(--pane-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+        }
+
+        .image-insert-menu[hidden] {
+            display: none;
+        }
+
+        .image-insert-menu button {
+            width: 100%;
+            padding: 8px 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border: 0;
+            border-radius: 4px;
+            background: transparent;
+            color: var(--text-primary);
+            font: inherit;
+            font-size: 0.85rem;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .image-insert-menu button:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .image-insert-menu button svg {
+            width: 16px;
+            height: 16px;
+            color: var(--text-secondary);
+        }
+
+        .svg-code-input {
+            width: 100%;
+            min-height: 260px;
+            resize: vertical;
+            box-sizing: border-box;
+            padding: 0.8rem;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--editor-bg);
+            color: var(--text-primary);
+            font: 0.82rem/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+
+        .svg-code-input:focus {
+            outline: 2px solid var(--btn-primary-bg);
+            outline-offset: 1px;
+        }
+
         /* ── Table Wizard Popover ── */
         .table-popover {
             position: absolute;
@@ -2063,7 +2128,13 @@
                     <button class="toolbar-btn" data-format="h3" title="見出し3"><i data-lucide="heading-3"></i></button>
                     <div class="toolbar-separator"></div>
                     <button class="toolbar-btn" data-format="link" title="リンク挿入 (Ctrl+K)"><i data-lucide="link"></i></button>
-                    <button class="toolbar-btn" id="toolbar-btn-image" data-format="image" title="画像挿入"><i data-lucide="image"></i></button>
+                    <div class="image-insert-wrap">
+                        <button class="toolbar-btn" id="toolbar-btn-image" type="button" title="画像またはSVGを挿入" aria-haspopup="menu" aria-expanded="false"><i data-lucide="image"></i></button>
+                        <div class="image-insert-menu" id="image-insert-menu" role="menu" hidden>
+                            <button type="button" id="btn-insert-image-url" role="menuitem"><i data-lucide="image"></i>画像URLを挿入</button>
+                            <button type="button" id="btn-insert-svg-code" role="menuitem"><i data-lucide="file-code-2"></i>SVGコードを挿入</button>
+                        </div>
+                    </div>
                     <button class="toolbar-btn" id="toolbar-btn-table" data-format="table" title="テーブル挿入"><i data-lucide="table"></i></button>
                     <button class="toolbar-btn" data-format="code" title="コードブロック"><i data-lucide="code"></i></button>
                     <div class="toolbar-separator"></div>
@@ -2468,6 +2539,24 @@ paginate: true
                             目次ファイルに自動生成される <code>&lt;!-- include: ファイル名.md --&gt;</code> の指示に基づき、ファイルを開いた際に同一フォルダ内の分割ファイルを自動結合して1つの連続したドキュメントとして画面に読み込みます。
                         </li>
                     </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SVG Code Insert Modal -->
+    <div class="modal-overlay" id="svg-insert-modal" aria-hidden="true">
+        <div class="modal-content" style="max-width: 760px;">
+            <div class="modal-header">
+                <h2><i data-lucide="file-code-2"></i> SVGコードを挿入</h2>
+                <button class="btn-close" id="btn-close-svg-insert" type="button" title="閉じる"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 0.9rem;">
+                <textarea id="svg-code-input" class="svg-code-input" spellcheck="false" aria-label="SVGコード"></textarea>
+                <div id="svg-insert-message" style="display: none; color: #f85149; font-size: 0.85rem;"></div>
+                <div style="display: flex; justify-content: flex-end; gap: 0.6rem;">
+                    <button class="btn btn-outline" id="btn-cancel-svg-insert" type="button">キャンセル</button>
+                    <button class="btn btn-primary" id="btn-confirm-svg-insert" type="button">挿入</button>
                 </div>
             </div>
         </div>
@@ -4073,6 +4162,71 @@ paginate: true
                 }
             });
 
+            const SVG_TEMPLATE = `<svg width="320" height="180" viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="説明">
+  <rect width="320" height="180" rx="8" fill="#f3f4f6" />
+  <text x="160" y="96" text-anchor="middle" font-size="20" fill="#111827">SVG</text>
+</svg>`;
+
+            const SVG_ALLOWED_ATTRS = [
+                'viewBox', 'xmlns', 'width', 'height', 'x', 'y', 'cx', 'cy', 'r', 'rx', 'ry',
+                'x1', 'x2', 'y1', 'y2', 'd', 'points', 'fill', 'fill-opacity', 'fill-rule',
+                'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-opacity',
+                'opacity', 'transform', 'preserveAspectRatio', 'text-anchor', 'font-size',
+                'font-family', 'font-weight', 'dominant-baseline', 'offset', 'stop-color',
+                'stop-opacity', 'id', 'class', 'role', 'aria-label', 'clip-path', 'mask',
+                'gradientUnits', 'gradientTransform', 'patternUnits'
+            ];
+
+            function getSvgSanitizeOptions(options = {}) {
+                const allowForeignObject = options.allowForeignObject === true;
+                return {
+                    USE_PROFILES: { html: true, svg: true },
+                    ADD_TAGS: options.addTags || [],
+                    ADD_ATTR: [...SVG_ALLOWED_ATTRS, ...(options.addAttrs || [])],
+                    FORBID_TAGS: allowForeignObject
+                        ? ['script', 'image', 'use', 'animate', 'animateMotion', 'animateTransform', 'set', 'audio', 'video', 'iframe', 'object', 'embed']
+                        : ['script', 'foreignObject', 'image', 'use', 'animate', 'animateMotion', 'animateTransform', 'set', 'audio', 'video', 'iframe', 'object', 'embed'],
+                    FORBID_ATTR: ['onabort', 'onerror', 'onload', 'onclick', 'onfocus', 'onmouseenter', 'onmouseleave', 'onmouseover', 'onmouseup', 'onmousedown']
+                };
+            }
+
+            function isSvgMarkup(markup) {
+                return /^\s*(?:<\?xml[^>]*>\s*)?<svg[\s>]/i.test(markup || '');
+            }
+
+            function sanitizeSvgMarkupForInsert(markup) {
+                const source = (markup || '').trim();
+                if (!isSvgMarkup(source)) {
+                    throw new Error('SVG要素から始まるコードを入力してください。');
+                }
+
+                const parsed = new DOMParser().parseFromString(source, 'image/svg+xml');
+                if (parsed.querySelector('parsererror') || !parsed.documentElement || parsed.documentElement.localName !== 'svg') {
+                    throw new Error('SVGとして解析できませんでした。');
+                }
+
+                let cleanMarkup = DOMPurify.sanitize(source, getSvgSanitizeOptions());
+                cleanMarkup = cleanMarkup.replace(/viewbox=/g, 'viewBox=');
+                const cleanDocument = new DOMParser().parseFromString(cleanMarkup, 'image/svg+xml');
+                if (cleanDocument.querySelector('parsererror') || !cleanDocument.documentElement || cleanDocument.documentElement.localName !== 'svg') {
+                    throw new Error('安全なSVG要素が残りませんでした。');
+                }
+
+                const svgElement = cleanDocument.documentElement;
+                if (!svgElement.getAttribute('xmlns')) {
+                    svgElement.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+                }
+                return new XMLSerializer().serializeToString(svgElement);
+            }
+
+            function insertSvgMarkup(markup, cm = editor) {
+                const cleanMarkup = sanitizeSvgMarkupForInsert(markup);
+                const doc = cm.getDoc();
+                doc.replaceSelection(`\n${cleanMarkup}\n`);
+                cm.focus();
+                updateStatus('saved', 'SVGコードを挿入しました');
+            }
+
             // 2. Initialize CodeMirror Editor
             editor = CodeMirror.fromTextArea(editorTextarea, {
                 mode: "gfm", // GitHub Flavored Markdown
@@ -4220,11 +4374,42 @@ paginate: true
                 }
             });
 
-            // Handle Image Pasting
+            // Handle image and SVG pasting. SVG remains editable source text; raster images use the existing compact Base64 flow.
             editor.on('paste', (cm, event) => {
-                const items = (event.clipboardData || event.originalEvent?.clipboardData).items;
+                const clipboardData = event.clipboardData || event.originalEvent?.clipboardData;
+                if (!clipboardData) return;
+
+                const clipboardText = clipboardData.getData('text/plain');
+                if (isSvgMarkup(clipboardText)) {
+                    event.preventDefault();
+                    try {
+                        insertSvgMarkup(clipboardText, cm);
+                    } catch (err) {
+                        updateStatus('error', 'SVGを挿入できません');
+                        alert(err.message);
+                    }
+                    return;
+                }
+
+                const items = clipboardData.items || [];
                 for (let i = 0; i < items.length; i++) {
                     const item = items[i];
+                    if (item.type === 'image/svg+xml') {
+                        event.preventDefault();
+                        const svgFile = item.getAsFile();
+                        if (!svgFile) return;
+                        const svgReader = new FileReader();
+                        svgReader.onload = (e) => {
+                            try {
+                                insertSvgMarkup(e.target.result, cm);
+                            } catch (err) {
+                                updateStatus('error', 'SVGを挿入できません');
+                                alert(err.message);
+                            }
+                        };
+                        svgReader.readAsText(svgFile);
+                        return;
+                    }
                     if (item.type.indexOf('image') !== -1) {
                         event.preventDefault();
                         const file = item.getAsFile();
@@ -4814,6 +4999,71 @@ paginate: true
                 }
             });
 
+            const imageInsertButton = document.getElementById('toolbar-btn-image');
+            const imageInsertMenu = document.getElementById('image-insert-menu');
+            const svgInsertModal = document.getElementById('svg-insert-modal');
+            const svgCodeInput = document.getElementById('svg-code-input');
+            const svgInsertMessage = document.getElementById('svg-insert-message');
+
+            function closeImageInsertMenu() {
+                imageInsertMenu.hidden = true;
+                imageInsertButton.setAttribute('aria-expanded', 'false');
+            }
+
+            function closeSvgInsertModal() {
+                svgInsertModal.classList.remove('active');
+                svgInsertModal.setAttribute('aria-hidden', 'true');
+                svgInsertMessage.style.display = 'none';
+                editor.focus();
+            }
+
+            function openSvgInsertModal() {
+                const selectedText = editor.getDoc().getSelection().trim();
+                svgCodeInput.value = isSvgMarkup(selectedText) ? selectedText : SVG_TEMPLATE;
+                svgInsertMessage.style.display = 'none';
+                svgInsertModal.classList.add('active');
+                svgInsertModal.setAttribute('aria-hidden', 'false');
+                setTimeout(() => svgCodeInput.focus(), 0);
+            }
+
+            imageInsertButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                const willOpen = imageInsertMenu.hidden;
+                imageInsertMenu.hidden = !willOpen;
+                imageInsertButton.setAttribute('aria-expanded', String(willOpen));
+            });
+            document.getElementById('btn-insert-image-url').addEventListener('click', () => {
+                closeImageInsertMenu();
+                insertFormatting('image');
+            });
+            document.getElementById('btn-insert-svg-code').addEventListener('click', () => {
+                closeImageInsertMenu();
+                openSvgInsertModal();
+            });
+            document.getElementById('btn-close-svg-insert').addEventListener('click', closeSvgInsertModal);
+            document.getElementById('btn-cancel-svg-insert').addEventListener('click', closeSvgInsertModal);
+            document.getElementById('btn-confirm-svg-insert').addEventListener('click', () => {
+                try {
+                    insertSvgMarkup(svgCodeInput.value);
+                    closeSvgInsertModal();
+                } catch (err) {
+                    svgInsertMessage.textContent = err.message;
+                    svgInsertMessage.style.display = 'block';
+                }
+            });
+            svgInsertModal.addEventListener('click', (e) => {
+                if (e.target === svgInsertModal) closeSvgInsertModal();
+            });
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.image-insert-wrap')) closeImageInsertMenu();
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    closeImageInsertMenu();
+                    if (svgInsertModal.classList.contains('active')) closeSvgInsertModal();
+                }
+            });
+
             // テーブルグリッドの初期化
             const tablePopover = document.getElementById('table-popover');
             const tableGridContainer = document.getElementById('table-grid-container');
@@ -5083,6 +5333,29 @@ paginate: true
         }
 
         // Update Preview Panel
+        const PREVIEW_SVG_ALLOWED_ATTRS = [
+            'viewBox', 'xmlns', 'width', 'height', 'x', 'y', 'cx', 'cy', 'r', 'rx', 'ry',
+            'x1', 'x2', 'y1', 'y2', 'd', 'points', 'fill', 'fill-opacity', 'fill-rule',
+            'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-opacity',
+            'opacity', 'transform', 'preserveAspectRatio', 'text-anchor', 'font-size',
+            'font-family', 'font-weight', 'dominant-baseline', 'offset', 'stop-color',
+            'stop-opacity', 'id', 'class', 'role', 'aria-label', 'clip-path', 'mask',
+            'gradientUnits', 'gradientTransform', 'patternUnits'
+        ];
+
+        function getPreviewSvgSanitizeOptions(options = {}) {
+            const allowForeignObject = options.allowForeignObject === true;
+            return {
+                USE_PROFILES: { html: true, svg: true },
+                ADD_TAGS: options.addTags || [],
+                ADD_ATTR: [...PREVIEW_SVG_ALLOWED_ATTRS, ...(options.addAttrs || [])],
+                FORBID_TAGS: allowForeignObject
+                    ? ['script', 'image', 'use', 'animate', 'animateMotion', 'animateTransform', 'set', 'audio', 'video', 'iframe', 'object', 'embed']
+                    : ['script', 'foreignObject', 'image', 'use', 'animate', 'animateMotion', 'animateTransform', 'set', 'audio', 'video', 'iframe', 'object', 'embed'],
+                FORBID_ATTR: ['onabort', 'onerror', 'onload', 'onclick', 'onfocus', 'onmouseenter', 'onmouseleave', 'onmouseover', 'onmouseup', 'onmousedown']
+            };
+        }
+
         async function updatePreview(markdownText) {
             if (!isPreviewPaneVisible()) return;
             const savedScrollTop = previewContainer ? previewContainer.scrollTop : 0;
@@ -5213,13 +5486,11 @@ paginate: true
                     // DOMPurifyはSVGのforeignObjectや複雑な属性（Marpの仕様）を破壊するため、
                     // 公式Marpエンジンの場合はサニタイズをスキップする（ローカルエディタのため自身で記述したMarkdownのみを扱う前提）
                     if (source !== 'marp-core') {
-                        cleanHtml = DOMPurify.sanitize(slidesHtml, {
-                            USE_PROFILES: { html: true, svg: true },
-                            ADD_TAGS: ['section', 'style', 'svg', 'foreignObject', 'path', 'g', 'figure', 'figcaption', 'div'],
-                            ADD_ATTR: ['id', 'data-theme', 'style', 'class', 'viewBox', 'data-marpit-svg', 'data-marpit-pagination', 'data-marpit-pagination-total', 'data-marpit-advanced-background', 'data-marpit-advanced-background-container', 'data-marpit-advanced-background-direction', 'data-marpit-advanced-background-split', 'data-bg-image', 'data-color', 'width', 'height', 'd', 'fill', 'xmlns', 'data-line'],
-                            FORBID_TAGS: ['script'],
-                            FORBID_ATTR: ['onerror', 'onclick', 'onload']
-                        });
+                        cleanHtml = DOMPurify.sanitize(slidesHtml, getPreviewSvgSanitizeOptions({
+                            allowForeignObject: true,
+                            addTags: ['section', 'style', 'svg', 'foreignObject', 'path', 'g', 'figure', 'figcaption', 'div'],
+                            addAttrs: ['data-theme', 'style', 'data-marpit-svg', 'data-marpit-pagination', 'data-marpit-pagination-total', 'data-marpit-advanced-background', 'data-marpit-advanced-background-container', 'data-marpit-advanced-background-direction', 'data-bg-image', 'data-color', 'data-line']
+                        }));
                         cleanHtml = cleanHtml.replace(/viewbox=/g, 'viewBox=');
                     }
 
@@ -5236,10 +5507,10 @@ paginate: true
                     }
                     const markedTextWithMarkers = injectLineMarkers(markdownText);
                     const rawHtml = marked.parse(markedTextWithMarkers);
-                    const cleanHtml = DOMPurify.sanitize(rawHtml, {
-                        ADD_TAGS: ['iframe', 'input', 'div'],
-                        ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'target', 'type', 'checked', 'disabled', 'start', 'data-line']
-                    });
+                    const cleanHtml = DOMPurify.sanitize(rawHtml, getPreviewSvgSanitizeOptions({
+                        addTags: ['iframe', 'input', 'div'],
+                        addAttrs: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'target', 'type', 'checked', 'disabled', 'start', 'data-line']
+                    }));
                     previewContainer.innerHTML = cleanHtml;
                     applyLineMarkers(previewContainer);
                     previewContainer.scrollTop = savedScrollTop;
