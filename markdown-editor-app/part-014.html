@@ -1,0 +1,646 @@
+             if (!res.ok) {
+                    if (res.status === 404) {
+                        showGhStatus('❌ ファイルが見つかりませんでした (404)', '#f85149');
+                    } else if (res.status === 401) {
+                        showGhStatus('❌ 認証失敗。トークンを確認してください (401)', '#f85149');
+                    } else {
+                        showGhStatus(`❌ APIエラー: ${res.status} ${res.statusText}`, '#f85149');
+                    }
+                    return;
+                }
+                const text = await res.text();
+                editor.setValue(text);
+                currentDocumentLength = text.length;
+                updatePreview(text);
+                localStorage.setItem('lumina_autosave', text);
+                saveGitHubSettings();
+                showGhStatus('✅ GitHubから読み込みに成功しました', '#3fb950');
+                updateStatus('saved', 'GitHub読込完了');
+            } catch (err) {
+                console.error('GitHub load failed:', err);
+                showGhStatus('❌ 通信エラー: ' + err.message, '#f85149');
+            }
+        }
+
+        // GitHubへファイルを保存（新規 or 上書き）
+        async function saveToGitHub() {
+            const inputs = getGitHubInputs(true); // 保存時はトークン必須
+            if (!inputs) return;
+            const { token, repo, branch, path } = inputs;
+
+            const content = editor.getValue();
+            if (!content.trim()) {
+                showGhStatus('⚠️ エディタが空です。保存するテキストを入力してください', '#d29922');
+                return;
+            }
+
+            showGhStatus('📤 GitHubへ保存中...', '#58a6ff');
+            try {
+                let sha = null;
+                try {
+                    const checkRes = await fetch(
+                        `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}&_=${Date.now()}`,
+                        {
+                            headers: {
+                                'Authorization': `token ${token}`,
+                                'Accept': 'application/vnd.github.v3+json'
+                            }
+                        }
+                    );
+                    if (checkRes.ok) {
+                        const data = await checkRes.json();
+                        sha = data.sha;
+                    }
+                } catch (e) {
+                    // ファイルが存在しない場合は sha = null のまま新規作成
+                }
+
+                const body = {
+                    message: (sha ? 'Update' : 'Create') + ` ${path} via Markdown Editor`,
+                    content: utf8ToBase64(content),
+                    branch: branch
+                };
+                if (sha) body.sha = sha;
+
+                const putRes = await fetch(
+                    `https://api.github.com/repos/${repo}/contents/${path}`,
+                    {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `token ${token}`,
+                            'Accept': 'application/vnd.github.v3+json',
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(body)
+                    }
+                );
+
+                if (!putRes.ok) {
+                    const errData = await putRes.json().catch(() => ({}));
+                    if (putRes.status === 409) {
+                        showGhStatus('❌ 競合エラー: 他の変更と衝突しています。再度読み込んでからお試しください (409)', '#f85149');
+                    } else if (putRes.status === 422) {
+                        showGhStatus('❌ SHAの不一致エラー: 再度読み込んでからお試しください (422)', '#f85149');
+                    } else if (putRes.status === 401) {
+                        showGhStatus('❌ 認証失敗。トークンを確認してください (401)', '#f85149');
+                    } else {
+                        showGhStatus(`❌ 保存失敗: ${putRes.status} ${errData.message || putRes.statusText}`, '#f85149');
+                    }
+                    return;
+                }
+
+                saveGitHubSettings();
+                showGhStatus(`✅ GitHubへの${sha ? '上書き' : '新規'}保存に成功しました`, '#3fb950');
+                updateStatus('saved', 'GitHub保存完了');
+            } catch (err) {
+                console.error('GitHub save failed:', err);
+                showGhStatus('❌ 通信エラー: ' + err.message, '#f85149');
+            }
+        }
+
+        // ===== GitHubリポジトリブラウザ機能 =====
+        let currentGhBrowsePath = '';
+
+        // GitHubリポジトリブラウザの表示・非表示トグルとロード
+        async function browseGitHubRepo() {
+            let token = document.getElementById('gh-token').value.trim();
+            let repo = document.getElementById('gh-repo').value.trim();
+
+            // なければ自動検出
+            if (!repo) {
+                const detected = detectGitHubPagesInfo();
+                if (detected) {
+                    repo = detected.repo;
+                    document.getElementById('gh-repo').value = repo;
+                    document.getElementById('gh-branch').value = detected.branch;
+                }
+            }
+
+            // リポジトリ名の自動クレンジング
+            if (repo) {
+                repo = sanitizeGitHubRepo(repo);
+                document.getElementById('gh-repo').value = repo;
+            }
+
+            if (!repo) { showGhStatus('⚠️ リポジトリ名 (owner/repo) を入力してください', '#d29922'); return; }
+
+            const browserEl = document.getElementById('gh-file-browser');
+            
+            // すでに表示されている場合は非表示にする
+            if (browserEl.style.display === 'flex') {
+                browserEl.style.display = 'none';
+                return;
+            }
+
+            // デフォルトの開始位置を 'document' フォルダにする
+            currentGhBrowsePath = 'document';
+            showGhStatus('📂 document フォルダを読み込み中...', '#58a6ff');
+            
+            // 'document' を取得してみて、エラー（404など）ならルート '' を再取得する
+            const success = await fetchGitHubDir(currentGhBrowsePath);
+            if (!success) {
+                currentGhBrowsePath = '';
+                await fetchGitHubDir(currentGhBrowsePath);
+            }
+        }
+
+        // 指定パスのGitHubリポジトリ内容を取得
+        async function fetchGitHubDir(path) {
+            const token = document.getElementById('gh-token').value.trim();
+            let repo = document.getElementById('gh-repo').value.trim();
+            let branch = document.getElementById('gh-branch').value.trim() || 'main';
+
+            // なければ自動検出
+            if (!repo) {
+                const detected = detectGitHubPagesInfo();
+                if (detected) {
+                    repo = detected.repo;
+                    document.getElementById('gh-repo').value = repo;
+                    document.getElementById('gh-branch').value = detected.branch;
+                }
+            }
+            
+            // リポジトリ名の自動クレンジング
+            if (repo) {
+                repo = sanitizeGitHubRepo(repo);
+                document.getElementById('gh-repo').value = repo;
+            }
+            
+            if (!repo) {
+                showGhStatus('⚠️ リポジトリ名を入力してください', '#d29922');
+                return false;
+            }
+            
+            const fileListEl = document.getElementById('gh-file-list');
+            const browserEl = document.getElementById('gh-file-browser');
+
+            browserEl.style.display = 'flex';
+            fileListEl.innerHTML = '<div style="font-size: 0.85rem; color: var(--text-secondary); padding: 0.5rem; text-align: center;">⌛ 読み込み中...</div>';
+            
+            renderBreadcrumb(path);
+
+            try {
+                const url = `https://api.github.com/repos/${repo}/contents/${path ? path : ''}?ref=${branch}&_=${Date.now()}`;
+                
+                const headers = {
+                    'Accept': 'application/vnd.github.v3+json'
+                };
+                if (token) {
+                    headers['Authorization'] = `token ${token}`;
+                }
+
+                let res = await fetch(url, { headers });
+
+                // トークン無効による隠蔽404または401エラーの場合、トークンなし（パブリック匿名）で自動フォールバック再試行
+                if (!res.ok && token && (res.status === 404 || res.status === 401)) {
+                    console.warn("GitHub API fetch dir failed with token, retrying without token...");
+                    const publicHeaders = {
+                        'Accept': 'application/vnd.github.v3+json'
+                    };
+                    const retryRes = await fetch(url, { headers: publicHeaders });
+                    if (retryRes.ok) {
+                        res = retryRes;
+                        showGhStatus('ℹ️ トークンが無効なため、トークンなし（公開情報）として参照しました', '#58a6ff');
+                    }
+                }
+
+                if (!res.ok) {
+                    if (res.status === 404) {
+                        fileListEl.innerHTML = '<div style="font-size: 0.85rem; color: #f85149; padding: 0.5rem;">❌ フォルダまたはリポジトリが見つかりません。</div>';
+                    } else if (res.status === 401) {
+                        fileListEl.innerHTML = '<div style="font-size: 0.85rem; color: #f85149; padding: 0.5rem;">❌ 認証失敗。トークンを確認してください。</div>';
+                    } else {
+                        fileListEl.innerHTML = `<div style="font-size: 0.85rem; color: #f85149; padding: 0.5rem;">❌ エラー: ${res.status}</div>`;
+                    }
+                    return false;
+                }
+
+                const items = await res.json();
+                
+                // フォルダを先、ファイルを後に並び替える
+                items.sort((a, b) => {
+                    if (a.type === b.type) return a.name.localeCompare(b.name);
+                    return a.type === 'dir' ? -1 : 1;
+                });
+
+                renderFileBrowser(items, path);
+                return true;
+            } catch (err) {
+                console.error('GitHub fetch dir failed:', err);
+                fileListEl.innerHTML = `<div style="font-size: 0.85rem; color: #f85149; padding: 0.5rem;">❌ エラー: ${err.message}</div>`;
+                return false;
+            }
+        }
+
+        // パンくずリストのレンダリング
+        // 共通ブレッドクラム生成関数
+        function renderGenericBreadcrumb(containerId, path, onClick) {
+            const breadcrumbEl = document.getElementById(containerId);
+            if (!breadcrumbEl) return;
+            breadcrumbEl.innerHTML = '';
+
+            // ルート
+            const rootSpan = document.createElement('span');
+            rootSpan.textContent = 'root';
+            rootSpan.style.cursor = 'pointer';
+            rootSpan.style.color = '#58a6ff';
+            rootSpan.style.fontWeight = '600';
+            rootSpan.addEventListener('click', () => {
+                onClick('');
+            });
+            breadcrumbEl.appendChild(rootSpan);
+
+            if (!path) return;
+
+            const parts = path.split('/');
+            let accumulatedPath = '';
+
+            parts.forEach((part, index) => {
+                const separator = document.createElement('span');
+                separator.textContent = ' / ';
+                separator.style.color = 'var(--text-secondary)';
+                breadcrumbEl.appendChild(separator);
+
+                accumulatedPath += (index === 0 ? '' : '/') + part;
+                const currentPathCopy = accumulatedPath;
+
+                const partSpan = document.createElement('span');
+                partSpan.textContent = part;
+                
+                if (index === parts.length - 1) {
+                    partSpan.style.color = 'var(--text-primary)';
+                    partSpan.style.fontWeight = 'bold';
+                } else {
+                    partSpan.style.cursor = 'pointer';
+                    partSpan.style.color = '#58a6ff';
+                    partSpan.addEventListener('click', () => {
+                        onClick(currentPathCopy);
+                    });
+                }
+                breadcrumbEl.appendChild(partSpan);
+            });
+        }
+
+        function renderBreadcrumb(path) {
+            renderGenericBreadcrumb('gh-breadcrumb', path, (p) => {
+                currentGhBrowsePath = p;
+                fetchGitHubDir(p);
+            });
+        }
+
+        // ファイルリストのレンダリング
+        // 共通ファイルブラウザ生成関数
+        function renderGenericFileBrowser(containerId, items, onDirClick, onFileClick) {
+            const fileListEl = document.getElementById(containerId);
+            if (!fileListEl) return;
+            fileListEl.innerHTML = '';
+
+            if (items.length === 0) {
+                fileListEl.innerHTML = '<div style="font-size: 0.85rem; color: var(--text-secondary); padding: 0.5rem; text-align: center;">このフォルダは空です。</div>';
+                return;
+            }
+
+            items.forEach(item => {
+                const itemEl = document.createElement('div');
+                itemEl.style.display = 'flex';
+                itemEl.style.alignItems = 'center';
+                itemEl.style.gap = '0.5rem';
+                itemEl.style.padding = '0.4rem 0.6rem';
+                itemEl.style.borderRadius = '4px';
+                itemEl.style.cursor = 'pointer';
+                itemEl.style.transition = 'background 0.2s';
+                itemEl.style.fontSize = '0.9rem';
+                
+                itemEl.addEventListener('mouseenter', () => {
+                    itemEl.style.background = 'rgba(255, 255, 255, 0.08)';
+                });
+                itemEl.addEventListener('mouseleave', () => {
+                    itemEl.style.background = 'transparent';
+                });
+
+                const icon = document.createElement('i');
+                icon.style.width = '16px';
+                icon.style.height = '16px';
+                icon.style.flexShrink = '0';
+
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = item.name;
+                nameSpan.style.overflow = 'hidden';
+                nameSpan.style.textOverflow = 'ellipsis';
+                nameSpan.style.whiteSpace = 'nowrap';
+
+                if (item.type === 'dir') {
+                    icon.setAttribute('data-lucide', 'folder');
+                    icon.style.color = '#e3b341';
+                    itemEl.appendChild(icon);
+                    itemEl.appendChild(nameSpan);
+                    
+                    itemEl.addEventListener('click', () => onDirClick(item));
+                } else {
+                    icon.setAttribute('data-lucide', 'file-text');
+                    icon.style.color = '#8b949e';
+                    itemEl.appendChild(icon);
+                    itemEl.appendChild(nameSpan);
+
+                    itemEl.addEventListener('click', () => onFileClick(item));
+                }
+
+                fileListEl.appendChild(itemEl);
+            });
+
+            if (window.lucide) {
+                window.lucide.createIcons({ root: fileListEl });
+            }
+        }
+
+        function renderFileBrowser(items, currentPath) {
+            renderGenericFileBrowser('gh-file-list', items, 
+                (item) => {
+                    currentGhBrowsePath = item.path;
+                    fetchGitHubDir(item.path);
+                },
+                (item) => {
+                    selectGitHubFile(item.path);
+                }
+            );
+        }
+
+        // ファイルが選択されたとき
+        function selectGitHubFile(filePath) {
+            document.getElementById('gh-path').value = filePath;
+            // ファイルブラウザを閉じる
+            document.getElementById('gh-file-browser').style.display = 'none';
+            showGhStatus('📂 ファイルを選択しました: ' + filePath, '#58a6ff');
+        }
+
+        // ===== ローカルフォルダ（document/）連携機能 =====
+        let activeLocalDirectoryHandle = null;
+        let activeLocalFileHandle = null;
+        let currentLocalBrowsePath = ''; // ディレクトリ内の現在の相対パス
+        let localDirectorySubHandles = {}; // ディレクトリ階層ごとのハンドルキャッシュ
+
+        // IndexedDB の初期化・オープン
+        function openLocalFolderDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open("LocalFolderSyncDB", 1);
+                request.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains("handles")) {
+                        db.createObjectStore("handles");
+                    }
+                };
+                request.onsuccess = (e) => resolve(e.target.result);
+                request.onerror = (e) => reject(e.target.error);
+            });
+        }
+
+        // DirectoryHandle を IndexedDB に保存
+        async function saveFolderHandleToDB(handle) {
+            try {
+                const db = await openLocalFolderDB();
+                const tx = db.transaction("handles", "readwrite");
+                tx.objectStore("handles").put(handle, "documentDir");
+                await new Promise((resolve, reject) => {
+                    tx.oncomplete = resolve;
+                    tx.onerror = () => reject(tx.error);
+                });
+            } catch (err) {
+                console.error("IndexedDB save failed:", err);
+            }
+        }
+
+        // DirectoryHandle を IndexedDB から読み込み
+        async function loadFolderHandleFromDB() {
+            try {
+                const db = await openLocalFolderDB();
+                const tx = db.transaction("handles", "readonly");
+                const handle = await new Promise((resolve, reject) => {
+                    const req = tx.objectStore("handles").get("documentDir");
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => reject(req.error);
+                });
+                return handle;
+            } catch (err) {
+                console.error("IndexedDB load failed:", err);
+                return null;
+            }
+        }
+
+        // モーダルステータス表示
+        function showLocalStatus(msg, color) {
+            const el = document.getElementById('local-folder-status');
+            if (!el) return;
+            el.textContent = msg;
+            el.style.color = color || '#58a6ff';
+            el.style.display = 'block';
+            setTimeout(() => { el.style.display = 'none'; }, 5000);
+        }
+
+        // フォルダ・ファイルのアクセス権限確認と要求
+        async function verifyLocalPermission(fileHandle, readWrite) {
+            const options = {};
+            if (readWrite) {
+                options.mode = 'readwrite';
+            }
+            if ((await fileHandle.queryPermission(options)) === 'granted') {
+                return true;
+            }
+            if ((await fileHandle.requestPermission(options)) === 'granted') {
+                return true;
+            }
+            return false;
+        }
+
+        async function readTextFromFileHandle(fileHandle) {
+            if (!(await verifyLocalPermission(fileHandle, false))) {
+                throw new Error('ファイルの読み込み権限がありません。');
+            }
+            const file = await fileHandle.getFile();
+            return await file.text();
+        }
+
+        async function writeTextToFileHandle(fileHandle, text) {
+            if (!(await verifyLocalPermission(fileHandle, true))) {
+                throw new Error('ファイルの書き込み権限がありません。');
+            }
+            const writable = await fileHandle.createWritable();
+            await writable.write(text);
+            await writable.close();
+        }
+
+        async function createLocalFileBackup(dirHandle, fileName, existingText) {
+            const backupName = `${fileName}.backup-${getTimestampForFilename()}`;
+            const backupHandle = await dirHandle.getFileHandle(backupName, { create: true });
+            await writeTextToFileHandle(backupHandle, existingText);
+            return backupName;
+        }
+
+        async function getFileHandleIfExists(dirHandle, fileName) {
+            try {
+                return await dirHandle.getFileHandle(fileName, { create: false });
+            } catch (err) {
+                if (err.name === 'NotFoundError') return null;
+                throw err;
+            }
+        }
+
+        async function checkMarkdownSaveConflict(dirHandle, fileName, expectedHash, nextText) {
+            const existingHandle = await getFileHandleIfExists(dirHandle, fileName);
+            if (!existingHandle) {
+                return { status: 'new', fileHandle: null };
+            }
+
+            const existingText = await readTextFromFileHandle(existingHandle);
+            const existingHash = getDocumentHash(existingText);
+            const nextHash = getDocumentHash(nextText);
+
+            if (existingHash === nextHash || (expectedHash && existingHash === expectedHash)) {
+                return { status: 'clean', fileHandle: existingHandle, existingText, existingHash };
+            }
+
+            return { status: 'conflict', fileHandle: existingHandle, existingText, existingHash };
+        }
+
+        async function resolveSingleMarkdownConflict(dirHandle, fileName, conflict, nextText) {
+            const choice = prompt(
+                `保存先のMarkdownが、読み込み後に他の人によって更新されています。\n\n対象: ${fileName}\n\n次のどれかを入力してください。\nreload: 保存を中止して最新版を読み込む\ncopy: 自分の変更を別名保存する\noverwrite: 既存ファイルをバックアップして上書きする\ncancel: 何もしない`,
+                'reload'
+            );
+            const normalized = (choice || '').trim().toLowerCase();
+
+            if (normalized === 'overwrite') {
+                const backupName = await createLocalFileBackup(dirHandle, fileName, conflict.existingText);
+                return { action: 'overwrite', fileHandle: conflict.fileHandle, backupName };
+            }
+
+            if (normalized === 'copy') {
+                const copyName = `${fileName.replace(/\.md$/i, '')}.conflict-${getTimestampForFilename()}.md`;
+                const copyHandle = await dirHandle.getFileHandle(copyName, { create: true });
+                await writeTextToFileHandle(copyHandle, nextText);
+                return { action: 'copy', fileHandle: copyHandle, copyName };
+            }
+
+            if (normalized === 'reload') {
+                setGeneratedFullReadOnly(false);
+                editor.setValue(conflict.existingText);
+                setGeneratedFullReadOnly(isGeneratedFullDocument(conflict.existingText));
+                currentDocumentLength = conflict.existingText.length;
+                updatePreview(conflict.existingText);
+                localStorage.setItem('lumina_autosave', conflict.existingText);
+                activeLocalFileOriginalHash = conflict.existingHash;
+                hasUnsavedChanges = false;
+                return { action: 'reload' };
+            }
+
+            return { action: 'cancel' };
+        }
+
+        async function ensureSplitSaveCanOverwrite(targets) {
+            const conflicts = [];
+            for (const target of targets) {
+                const check = await checkMarkdownSaveConflict(
+                    target.dirHandle,
+                    target.fileName,
+                    target.expectedHash || '',
+                    target.content
+                );
+                target.fileHandle = check.fileHandle;
+                if (target.generatedFull && check.status === 'conflict' && isGeneratedFullDocument(check.existingText)) {
+                    continue;
+                }
+                if (check.status === 'conflict') {
+                    conflicts.push({ target, check });
+                }
+            }
+
+            if (!conflicts.length) return { ok: true, backups: [] };
+
+            const conflictNames = conflicts.map(item => item.target.fileName).join('\n- ');
+            const choice = prompt(
+                `分割保存の対象ファイルが、読み込み後に他の人によって更新されています。\n\n- ${conflictNames}\n\n次のどれかを入力してください。\noverwrite: 既存ファイルをバックアップして分割保存を続行する\ncancel: 保存を中止する`,
+                'cancel'
+            );
+
+            if ((choice || '').trim().toLowerCase() !== 'overwrite') {
+                return { ok: false, backups: [] };
+            }
+
+            const backups = [];
+            for (const { target, check } of conflicts) {
+                const backupName = await createLocalFileBackup(target.dirHandle, target.fileName, check.existingText);
+                backups.push(backupName);
+            }
+            return { ok: true, backups };
+        }
+
+        async function getActiveLocalFileDirectoryHandle() {
+            if (!activeLocalDirectoryHandle) return null;
+            let dirHandle = activeLocalDirectoryHandle;
+            if (activeLocalFileDirectoryPath) {
+                const parts = activeLocalFileDirectoryPath.split('/');
+                for (const part of parts) {
+                    dirHandle = await dirHandle.getDirectoryHandle(part);
+                }
+            }
+            return dirHandle;
+        }
+
+        function getActiveLocalCommentFileName() {
+            if (!activeLocalFileHandle || !activeLocalFileHandle.name) return '';
+            return `${activeLocalFileHandle.name}.comments.json`;
+        }
+
+        async function readSharedProofreadPayload() {
+            const dirHandle = await getActiveLocalFileDirectoryHandle();
+            const commentFileName = getActiveLocalCommentFileName();
+            if (!dirHandle || !commentFileName) return null;
+
+            try {
+                const commentHandle = await dirHandle.getFileHandle(commentFileName, { create: false });
+                if (!(await verifyLocalPermission(commentHandle, false))) return null;
+                const file = await commentHandle.getFile();
+                const text = await file.text();
+                return JSON.parse(text);
+            } catch (err) {
+                if (err.name !== 'NotFoundError') {
+                    console.warn('Shared proofread comments load failed:', err);
+                }
+                return null;
+            }
+        }
+
+        async function restoreSharedProofreadComments(text) {
+            const saved = await readSharedProofreadPayload();
+            if (!saved || saved.textHash !== getProofreadTextHash(text) || !Array.isArray(saved.comments)) {
+                return false;
+            }
+            sharedProofreadRevision = saved.revision || saved.updatedAt || '';
+
+            const ignoredRanges = buildIgnoredRanges(text);
+            const restored = saved.comments
+                .filter(comment => !comment.status || comment.status === 'open')
+                .map((comment, index) => normalizeProofreadComment(comment, index, comment.source || 'shared', text, ignoredRanges))
+                .filter(Boolean);
+            setProofreadComments(restored, { skipSave: true });
+            return true;
+        }
+
+        async function saveSharedProofreadComments(comments, text) {
+            const dirHandle = await getActiveLocalFileDirectoryHandle();
+            const commentFileName = getActiveLocalCommentFileName();
+            if (!dirHandle || !commentFileName) return;
+
+            try {
+                const remote = await readSharedProofreadPayload();
+                const remoteChanged = remote
+                    && remote.textHash === getProofreadTextHash(text)
+                    && (remote.revision || remote.updatedAt || '') !== sharedProofreadRevision
+                    && Array.isArray(remote.comments);
+                const mergedComments = remoteChanged
+                    ? mergeProofreadComments(comments, remote.comments)
+                    : comments;
+                const commentHandle = await dirHandle.getFileHandle(commentFileName, { create: true });
+                if (!(await verifyLocalPermission(commentHandle, true))) return;
+                const payload = getProofreadCommentPayload(text, mergedComments);
+                const writable = await commentHandle.createWritable();
+                await writable.write(JSON.strin
