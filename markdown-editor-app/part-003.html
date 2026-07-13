@@ -1,0 +1,477 @@
+      <header class="glass-header">
+            <div class="header-left">
+                <div class="logo">
+                    <i data-lucide="pen-tool"></i>
+                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.5.11)</span>
+                    </h1>
+                </div>
+                <div class="status-indicator" id="save-status">
+                    <span class="status-dot"></span>
+                    <span class="status-text" id="status-text">準備完了</span>
+                </div>
+                <div class="doc-title-wrap">
+                    <label for="doc-title-input">📄 ドキュメント名</label>
+                    <input type="text" id="doc-title-input" placeholder="例: 会議資料" maxlength="100">
+                </div>
+                <div class="mode-switcher" id="mode-switcher">
+                    <button class="mode-btn active" data-mode="doc">Doc</button>
+                    <button class="mode-btn" data-mode="slide">Slide</button>
+                </div>
+            </div>
+            <div class="header-right">
+                <!-- 常に表示するボタン群 -->
+                <button class="btn btn-outline" id="btn-toggle-outline" title="目次の表示/非表示">
+                    <i data-lucide="list"></i>
+                    <span>目次切替</span>
+                </button>
+                <button class="btn btn-outline" id="btn-toggle-preview" title="プレビューの表示/非表示">
+                    <i data-lucide="layout-panel-left"></i>
+                    <span>プレビュー切替</span>
+                </button>
+                <button class="btn btn-outline" id="btn-toggle-proofread" title="校正コメントの表示/非表示">
+                    <i data-lucide="message-square-text"></i>
+                    <span>AI校正</span>
+                </button>
+                <button class="btn btn-outline" id="btn-help" title="Markdownの書き方">
+                    <i data-lucide="help-circle"></i>
+                    <span>ヘルプ</span>
+                </button>
+                <button class="btn btn-outline" id="btn-new">
+                    <i data-lucide="file-plus"></i>
+                    <span>新規作成</span>
+                </button>
+
+                <!-- ハンバーガーメニューボタン -->
+                <button class="btn btn-outline hamburger-btn" id="btn-hamburger" title="メニュー">
+                    <i data-lucide="menu"></i>
+                </button>
+
+                <!-- ハンバーガーメニュー ドロップダウン -->
+                <div class="hamburger-menu" id="hamburger-menu">
+                    <div class="hamburger-menu-section">
+                        <div class="hamburger-menu-label">ファイル操作</div>
+                        <div class="hamburger-menu-row">
+                            <div class="encoding-selector-wrap" style="display: flex; align-items: center; gap: 0.4rem; background: rgba(0, 0, 0, 0.2); border: 1px solid var(--border-color); border-radius: 6px; padding: 0 0.5rem; height: 38px; box-sizing: border-box;">
+                                <label for="encoding-select" style="cursor: pointer; display: flex; align-items: center; color: var(--text-secondary);" title="読み込み時の文字コード">
+                                    <i data-lucide="languages" style="width: 16px; height: 16px;"></i>
+                                </label>
+                                <select id="encoding-select" style="background: transparent; border: none; color: var(--text-primary); font-size: 0.875rem; font-family: var(--font-ui); cursor: pointer; outline: none; padding-right: 0.5rem; height: 100%;">
+                                    <option value="UTF-8" style="background: var(--pane-bg); color: var(--text-primary);">UTF-8 (推奨)</option>
+                                    <option value="Shift_JIS" style="background: var(--pane-bg); color: var(--text-primary);">Shift_JIS</option>
+                                    <option value="EUC-JP" style="background: var(--pane-bg); color: var(--text-primary);">EUC-JP</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="hamburger-menu-row">
+                            <button class="btn btn-outline hamburger-menu-item" id="btn-open">
+                                <i data-lucide="folder-open"></i>
+                                <span>開く</span>
+                            </button>
+                            <button class="btn btn-primary hamburger-menu-item" id="btn-save-md">
+                                <i data-lucide="save"></i>
+                                <span>Markdown保存</span>
+                            </button>
+                        </div>
+                        <div class="hamburger-menu-row">
+                            <button class="btn btn-outline hamburger-menu-item" id="btn-split-save" style="border-color: rgba(88, 166, 255, 0.4);" title="指定コメント箇所でファイルを自動分割して保存">
+                                <i data-lucide="git-branch"></i>
+                                <span>分割保存</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="hamburger-menu-divider"></div>
+                    <div class="hamburger-menu-section">
+                        <div class="hamburger-menu-label">エクスポート</div>
+                        <div class="hamburger-menu-row">
+                            <button class="btn btn-secondary hamburger-menu-item" id="btn-export-word">
+                                <i data-lucide="file-text"></i>
+                                <span>Word出力</span>
+                            </button>
+                            <button class="btn btn-secondary hamburger-menu-item" id="btn-export-pdf"
+                                style="background: #da3633; border-color: rgba(255, 255, 255, 0.1);">
+                                <i data-lucide="file-down"></i>
+                                <span>PDF出力</span>
+                            </button>
+                        </div>
+                        <div class="hamburger-menu-row">
+                            <button class="btn btn-secondary hamburger-menu-item" id="btn-export-html"
+                                style="background: #e36209; border-color: rgba(255, 255, 255, 0.1);">
+                                <i data-lucide="globe"></i>
+                                <span>HTML出力</span>
+                            </button>
+                            <button class="btn btn-secondary hamburger-menu-item" id="btn-preview-html"
+                                style="background: #8957e5; border-color: rgba(255, 255, 255, 0.1);" title="HTMLを別タブでプレビュー表示">
+                                <i data-lucide="eye"></i>
+                                <span>HTMLプレビュー</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="hamburger-menu-divider"></div>
+                    <div class="hamburger-menu-section">
+                        <div class="hamburger-menu-label">テーマ・表示</div>
+                        <div class="hamburger-menu-row">
+                            <div class="doc-theme-dropdown" id="doc-theme-dropdown">
+                                <button class="btn btn-outline hamburger-menu-item" id="btn-doc-theme" style="border-color: rgba(163, 113, 247, 0.4);" title="ドキュメントテーマを選択">
+                                    <i data-lucide="palette"></i>
+                                    <span>テーマ</span>
+                                </button>
+                                <div class="doc-theme-menu" id="doc-theme-menu">
+                                    <button class="doc-theme-menu-item active" data-theme="github">
+                                        <span class="check-mark">✓</span>
+                                        <span>📄 GitHub（デフォルト）</span>
+                                    </button>
+                                    <button class="doc-theme-menu-item" data-theme="academic">
+                                        <span class="check-mark"></span>
+                                        <span>📚 アカデミック（論文風）</span>
+                                    </button>
+                                    <button class="doc-theme-menu-item" data-theme="corporate">
+                                        <span class="check-mark"></span>
+                                        <span>💼 コーポレート（ビジネス）</span>
+                                    </button>
+                                    <button class="doc-theme-menu-item" data-theme="minimal">
+                                        <span class="check-mark"></span>
+                                        <span>✨ ミニマル</span>
+                                    </button>
+                                    <div class="doc-theme-menu-divider"></div>
+                                    <button class="doc-theme-menu-item" id="btn-load-css-file">
+                                        <span class="check-mark"></span>
+                                        <span>📂 CSSファイルを読み込む...</span>
+                                    </button>
+                                    <button class="doc-theme-menu-item" id="btn-open-css-editor">
+                                        <span class="check-mark"></span>
+                                        <span>✏️ カスタムCSSを編集...</span>
+                                    </button>
+                                    <div class="doc-theme-menu-divider"></div>
+                                    <button class="doc-theme-menu-item" id="btn-reset-theme" style="color: #f85149;">
+                                        <span class="check-mark"></span>
+                                        <span>🗑️ カスタムテーマを削除</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <button class="btn btn-outline hamburger-menu-item" id="btn-theme-toggle" style="border-color: var(--accent-color);" title="テーマ切り替え (ライト/ダーク)">
+                                <i data-lucide="sun"></i>
+                                <span>ライトモード</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="hamburger-menu-divider"></div>
+                    <div class="hamburger-menu-section">
+                        <div class="hamburger-menu-label">連携</div>
+                        <div class="hamburger-menu-row">
+                            <button class="btn btn-outline hamburger-menu-item" id="btn-open-exporter" title="Mermaid Exporter を別タブで開く">
+                                <i data-lucide="external-link"></i>
+                                <span>Mermaid Exporter</span>
+                            </button>
+                        </div>
+                        <div class="hamburger-menu-row">
+                            <button class="btn btn-outline hamburger-menu-item" id="btn-local-sync" style="border-color: rgba(46, 160, 67, 0.4);" title="ローカルのdocumentフォルダと連携する">
+                                <i data-lucide="folder"></i>
+                                <span>フォルダ連携</span>
+                            </button>
+                            <button class="btn btn-outline hamburger-menu-item" id="btn-github-sync" style="border-color: rgba(88, 166, 255, 0.4);" title="GitHubリポジトリと連携する">
+                                <i data-lucide="github"></i>
+                                <span>GitHub連携</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- ハンバーガーメニュー背景オーバーレイ -->
+        <div class="hamburger-overlay" id="hamburger-overlay"></div>
+
+        <!-- Main Content (Split View) -->
+        <main class="split-view">
+            <!-- Outline Pane -->
+            <aside class="pane outline-pane" id="outline-pane" style="display: none;">
+                <div class="pane-header">
+                    <span>Outline</span>
+                </div>
+                <div class="outline-content" id="outline-content">
+                    <!-- Outline items will be populated dynamically -->
+                </div>
+            </aside>
+
+            <!-- Editor Pane -->
+            <section class="pane editor-pane" id="editor-pane">
+                <div class="pane-header">
+                    <span>Editor</span>
+                </div>
+                <div class="editor-toolbar" id="editor-toolbar">
+                    <button class="toolbar-btn" data-format="bold" title="太字 (Ctrl+B)"><i data-lucide="bold"></i></button>
+                    <button class="toolbar-btn" data-format="italic" title="斜体 (Ctrl+I)"><i data-lucide="italic"></i></button>
+                    <button class="toolbar-btn" data-format="strikethrough" title="打ち消し線"><i data-lucide="strikethrough"></i></button>
+                    <div class="toolbar-separator"></div>
+                    <button class="toolbar-btn" data-format="h1" title="見出し1"><i data-lucide="heading-1"></i></button>
+                    <button class="toolbar-btn" data-format="h2" title="見出し2"><i data-lucide="heading-2"></i></button>
+                    <button class="toolbar-btn" data-format="h3" title="見出し3"><i data-lucide="heading-3"></i></button>
+                    <div class="toolbar-separator"></div>
+                    <button class="toolbar-btn" data-format="link" title="リンク挿入 (Ctrl+K)"><i data-lucide="link"></i></button>
+                    <div class="image-insert-wrap">
+                        <button class="toolbar-btn" id="toolbar-btn-image" type="button" title="画像またはSVGを挿入" aria-haspopup="menu" aria-expanded="false"><i data-lucide="image"></i></button>
+                        <div class="image-insert-menu" id="image-insert-menu" role="menu" hidden>
+                            <button type="button" id="btn-insert-image-url" role="menuitem"><i data-lucide="image"></i>画像URLを挿入</button>
+                            <button type="button" id="btn-insert-svg-code" role="menuitem"><i data-lucide="file-code-2"></i>SVGコードを挿入</button>
+                        </div>
+                    </div>
+                    <button class="toolbar-btn" id="toolbar-btn-table" data-format="table" title="テーブル挿入"><i data-lucide="table"></i></button>
+                    <button class="toolbar-btn" data-format="code" title="コードブロック"><i data-lucide="code"></i></button>
+                    <div class="toolbar-separator"></div>
+                    <button class="toolbar-btn" data-format="ul" title="無順序リスト"><i data-lucide="list"></i></button>
+                    <button class="toolbar-btn" data-format="ol" title="順序付きリスト"><i data-lucide="list-ordered"></i></button>
+                    <button class="toolbar-btn" data-format="quote" title="引用"><i data-lucide="text-quote"></i></button>
+                    
+                    <!-- テーブル操作補助ツール（テーブルにカーソルがある時のみ表示） -->
+                    <div id="table-helper-tools" style="display: none; align-items: center; gap: 4px;">
+                        <div class="toolbar-separator"></div>
+                        <button class="toolbar-btn" id="btn-table-add-row" title="下に行を追加"><i data-lucide="row-insert-bottom"></i></button>
+                        <button class="toolbar-btn" id="btn-table-delete-row" title="行を削除"><i data-lucide="row-delete"></i></button>
+                        <button class="toolbar-btn" id="btn-table-add-col" title="右に列を追加"><i data-lucide="column-insert-right"></i></button>
+                        <button class="toolbar-btn" id="btn-table-delete-col" title="列を削除"><i data-lucide="column-delete"></i></button>
+                    </div>
+                </div>
+                <div class="editor-container" id="editor-container" style="position: relative;">
+                    <!-- CodeMirror will attach here -->
+                    <textarea id="markdown-editor"></textarea>
+                    
+                    <!-- Table Wizard Popover -->
+                    <div class="table-popover" id="table-popover" style="display: none;">
+                        <div class="table-popover-title">テーブル挿入 (行 x 列)</div>
+                        <div class="grid-container" id="table-grid-container"></div>
+                        <div class="table-popover-status" id="table-popover-status">0 x 0</div>
+                    </div>
+                </div>
+                <div class="editor-statusbar" id="editor-statusbar">
+                    <span id="stat-chars" title="文字数">0 文字</span>
+                    <span class="stat-separator">|</span>
+                    <span id="stat-words" title="単語数（英語）">0 words</span>
+                    <span class="stat-separator">|</span>
+                    <span id="stat-lines" title="行数">0 行</span>
+                    <span class="stat-separator">|</span>
+                    <span id="stat-reading" title="読了時間の目安">約 0 分</span>
+                </div>
+            </section>
+
+            <!-- Preview Pane -->
+            <section class="pane preview-pane" id="preview-pane">
+                <div class="pane-header">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span>Preview</span>
+                        <span id="engine-indicator"
+                            style="font-size: 0.7em; padding: 2px 6px; border-radius: 4px; display: none; font-weight: 500;"></span>
+                    </div>
+                    <div class="pane-header-actions">
+                        <button id="btn-popout-preview" class="btn-pane-icon" title="別タブで開く">
+                            <i data-lucide="external-link"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="preview-container" id="preview-content">
+                    <!-- HTML Preview will be rendered here -->
+                </div>
+                <style id="marp-style"></style>
+                <style id="custom-theme-style"></style>
+
+                <!-- CSS Editor Modal -->
+                <div class="css-editor-overlay" id="css-editor-overlay">
+                    <div class="css-editor-modal">
+                        <div class="css-editor-header">
+                            <h3>✏️ カスタムCSSエディター</h3>
+                            <button class="btn-pane-icon" id="btn-close-css-editor" title="閉じる">
+                                <i data-lucide="x"></i>
+                            </button>
+                        </div>
+                        <div class="css-editor-body">
+                            <textarea id="css-editor-textarea" spellcheck="false" placeholder="カスタムCSSをここに入力..."></textarea>
+                            <div class="css-editor-hint">
+                                💡 入力したCSSは自動的にプレビュー領域にスコーピングされます。<br>
+                                　 例: <code>h1 { color: red; }</code> → ドキュメント・スライド両方の見出しに適用
+                            </div>
+                        </div>
+                        <div class="css-editor-footer">
+                            <button class="btn btn-outline" id="btn-css-template">テンプレート挿入</button>
+                            <div class="btn-group">
+                                <button class="btn btn-outline" id="btn-cancel-css-editor">キャンセル</button>
+                            <button class="btn btn-primary" id="btn-apply-css-editor">適用して保存</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Proofreading Comments Pane -->
+            <aside class="pane proofread-pane" id="proofread-pane" style="display: none;">
+                <div class="pane-header">
+                    <span>Proofread</span>
+                    <div class="pane-header-actions">
+                        <button class="btn-pane-icon" id="btn-close-proofread" title="閉じる">
+                            <i data-lucide="x"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="proofread-actions">
+                    <button class="btn btn-outline" id="btn-manual-comment" title="選択範囲に手動コメントを追加">
+                        <i data-lucide="message-plus"></i>
+                        <span>コメント追加</span>
+                    </button>
+                    <button class="btn btn-outline" id="btn-rule-proofread" title="ブラウザ内のルールで校正">
+                        <i data-lucide="spell-check"></i>
+                        <span>ルール校正</span>
+                    </button>
+                    <button class="btn btn-secondary" id="btn-ai-proofread" title="ユーザーAPIキーでAI校正">
+                        <i data-lucide="sparkles"></i>
+                        <span>AI校正</span>
+                    </button>
+                    <button class="btn btn-outline" id="btn-proofread-settings" title="AI校正設定">
+                        <i data-lucide="settings"></i>
+                        <span>設定</span>
+                    </button>
+                    <button class="btn btn-outline" id="btn-proofread-refresh" title="共有フォルダのコメントを再読み込み">
+                        <i data-lucide="refresh-cw"></i>
+                        <span>共有読込</span>
+                    </button>
+                </div>
+                <div class="proofread-summary" id="proofread-summary">校正コメントはまだありません</div>
+                <div class="proofread-filter" id="proofread-filter">
+                    <button class="proofread-filter-btn active" data-filter="all">すべて</button>
+                    <button class="proofread-filter-btn" data-filter="manual">手動</button>
+                    <button class="proofread-filter-btn" data-filter="rule">ルール</button>
+                    <button class="proofread-filter-btn" data-filter="ai">AI</button>
+                </div>
+                <div class="proofread-list" id="proofread-list">
+                    <div class="proofread-empty">本文を選択して「コメント追加」を押すか、「ルール校正」「AI校正」を実行すると、ここにコメントが表示されます。</div>
+                </div>
+            </aside>
+        </main>
+    </div>
+
+    <!-- 隠しファイル入力とスクリプト -->
+    <input type="file" id="file-input" accept=".md" style="display: none;">
+
+    <script src="https://unpkg.com/html-docx-js/dist/html-docx.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <!-- Local PDF export libraries (html2canvas + jsPDF, shared with slide-editor) -->
+    <script src="./pdf-libs.bundle.js?v=20260704"></script>
+
+    <!-- Help Modal -->
+    <div class="modal-overlay" id="help-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i data-lucide="help-circle"></i> Markdownの使い方</h2>
+                <button class="btn-close" id="btn-close-help">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="modal-body markdown-body" style="padding: 0;">
+                <table class="cheat-sheet-table">
+                    <thead>
+                        <tr>
+                            <th>やりたいこと</th>
+                            <th>書き方 (Markdown)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>見出し (特大)</td>
+                            <td><code># 見出しテキスト</code></td>
+                        </tr>
+                        <tr>
+                            <td>見出し (大)</td>
+                            <td><code>## 見出しテキスト</code></td>
+                        </tr>
+                        <tr>
+                            <td>見出し (中)</td>
+                            <td><code>### 見出しテキスト</code></td>
+                        </tr>
+                        <tr>
+                            <td>太字</td>
+                            <td><code>**太字**</code></td>
+                        </tr>
+                        <tr>
+                            <td>斜体</td>
+                            <td><code>*斜体*</code></td>
+                        </tr>
+                        <tr>
+                            <td>打ち消し線</td>
+                            <td><code>~~打ち消し線~~</code></td>
+                        </tr>
+                        <tr>
+                            <td>箇条書きリスト</td>
+                            <td><code>- リスト項目</code> または <code>* リスト項目</code></td>
+                        </tr>
+                        <tr>
+                            <td>番号付きリスト</td>
+                            <td><code>1. リスト項目</code></td>
+                        </tr>
+                        <tr>
+                            <td>リンク</td>
+                            <td><code>[リンクのテキスト](URL)</code></td>
+                        </tr>
+                        <tr>
+                            <td>画像</td>
+                            <td><code>![代替テキスト](画像URL)</code></td>
+                        </tr>
+                        <tr>
+                            <td>引用</td>
+                            <td><code>> 引用文</code></td>
+                        </tr>
+                        <tr>
+                            <td>短いコード</td>
+                            <td><code>`code`</code> （バッククォートで囲む）</td>
+                        </tr>
+                        <tr>
+                            <td>コードブロック<br>(複数行)</td>
+                            <td><code>```javascript<br>console.log("hello");<br>```</code></td>
+                        </tr>
+                        <tr>
+                            <td>表 (テーブル)</td>
+                            <td><code>| 見出し | 見出し |<br>| ------ | ------ |<br>| セル   | セル   |</code></td>
+                        </tr>
+                        <tr>
+                            <td>図やグラフ<br>(Mermaid)</td>
+                            <td><code>```mermaid<br>graph TD;<br>A-->B;<br>```</code></td>
+                        </tr>
+                        <tr>
+                            <td>スライド作成<br>(Marp)</td>
+                            <td>先頭に以下を記述:<br><code>---<br>marp: true<br>---</code><br>区切りは <code>---</code></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3 style="margin: 1.5rem 0.75rem 0.5rem; font-size: 1.1em; color: var(--text-primary);">Mermaid
+                    グラフの方向（flowchart / graph）</h3>
+                <table class="cheat-sheet-table">
+                    <thead>
+                        <tr>
+                            <th>コード (xx部分)</th>
+                            <th>方向</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>TB</code> または <code>TD</code></td>
+                            <td>上から下 (Top to Bottom / Down)</td>
+                        </tr>
+                        <tr>
+                            <td><code>BT</code></td>
+                            <td>下から上 (Bottom to Top)</td>
+                        </tr>
+                        <tr>
+                            <td><code>LR</code></td>
+                            <td>左から右 (Left to Right)</td>
+                        </tr>
+                        <tr>
+                            <td><code>RL</code></td>
+                            <td>右から左 (Right to Left)</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3 style="margin: 1.5rem 0.75rem 0.5rem; font-size: 1.1em; color: var(--text-primary);">Mermaid
+                    記号一覧（フローチャート）</h3>
+                <table class="cheat-sheet-table">
+                    <thead>
+                        <tr>
+                            <th>コード</th>
+             
