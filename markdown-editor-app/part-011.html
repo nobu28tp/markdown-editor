@@ -1,0 +1,532 @@
+
+
+        // 各テーマの切り替え
+        document.querySelectorAll('#doc-theme-menu .doc-theme-menu-item[data-theme]').forEach(item => {
+            item.addEventListener('click', () => {
+                const theme = item.getAttribute('data-theme');
+                applyDocTheme(theme);
+            });
+        });
+
+        // CSSファイルのロード
+        const btnLoadCssFile = document.getElementById('btn-load-css-file');
+        if (btnLoadCssFile) {
+            btnLoadCssFile.addEventListener('click', () => {
+                const fileInput = document.createElement('input');
+                fileInput.type = 'file';
+                fileInput.accept = '.css';
+                fileInput.onchange = e => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = event => {
+                        const css = event.target.result;
+                        applyDocTheme('custom', css);
+                        updateStatus('saved', `CSSファイルを読み込みました (${file.name})`);
+                    };
+                    reader.readAsText(file);
+                };
+                fileInput.click();
+                if (docThemeMenu) {
+                    docThemeMenu.classList.remove('show');
+                }
+            });
+        }
+
+        // CSSエディタを開く
+        const btnOpenCssEditor = document.getElementById('btn-open-css-editor');
+        if (btnOpenCssEditor) {
+            btnOpenCssEditor.addEventListener('click', () => {
+                const currentCss = localStorage.getItem('lumina_custom_css') || '';
+                const textarea = document.getElementById('css-editor-textarea');
+                if (textarea) {
+                    textarea.value = currentCss;
+                }
+                const overlay = document.getElementById('css-editor-overlay');
+                if (overlay) {
+                    overlay.classList.add('show');
+                }
+                if (docThemeMenu) {
+                    docThemeMenu.classList.remove('show');
+                }
+            });
+        }
+
+        // CSSエディタの閉じるボタン
+        const btnCloseCssEditor = document.getElementById('btn-close-css-editor');
+        if (btnCloseCssEditor) {
+            btnCloseCssEditor.addEventListener('click', () => {
+                document.getElementById('css-editor-overlay').classList.remove('show');
+            });
+        }
+
+        // CSSエディタのキャンセルボタン
+        const btnCancelCssEditor = document.getElementById('btn-cancel-css-editor');
+        if (btnCancelCssEditor) {
+            btnCancelCssEditor.addEventListener('click', () => {
+                document.getElementById('css-editor-overlay').classList.remove('show');
+            });
+        }
+
+        // CSSエディタの適用ボタン
+        const btnApplyCssEditor = document.getElementById('btn-apply-css-editor');
+        if (btnApplyCssEditor) {
+            btnApplyCssEditor.addEventListener('click', () => {
+                const textarea = document.getElementById('css-editor-textarea');
+                if (textarea) {
+                    const css = textarea.value;
+                    applyDocTheme('custom', css);
+                    document.getElementById('css-editor-overlay').classList.remove('show');
+                    updateStatus('saved', 'カスタムテーマ適用');
+                }
+            });
+        }
+
+        // モーダルの外枠クリックで閉じる
+        const cssEditorOverlay = document.getElementById('css-editor-overlay');
+        if (cssEditorOverlay) {
+            cssEditorOverlay.addEventListener('click', (e) => {
+                if (e.target === e.currentTarget) {
+                    cssEditorOverlay.classList.remove('show');
+                }
+            });
+        }
+
+        // ── テンプレート挿入 ──
+        const btnCssTemplate = document.getElementById('btn-css-template');
+        if (btnCssTemplate) {
+            btnCssTemplate.addEventListener('click', () => {
+                // 現在アクティブなテーマ（customの場合はgithubをフォールバック）をコピーする
+                const themeToCopy = currentDocTheme === 'custom' ? 'github' : currentDocTheme;
+                const baseStyle = PRESET_THEMES[themeToCopy] || '';
+                
+                // 各テーマ固有のプロパティ値（フォントや見出し色などをテーマに合わせて動的差し替え）
+                const themeProps = {
+                    github: {
+                        font: "'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif",
+                        size: "16px",
+                        color: "#24292f",
+                        h1Color: "#0f172a",
+                        h1Border: "1px solid #d0d7de",
+                        h2Color: "#1f2328",
+                        tableBg: "#f6f8fa",
+                        tableColor: "#24292f",
+                        quoteBorder: "#d0d7de"
+                    },
+                    academic: {
+                        font: "'Noto Serif JP', 'Georgia', serif",
+                        size: "15px",
+                        color: "#333333",
+                        h1Color: "#111111",
+                        h1Border: "2px solid #333333",
+                        h2Color: "#333333",
+                        tableBg: "#f0f0f0",
+                        tableColor: "#111111",
+                        quoteBorder: "#666666"
+                    },
+                    corporate: {
+                        font: "'Noto Sans JP', 'Helvetica Neue', Arial, sans-serif",
+                        size: "16px",
+                        color: "#24292f",
+                        h1Color: "#1b3a5c",
+                        h1Border: "3px solid #1b3a5c",
+                        h2Color: "#2c5f8a",
+                        tableBg: "#1b3a5c",
+                        tableColor: "#ffffff",
+                        quoteBorder: "#2c5f8a"
+                    },
+                    minimal: {
+                        font: "'Noto Sans JP', sans-serif",
+                        size: "15px",
+                        color: "#333333",
+                        h1Color: "#333333",
+                        h1Border: "none",
+                        h2Color: "#555555",
+                        tableBg: "transparent",
+                        tableColor: "#888888",
+                        quoteBorder: "#dddddd"
+                    }
+                };
+
+                const props = themeProps[themeToCopy] || themeProps.github;
+
+                // 各テーマに対応するMermaid枠線・接続線・フォント・テキスト色のカスタムCSSコード例を記述
+                let mermaidCustomCss = '';
+                if (themeToCopy === 'academic') {
+                    mermaidCustomCss = `\n\n/* ── Mermaidグラフのカスタム (Academic) ── */\n.mermaid-container,\n.mermaid-container text,\n.mermaid-container tspan,\n.mermaid-container .nodeLabel,\n.mermaid-container .edgeLabel {\n    font-family: 'Noto Serif JP', 'Georgia', serif !important;\n    color: #333333 !important;\n    fill: #333333 !important;\n}\n.mermaid-container .node rect,\n.mermaid-container .node circle,\n.mermaid-container .node polygon,\n.mermaid-container .node path,\n.mermaid-container .node ellipse,\n.mermaid-container .node .label-container,\n.mermaid-container .node .basic {\n    stroke: #333333 !important;\n    stroke-width: 1.5px !important;\n    fill: #ffffff !important;\n}\n.mermaid-container .flowchart-link,\n.mermaid-container .edgePath .path {\n    stroke: #333333 !important;\n}\n.mermaid-container .marker,\n.mermaid-container .arrowheadPath,\n.mermaid-container marker path {\n    fill: #333333 !important;\n    stroke: #333333 !important;\n}`;
+                } else if (themeToCopy === 'corporate') {
+                    mermaidCustomCss = `\n\n/* ── Mermaidグラフのカスタム (Corporate) ── */\n.mermaid-container,\n.mermaid-container text,\n.mermaid-container tspan,\n.mermaid-container .nodeLabel,\n.mermaid-container .edgeLabel {\n    font-family: 'Noto Sans JP', 'Helvetica Neue', Arial, sans-serif !important;\n    color: #1b3a5c !important;\n    fill: #1b3a5c !important;\n}\n.mermaid-container .node rect,\n.mermaid-container .node circle,\n.mermaid-container .node polygon,\n.mermaid-container .node path,\n.mermaid-container .node ellipse,\n.mermaid-container .node .label-container,\n.mermaid-container .node .basic {\n    stroke: #225f99 !important;\n    stroke-width: 2px !important;\n    fill: #f0f8ff !important;\n}\n.mermaid-container .flowchart-link,\n.mermaid-container .edgePath .path {\n    stroke: #3182ce !important;\n}\n.mermaid-container .marker,\n.mermaid-container .arrowheadPath,\n.mermaid-container marker path {\n    fill: #3182ce !important;\n    stroke: #3182ce !important;\n}`;
+                } else if (themeToCopy === 'minimal') {
+                    mermaidCustomCss = `\n\n/* ── Mermaidグラフのカスタム (Minimal) ── */\n.mermaid-container,\n.mermaid-container text,\n.mermaid-container tspan,\n.mermaid-container .nodeLabel,\n.mermaid-container .edgeLabel {\n    font-family: 'Noto Sans JP', sans-serif !important;\n    color: #333333 !important;\n    fill: #333333 !important;\n}\n.mermaid-container .node rect,\n.mermaid-container .node circle,\n.mermaid-container .node polygon,\n.mermaid-container .node path,\n.mermaid-container .node ellipse,\n.mermaid-container .node .label-container,\n.mermaid-container .node .basic {\n    stroke: #e0e0e0 !important;\n    stroke-width: 1px !important;\n    fill: #fafafa !important;\n}\n.mermaid-container .flowchart-link,\n.mermaid-container .edgePath .path {\n    stroke: #cccccc !important;\n}\n.mermaid-container .marker,\n.mermaid-container .arrowheadPath,\n.mermaid-container marker path {\n    fill: #cccccc !important;\n    stroke: #cccccc !important;\n}`;
+                } else {
+                    mermaidCustomCss = `\n\n/* ── Mermaidグラフのカスタム (Github) ── */\n.mermaid-container,\n.mermaid-container text,\n.mermaid-container tspan,\n.mermaid-container .nodeLabel,\n.mermaid-container .edgeLabel {\n    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;\n    color: #24292f !important;\n    fill: #24292f !important;\n}\n.mermaid-container .node rect,\n.mermaid-container .node circle,\n.mermaid-container .node polygon,\n.mermaid-container .node path,\n.mermaid-container .node ellipse,\n.mermaid-container .node .label-container,\n.mermaid-container .node .basic {\n    stroke: #d0d7de !important;\n    stroke-width: 1.5px !important;\n}\n.mermaid-container .flowchart-link,\n.mermaid-container .edgePath .path {\n    stroke: #57606a !important;\n}\n.mermaid-container .marker,\n.mermaid-container .arrowheadPath,\n.mermaid-container marker path {\n    fill: #57606a !important;\n    stroke: #57606a !important;\n}`;
+                }
+
+                const template = `/* ── カスタムテーマ (ベース: ${themeToCopy}) ──\n * このCSSはドキュメント・スライド両方に自動適用されます。\n * セレクタは自動的にプレビュー領域にスコーピングされるため、\n * h1, p, table 等をそのまま書けます。\n */\n\n/* ── 基本テキストとフォント ── */\np, li, td, th, dd, dt {\n    font-family: ${props.font};\n    font-size: ${props.size};\n    line-height: 1.8;\n    color: ${props.color};\n}\n\n/* ── 見出し ── */\nh1 {\n    font-size: 2em;\n    color: ${props.h1Color};\n    border-bottom: ${props.h1Border};\n    padding-bottom: 0.3em;\n}\n\nh2 {\n    font-size: 1.5em;\n    color: ${props.h2Color};\n    border-bottom: 1px solid #e2e8f0;\n    padding-bottom: 0.2em;\n}\n\n/* ── テーブル ── */\ntable th {\n    background-color: ${props.tableBg};\n    color: ${props.tableColor};\n}\n\n/* ── 引用 ── */\nblockquote {\n    border-left: 4px solid ${props.quoteBorder};\n    background: rgba(43, 108, 176, 0.04);\n    padding: 0.5em 1em;\n    border-radius: 0 6px 6px 0;\n}\n\n/* ── 引用内の文字 ── */\nblockquote p {\n    font-family: ${props.font};\n    color: ${props.color};\n}\n\n/* ── コード ── */\npre {\n    background-color: #f6f8fa;\n    border-radius: 8px;\n}\ncode {\n    font-size: 85%;\n}\n\n/* ── 選択中テーマ (${themeToCopy}) のベース設定 ── */\n${baseStyle.trim()}${mermaidCustomCss}`;
+
+                const textarea = document.getElementById('css-editor-textarea');
+                if (textarea) {
+                    if (textarea.value.trim() && !confirm('現在の内容をテンプレートで置き換えますか？')) return;
+                    textarea.value = template;
+                    textarea.focus();
+                }
+            });
+        }
+
+        // ── Reset custom theme ──
+        document.getElementById('btn-reset-theme').addEventListener('click', () => {
+            localStorage.removeItem('lumina_custom_css');
+            const textarea = document.getElementById('css-editor-textarea');
+            if (textarea) {
+                textarea.value = '';
+            }
+            applyDocTheme('github');
+            if (docThemeMenu) {
+                docThemeMenu.classList.remove('show');
+            }
+            updateStatus('saved', 'テーマをリセット');
+        });
+
+        // ── Restore theme on startup ──
+        restoreDocTheme();
+
+        // ── Helper: Get sanitized document title for use in filenames ──
+        function getDocTitle() {
+            const raw = (document.getElementById('doc-title-input').value || '').trim();
+            if (!raw) return 'document';
+            // Remove characters not safe for filenames
+            return raw.replace(/[\\/:*?"<>|]/g, '_');
+        }
+
+        const GENERATED_FULL_MARKER = 'lumina-generated-full';
+
+        function isGeneratedFullDocument(text) {
+            return new RegExp(`<!--\\s*${GENERATED_FULL_MARKER}:`).test(text || '');
+        }
+
+        function getGeneratedFullSourceName(text) {
+            const match = String(text || '').match(new RegExp(`<!--\\s*${GENERATED_FULL_MARKER}:\\s*source=([^;\\s]+)`));
+            return match ? match[1].trim() : '';
+        }
+
+        function stripGeneratedFullMarker(text) {
+            return String(text || '').replace(new RegExp(`^<!--\\s*${GENERATED_FULL_MARKER}:[\\s\\S]*?-->\\n?`), '');
+        }
+
+        function getFullVersionFileName(mainFileName) {
+            const base = String(mainFileName || 'index.md').replace(/\.md$/i, '');
+            return `${base}.full.md`;
+        }
+
+        function buildFullVersionContent(mainFileName, fullText) {
+            const body = stripGeneratedFullMarker(fullText);
+            return `<!-- ${GENERATED_FULL_MARKER}: source=${mainFileName}; update=split-save-only -->\n${body}`;
+        }
+
+        function setGeneratedFullReadOnly(enabled) {
+            isGeneratedFullReadOnly = !!enabled;
+            if (editor) {
+                editor.setOption('readOnly', enabled ? 'nocursor' : false);
+                const wrapper = editor.getWrapperElement();
+                if (wrapper) {
+                    wrapper.classList.toggle('generated-full-readonly', !!enabled);
+                }
+            }
+            const localFileInput = document.getElementById('local-file-name');
+            if (localFileInput) {
+                localFileInput.readOnly = !!enabled;
+            }
+        }
+
+        // Save as .md file
+        async function handleSaveMd() {
+            const content = editor.getValue();
+
+            // File System Access API (showSaveFilePicker) が利用可能なら、保存場所を選択させる
+            if (window.showSaveFilePicker) {
+                try {
+                    const fileHandle = await window.showSaveFilePicker({
+                        suggestedName: getDocTitle() + '.md',
+                        types: [{
+                            description: 'Markdownファイル',
+                            accept: { 'text/markdown': ['.md'] }
+                        }]
+                    });
+                    updateStatus('saving', '保存中...');
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(content);
+                    await writable.close();
+                    
+                    localStorage.setItem('lumina_autosave', content);
+                    hasUnsavedChanges = false;
+                    
+                    updateStatus('saved', `保存しました (${fileHandle.name})`);
+                    return;
+                } catch (err) {
+                    // ユーザーがキャンセルした場合は何もしない
+                    if (err.name === 'AbortError') return;
+                    console.error("showSaveFilePicker failed, falling back to download:", err);
+                }
+            }
+
+            // フォールバック: 従来のダウンロード方式
+            const blob = new Blob([content], { type: 'text/markdown' });
+            try {
+                triggerDownload(blob, getDocTitle() + '.md');
+                
+                localStorage.setItem('lumina_autosave', content);
+                hasUnsavedChanges = false;
+                
+                updateStatus('saved', 'mdとして保存完了');
+            } catch (e) {
+                console.error(e);
+                alert("保存中にエラーが発生しました。");
+            }
+        }
+
+        // 自動分割保存
+        async function handleSplitSave() {
+            if (!activeLocalDirectoryHandle) {
+                alert("分割保存を使用するには、まず「フォルダ連携」を行ってフォルダを選択してください。");
+                return;
+            }
+
+            const content = stripGeneratedFullMarker(editor.getValue());
+            const lines = content.split('\n');
+            const parts = [];
+            let currentPart = { filename: '', contentLines: [] };
+            const mainContentLines = [];
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                const trimmed = line.trim();
+
+                if (trimmed.startsWith('<!-- split:') && trimmed.endsWith('-->')) {
+                    if (currentPart.filename) {
+                        parts.push(currentPart);
+                    }
+                    const match = trimmed.match(/<!--\s*split:\s*([^\s]+)\s*-->/);
+                    const filename = match ? match[1].trim() : `part_${parts.length + 1}.md`;
+                    currentPart = { filename: filename, contentLines: [] };
+                    
+                    mainContentLines.push(`<!-- include: ${filename} -->`);
+                } else {
+                    if (currentPart.filename) {
+                        currentPart.contentLines.push(line);
+                    } else {
+                        mainContentLines.push(line);
+                    }
+                }
+            }
+            if (currentPart.filename) {
+                parts.push(currentPart);
+            }
+
+            if (parts.length === 0) {
+                alert("ドキュメント内に分割指定 <!-- split: ファイル名.md --> が見つかりません。ヘルプを参照して記述してください。");
+                return;
+            }
+
+            try {
+                updateStatus('saving', 'ファイルを自動分割して保存中...');
+                setGeneratedFullReadOnly(false);
+
+                let mainHandle = activeLocalFileHandle;
+                let mainExpectedHash = activeLocalFileOriginalHash || '';
+                if (mainHandle && isGeneratedFullDocument(editor.getValue())) {
+                    const sourceName = getGeneratedFullSourceName(editor.getValue()) || 'index.md';
+                    mainHandle = await activeLocalDirectoryHandle.getFileHandle(sourceName, { create: true });
+                    activeLocalFileHandle = mainHandle;
+                    mainExpectedHash = '';
+                    document.getElementById('local-file-name').value = mainHandle.name;
+                }
+                if (!mainHandle) {
+                    mainHandle = await activeLocalDirectoryHandle.getFileHandle('index.md', { create: true });
+                    activeLocalFileHandle = mainHandle;
+                    document.getElementById('local-file-name').value = mainHandle.name;
+                }
+
+                const targets = parts.map(part => ({
+                    dirHandle: activeLocalDirectoryHandle,
+                    fileName: part.filename,
+                    content: part.contentLines.join('\n'),
+                    expectedHash: splitSourceFileHashes[part.filename] || ''
+                }));
+                targets.push({
+                    dirHandle: activeLocalDirectoryHandle,
+                    fileName: mainHandle.name,
+                    content: mainContentLines.join('\n'),
+                    expectedHash: mainExpectedHash
+                });
+                const fullVersionFileName = getFullVersionFileName(mainHandle.name);
+                targets.push({
+                    dirHandle: activeLocalDirectoryHandle,
+                    fileName: fullVersionFileName,
+                    content: buildFullVersionContent(mainHandle.name, content),
+                    expectedHash: '',
+                    generatedFull: true
+                });
+
+                const overwriteCheck = await ensureSplitSaveCanOverwrite(targets);
+                if (!overwriteCheck.ok) {
+                    updateStatus('normal', '分割保存を中止しました');
+                    return;
+                }
+
+                // 1. 各分割ファイルを保存
+                for (const target of targets) {
+                    if (!target.fileHandle) {
+                        target.fileHandle = await target.dirHandle.getFileHandle(target.fileName, { create: true });
+                    }
+                    await writeTextToFileHandle(target.fileHandle, target.content);
+                }
+
+                activeLocalFileHandle = mainHandle;
+                activeLocalFileDirectoryPath = '';
+                activeLocalFileOriginalHash = getDocumentHash(mainContentLines.join('\n'));
+                splitSourceFileHashes = {};
+                parts.forEach(part => {
+                    splitSourceFileHashes[part.filename] = getDocumentHash(part.contentLines.join('\n'));
+                });
+
+                updateStatus('saved', overwriteCheck.backups.length
+                    ? `バックアップ作成後に分割保存が完了しました（バックアップ ${overwriteCheck.backups.length} 件）`
+                    : `自動分割保存が完了しました（計 ${parts.length + 2} ファイル）`);
+                
+                // ディレクトリ一覧を再ロード
+                if (typeof fetchLocalDir === 'function') {
+                    await fetchLocalDir(currentLocalBrowsePath);
+                }
+            } catch (err) {
+                console.error("Split save failed:", err);
+                alert("分割保存中にエラーが発生しました: " + err.message);
+                updateStatus('error', '分割保存失敗');
+            }
+        }
+
+        // Helper: Convert SVG to PNG Base64 (Robust version with Blob and safety timeout)
+        function convertSvgToPng(svgElement) {
+            // Ensure textLength and lengthAdjust are removed from internal texts to prevent dot-compression during canvas rendering
+            svgElement.querySelectorAll('text, tspan').forEach(el => {
+                el.removeAttribute('textLength');
+                el.removeAttribute('lengthAdjust');
+            });
+
+            return new Promise((resolve) => {
+                const rect = svgElement.getBoundingClientRect();
+                let width = rect.width || parseFloat(svgElement.getAttribute('width')) || 600;
+                let height = rect.height || parseFloat(svgElement.getAttribute('height')) || 400;
+
+                // Size sanitization
+                if (isNaN(width) || width <= 1) width = 600;
+                if (isNaN(height) || height <= 1) height = 400;
+
+                // Safety timeout (1.5 seconds) to prevent freezing on local CORS or image load errors
+                const timeoutId = setTimeout(() => {
+                    console.warn("SVG conversion timed out, returning fallback");
+                    cleanup();
+                    resolve({
+                        src: null,
+                        width: width,
+                        height: height,
+                        failed: true
+                    });
+                }, 1500);
+
+                svgElement.setAttribute('width', width);
+                svgElement.setAttribute('height', height);
+
+                const serializer = new XMLSerializer();
+                let svgString = serializer.serializeToString(svgElement);
+                if (!svgString.includes('xmlns="http://www.w3.org/2000/svg"')) {
+                    svgString = svgString.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+                }
+
+                let imgSrc;
+                let isBlob = false;
+                try {
+                    // Use Blob and createObjectURL to support Japanese (multibyte) characters safely
+                    const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+                    imgSrc = URL.createObjectURL(blob);
+                    isBlob = true;
+                } catch (e) {
+                    // Fallback to Base64 data URI if Blob fails
+                    imgSrc = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgString)));
+                }
+
+                const img = new Image();
+                // Do NOT set img.crossOrigin = "Anonymous" in local file:/// context to prevent CORS freeze
+
+                function cleanup() {
+                    clearTimeout(timeoutId);
+                    if (isBlob && imgSrc) {
+                        URL.revokeObjectURL(imgSrc);
+                    }
+                }
+
+                img.onload = function () {
+                    try {
+                        const canvas = document.createElement('canvas');
+                        const scale = 2; // high resolution
+                        canvas.width = width * scale;
+                        canvas.height = height * scale;
+                        const ctx = canvas.getContext('2d');
+                        ctx.scale(scale, scale);
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(0, 0, width, height);
+                        ctx.drawImage(img, 0, 0, width, height);
+                        
+                        const pngData = canvas.toDataURL('image/png');
+                        cleanup();
+                        resolve({
+                            src: pngData,
+                            width: width,
+                            height: height
+                        });
+                    } catch (err) {
+                        console.error('Canvas rendering failed:', err);
+                        cleanup();
+                        resolve({
+                            src: null,
+                            width: width,
+                            height: height,
+                            failed: true
+                        });
+                    }
+                };
+
+                img.onerror = function (err) {
+                    console.error('SVG Image rendering failed:', err);
+                    cleanup();
+                    resolve({
+                        src: null,
+                        width: width,
+                        height: height,
+                        failed: true
+                    });
+                };
+
+                img.src = imgSrc;
+            });
+        }
+
+        // Export as .pptx (PowerPoint)
+        async function handleExportPptx() {
+            try {
+                updateStatus('saving', 'PowerPoint出力を準備中...');
+
+                const slideWrappers = Array.from(previewContainer.querySelectorAll('.marp-slide-wrapper'));
+                if (slideWrappers.length === 0) {
+                    alert("スライドのレンダリングデータが見つかりません。プレビューを表示した状態で実行してください。");
+                    updateStatus('normal', '出力失敗');
+                    return;
+                }
+
+                const pptx = new PptxGenJS();
+
+                // アスペクト比を動的に判別
+                let layoutName = 'LAYOUT_16x9';
+                let slideW = 1280, slideH = 720;
+                const firstSection = previewContainer.querySelector('.marp-slide-wrapper section');
+                if (firstSection) {
+     
