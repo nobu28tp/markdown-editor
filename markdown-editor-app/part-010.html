@@ -1,0 +1,666 @@
+
+            }
+            
+            updateSearch(input.value);
+
+            if (showReplace) {
+                const replaceInput = document.getElementById('replace-input');
+                if (input.value) {
+                    replaceInput.focus();
+                    replaceInput.select();
+                } else {
+                    input.focus();
+                }
+            } else {
+                input.focus();
+                input.select();
+            }
+        }
+
+        function toggleReplaceRow(show) {
+            const replaceRow = document.getElementById('replace-row');
+            const toggleBtn = document.getElementById('search-toggle-replace');
+            if (!replaceRow) return;
+
+            if (show === undefined) {
+                show = replaceRow.style.display === 'none';
+            }
+            
+            if (show) {
+                replaceRow.style.display = 'flex';
+                toggleBtn.classList.add('active');
+            } else {
+                replaceRow.style.display = 'none';
+                toggleBtn.classList.remove('active');
+            }
+        }
+
+        function updateSearch(query) {
+            clearSearchMarkers();
+            searchState.query = query;
+            searchState.matches = [];
+            searchState.currentIndex = -1;
+
+            if (!query) {
+                document.getElementById('search-counter').innerText = '0/0';
+                return;
+            }
+
+            const cursor = editor.getSearchCursor(query, CodeMirror.Pos(0, 0), true);
+            
+            while (cursor.findNext()) {
+                const from = cursor.from();
+                const to = cursor.to();
+                searchState.matches.push({ from, to });
+                
+                const marker = editor.markText(from, to, { className: 'search-highlight' });
+                searchMarkers.push(marker);
+            }
+
+            const total = searchState.matches.length;
+            if (total > 0) {
+                const currentCursor = editor.getCursor();
+                let closestIndex = 0;
+                let minDiff = Infinity;
+                
+                for (let i = 0; i < total; i++) {
+                    const match = searchState.matches[i];
+                    const lineDiff = match.from.line - currentCursor.line;
+                    const chDiff = match.from.ch - currentCursor.ch;
+                    
+                    let diff = lineDiff * 1000 + chDiff;
+                    if (diff >= 0 && diff < minDiff) {
+                        minDiff = diff;
+                        closestIndex = i;
+                    }
+                }
+                
+                searchState.currentIndex = closestIndex;
+                selectMatch(closestIndex);
+            } else {
+                document.getElementById('search-counter').innerText = '0/0';
+            }
+        }
+
+        function selectMatch(index) {
+            const total = searchState.matches.length;
+            if (total === 0 || index < 0 || index >= total) return;
+
+            const match = searchState.matches[index];
+            editor.setSelection(match.from, match.to);
+            editor.scrollIntoView({ from: match.from, to: match.to }, 150);
+            
+            document.getElementById('search-counter').innerText = `${index + 1}/${total}`;
+        }
+
+        function findNextMatch(reverse) {
+            const total = searchState.matches.length;
+            if (total === 0) return;
+
+            if (reverse) {
+                searchState.currentIndex = (searchState.currentIndex - 1 + total) % total;
+            } else {
+                searchState.currentIndex = (searchState.currentIndex + 1) % total;
+            }
+            
+            selectMatch(searchState.currentIndex);
+        }
+
+        function replaceCurrentMatch() {
+            const total = searchState.matches.length;
+            if (total === 0 || searchState.currentIndex < 0) return;
+
+            const match = searchState.matches[searchState.currentIndex];
+            const replaceVal = document.getElementById('replace-input').value;
+            
+            editor.replaceRange(replaceVal, match.from, match.to);
+            updateSearch(searchState.query);
+        }
+
+        function replaceAllMatches() {
+            const total = searchState.matches.length;
+            if (total === 0) return;
+
+            const query = searchState.query;
+            const replaceVal = document.getElementById('replace-input').value;
+
+            editor.operation(() => {
+                for (let i = total - 1; i >= 0; i--) {
+                    const match = searchState.matches[i];
+                    editor.replaceRange(replaceVal, match.from, match.to);
+                }
+            });
+
+            updateSearch(query);
+        }
+
+        function closeCustomSearch() {
+            const searchBar = document.getElementById('custom-search-bar');
+            if (searchBar) {
+                searchBar.classList.remove('active');
+            }
+            clearSearchMarkers();
+            editor.focus();
+        }
+
+        // Auto Save Logic (Periodic every 5 minutes)
+        function startAutosaveTimer() {
+            if (autosaveInterval) clearInterval(autosaveInterval);
+            autosaveInterval = setInterval(() => {
+                performAutosave();
+            }, AUTOSAVE_INTERVAL_MS);
+        }
+
+        function performAutosave() {
+            if (isGeneratedFullReadOnly) return;
+            if (!hasUnsavedChanges) return;
+
+            updateStatus('saving', '自動保存中...');
+            const content = editor.getValue();
+
+            // Simulate slight delay to show the saving status indicator to the user
+            setTimeout(() => {
+                try {
+                    localStorage.setItem('lumina_autosave', content);
+                    saveProofreadComments();
+                    hasUnsavedChanges = false;
+                    
+                    const now = new Date();
+                    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    updateStatus('saved', `自動保存完了 (${timeStr})`);
+
+                    setTimeout(() => {
+                        if (!hasUnsavedChanges) {
+                            updateStatus('normal', '変更なし');
+                        }
+                    }, 3000);
+                } catch (e) {
+                    console.error("Auto-save failed:", e);
+                    if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+                        updateStatus('error', '容量超過エラー');
+                        alert("ブラウザの保存容量（約5MB）を超えました。画像が多すぎます。\\n不要な画像を削除するか、ファイルをMDとして保存してから新規作成してください。");
+                    } else {
+                        updateStatus('error', '保存エラー');
+                    }
+                }
+            }, 500);
+        }
+
+        // Update Header Status UI
+        function updateStatus(state, text) {
+            statusIndicator.className = 'status-indicator ' + state;
+            statusText.innerText = text;
+        }
+
+        // --- File System Access API Integrations ---
+
+        // Create New File (Clear everything)
+        function handleNewFile() {
+            if (hasUnsavedChanges && editor.getValue().trim() !== '') {
+                const confirmClear = confirm("編集中の内容は破棄されます。新規作成しますか？\n（必要であれば先に保存してください）");
+                if (!confirmClear) return;
+            }
+
+            editor.setValue('');
+            setGeneratedFullReadOnly(false);
+            currentDocumentLength = 0;
+            activeLocalFileHandle = null;
+            activeLocalFileDirectoryPath = '';
+            activeLocalFileOriginalHash = '';
+            splitSourceFileHashes = {};
+            sharedProofreadRevision = '';
+            updatePreview('');
+            clearProofreadComments();
+            localStorage.removeItem('lumina_autosave');
+            hasUnsavedChanges = false;
+            updateStatus('normal', '新規作成しました');
+        }
+
+        // Load .md file
+        function handleOpenFile() {
+            const fileInput = document.getElementById('file-input');
+
+            // Reset any previous selection
+            fileInput.value = '';
+
+            fileInput.onchange = e => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const encoding = document.getElementById('encoding-select').value || 'UTF-8';
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const content = event.target.result;
+                    activeLocalFileHandle = null;
+                    activeLocalFileDirectoryPath = '';
+                    activeLocalFileOriginalHash = '';
+                    splitSourceFileHashes = {};
+                    sharedProofreadRevision = '';
+                    setGeneratedFullReadOnly(false);
+                    editor.setValue(content);
+                    setGeneratedFullReadOnly(isGeneratedFullDocument(content));
+                    currentDocumentLength = content.length;
+                    updatePreview(content);
+                    const restoredComments = restoreOrClearProofreadComments(content);
+                    // Instantly save to local storage as well
+                    localStorage.setItem('lumina_autosave', content);
+                    hasUnsavedChanges = false;
+                    updateStatus('saved', restoredComments ? `ファイルと校正コメントを開きました (${encoding})` : `ファイルを開きました (${encoding})`);
+                };
+                reader.readAsText(file, encoding);
+            };
+
+            // Trigger the file browser dialog
+            fileInput.click();
+        }
+
+        // Custom Helper for File Downloading
+        function triggerDownload(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // ── App Version ──
+        const APP_VERSION = '5.5.11';
+
+        // ══════════════════════════════════════
+        // 🎨 Document Theme Engine
+        // ══════════════════════════════════════
+        const PRESET_THEMES = {
+            github: `
+                .mermaid-container,
+                .mermaid-container text,
+                .mermaid-container tspan,
+                .mermaid-container .nodeLabel,
+                .mermaid-container .edgeLabel {
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+                    color: #24292f !important;
+                    fill: #24292f !important;
+                }
+                .mermaid-container .node rect,
+                .mermaid-container .node circle,
+                .mermaid-container .node polygon,
+                .mermaid-container .node path,
+                .mermaid-container .node ellipse,
+                .mermaid-container .node .label-container,
+                .mermaid-container .node .basic {
+                    stroke: #d0d7de !important;
+                    stroke-width: 1.5px !important;
+                }
+                .mermaid-container .flowchart-link,
+                .mermaid-container .edgePath .path {
+                    stroke: #57606a !important;
+                }
+                .mermaid-container .marker,
+                .mermaid-container .arrowheadPath,
+                .mermaid-container marker path {
+                    fill: #57606a !important;
+                    stroke: #57606a !important;
+                }
+            `,
+            academic: `
+                h1 { font-family: 'Noto Serif JP', 'Georgia', serif; border-bottom: 2px solid #333; padding-bottom: 0.3em; }
+                h2 { font-family: 'Noto Serif JP', 'Georgia', serif; border-bottom: 1px solid #999; padding-bottom: 0.2em; }
+                h3, h4, h5, h6 { font-family: 'Noto Serif JP', 'Georgia', serif; }
+                body, p, li, td, th, dd, dt { font-family: 'Noto Serif JP', 'Georgia', serif; font-size: 15px; line-height: 1.9; }
+                blockquote { font-style: italic; border-left-color: #666; }
+                table th { background-color: #f0f0f0; font-weight: 700; }
+                code { font-size: 80%; }
+                hr { background-color: #333; height: 1px; }
+
+                /* Mermaidグラフのカスタム (Academic) */
+                .mermaid-container,
+                .mermaid-container text,
+                .mermaid-container tspan,
+                .mermaid-container .nodeLabel,
+                .mermaid-container .edgeLabel {
+                    font-family: 'Noto Serif JP', 'Georgia', serif !important;
+                    color: #333333 !important;
+                    fill: #333333 !important;
+                }
+                .mermaid-container .node rect,
+                .mermaid-container .node circle,
+                .mermaid-container .node polygon,
+                .mermaid-container .node path,
+                .mermaid-container .node ellipse,
+                .mermaid-container .node .label-container,
+                .mermaid-container .node .basic {
+                    stroke: #333333 !important;
+                    stroke-width: 1.5px !important;
+                    fill: #ffffff !important;
+                }
+                .mermaid-container .flowchart-link,
+                .mermaid-container .edgePath .path {
+                    stroke: #333333 !important;
+                }
+                .mermaid-container .marker,
+                .mermaid-container .arrowheadPath,
+                .mermaid-container marker path {
+                    fill: #333333 !important;
+                    stroke: #333333 !important;
+                }
+            `,
+            corporate: `
+                h1 { color: #1b3a5c; border-bottom: 3px solid #1b3a5c; padding-bottom: 0.3em; font-size: 1.8em; }
+                h2 { color: #2c5f8a; border-left: 4px solid #2c5f8a; padding-left: 0.6em; border-bottom: none; }
+                h3 { color: #3a7ab5; }
+                table th { background-color: #1b3a5c; color: #ffffff; border-color: #1b3a5c; }
+                table td { border-color: #ccd6e0; }
+                table tr:nth-child(2n) { background-color: #eef3f8; }
+                blockquote { border-left-color: #2c5f8a; background: rgba(44, 95, 138, 0.04); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+                code { background-color: rgba(27, 58, 92, 0.08); color: #1b3a5c; }
+
+                /* Mermaidグラフのカスタム (Corporate) */
+                .mermaid-container,
+                .mermaid-container text,
+                .mermaid-container tspan,
+                .mermaid-container .nodeLabel,
+                .mermaid-container .edgeLabel {
+                    font-family: 'Noto Sans JP', 'Helvetica Neue', Arial, sans-serif !important;
+                    color: #1b3a5c !important;
+                    fill: #1b3a5c !important;
+                }
+                .mermaid-container .node rect,
+                .mermaid-container .node circle,
+                .mermaid-container .node polygon,
+                .mermaid-container .node path,
+                .mermaid-container .node ellipse,
+                .mermaid-container .node .label-container,
+                .mermaid-container .node .basic {
+                    stroke: #225f99 !important;
+                    stroke-width: 2px !important;
+                    fill: #f0f8ff !important;
+                }
+                .mermaid-container .flowchart-link,
+                .mermaid-container .edgePath .path {
+                    stroke: #3182ce !important;
+                }
+                .mermaid-container .marker,
+                .mermaid-container .arrowheadPath,
+                .mermaid-container marker path {
+                    fill: #3182ce !important;
+                    stroke: #3182ce !important;
+                }
+            `,
+            minimal: `
+                h1 { font-weight: 300; font-size: 2em; border-bottom: none; letter-spacing: -0.02em; }
+                h2 { font-weight: 400; font-size: 1.4em; border-bottom: none; color: #555; margin-top: 2em; }
+                h3 { font-weight: 600; font-size: 1.1em; border-bottom: none; color: #666; }
+                p { line-height: 1.85; }
+                table { border-collapse: collapse; }
+                table th, table td { border: none; border-bottom: 1px solid #e0e0e0; padding: 10px 16px; }
+                table th { font-weight: 600; text-align: left; color: #888; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.05em; }
+                table tr:nth-child(2n) { background-color: transparent; }
+                blockquote { border-left: 2px solid #ddd; color: #777; font-style: italic; }
+                code { background-color: rgba(0,0,0,0.04); border-radius: 3px; }
+                pre { border-radius: 4px; border: 1px solid #eee; }
+                hr { background-color: #eee; height: 1px; }
+
+                /* Mermaidグラフのカスタム (Minimal) */
+                .mermaid-container,
+                .mermaid-container text,
+                .mermaid-container tspan,
+                .mermaid-container .nodeLabel,
+                .mermaid-container .edgeLabel {
+                    font-family: 'Noto Sans JP', sans-serif !important;
+                    color: #333333 !important;
+                    fill: #333333 !important;
+                }
+                .mermaid-container .node rect,
+                .mermaid-container .node circle,
+                .mermaid-container .node polygon,
+                .mermaid-container .node path,
+                .mermaid-container .node ellipse,
+                .mermaid-container .node .label-container,
+                .mermaid-container .node .basic {
+                    stroke: #e0e0e0 !important;
+                    stroke-width: 1px !important;
+                    fill: #fafafa !important;
+                }
+                .mermaid-container .flowchart-link,
+                .mermaid-container .edgePath .path {
+                    stroke: #cccccc !important;
+                }
+                .mermaid-container .marker,
+                .mermaid-container .arrowheadPath,
+                .mermaid-container marker path {
+                    fill: #cccccc !important;
+                    stroke: #cccccc !important;
+                }
+            `
+        };
+
+        let currentDocTheme = 'github';
+        const customThemeStyleTag = document.getElementById('custom-theme-style');
+
+        function prefixCssSelectors(rawCss, prefix) {
+            let result = '';
+            let i = 0;
+            const css = rawCss.replace(/\/\*[\s\S]*?\*\//g, ''); // コメント除去
+
+            while (i < css.length) {
+                while (i < css.length && /\s/.test(css[i])) { result += css[i]; i++; }
+                if (i >= css.length) break;
+
+                if (css[i] === '@') {
+                    const atStart = i;
+                    while (i < css.length && css[i] !== '{' && css[i] !== ';') i++;
+                    if (i < css.length && css[i] === ';') {
+                        result += css.substring(atStart, i + 1);
+                        i++;
+                        continue;
+                    }
+                    if (i < css.length && css[i] === '{') {
+                        const atRule = css.substring(atStart, i);
+                        if (/^@(keyframes|font-face)/.test(atRule.trim())) {
+                            let depth = 1;
+                            let j = i + 1;
+                            while (j < css.length && depth > 0) {
+                                if (css[j] === '{') depth++;
+                                if (css[j] === '}') depth--;
+                                j++;
+                            }
+                            result += css.substring(atStart, j);
+                            i = j;
+                        } else {
+                            let depth = 1;
+                            let j = i + 1;
+                            while (j < css.length && depth > 0) {
+                                if (css[j] === '{') depth++;
+                                if (css[j] === '}') depth--;
+                                j++;
+                            }
+                            const innerCss = css.substring(i + 1, j - 1);
+                            result += atRule + '{' + prefixCssSelectors(innerCss, prefix) + '}';
+                            i = j;
+                        }
+                    }
+                    continue;
+                }
+
+                const selStart = i;
+                while (i < css.length && css[i] !== '{') i++;
+                if (i >= css.length) break;
+
+                const selectorBlock = css.substring(selStart, i).trim();
+                let depth = 1;
+                let j = i + 1;
+                while (j < css.length && depth > 0) {
+                    if (css[j] === '{') depth++;
+                    if (css[j] === '}') depth--;
+                    j++;
+                }
+                const body = css.substring(i, j);
+
+                const scopedSelectors = selectorBlock.split(',').map(s => {
+                    s = s.trim();
+                    if (!s) return s;
+                    return prefix + ' ' + s;
+                }).join(', ');
+
+                result += scopedSelectors + ' ' + body;
+                i = j;
+            }
+
+            return result;
+        }
+
+        function scopeCustomCss(rawCss) {
+            if (!rawCss || !rawCss.trim()) return '';
+            const docCss = prefixCssSelectors(rawCss, '#preview-content.markdown-body');
+            const slideCss = prefixCssSelectors(rawCss, '#preview-content .marp-slide-wrapper section');
+            return '/* === Document Mode === */\n' + docCss + '\n\n/* === Slide Mode === */\n' + slideCss;
+        }
+
+        // ===== Mermaidテーマ初期化（テーマ連動対応） =====
+        let mermaidInitialized = false;
+
+        const MERMAID_THEME_VARS = {
+            github: {
+                primaryColor: '#f8f9fa',
+                primaryBorderColor: '#d0d7de',
+                primaryTextColor: '#24292f',
+                lineColor: '#57606a'
+            },
+            academic: {
+                primaryColor: '#ffffff',
+                primaryBorderColor: '#333333',
+                primaryTextColor: '#333333',
+                lineColor: '#333333'
+            },
+            corporate: {
+                primaryColor: '#f4f7fa',
+                primaryBorderColor: '#1b3a5c',
+                primaryTextColor: '#1b3a5c',
+                lineColor: '#2c5f8a'
+            },
+            minimal: {
+                primaryColor: '#fafafa',
+                primaryBorderColor: '#e0e0e0',
+                primaryTextColor: '#333333',
+                lineColor: '#cccccc'
+            },
+            custom: {
+                primaryColor: '#f8f9fa',
+                primaryBorderColor: '#d0d7de',
+                primaryTextColor: '#24292f',
+                lineColor: '#57606a'
+            }
+        };
+
+        function getMermaidConfig(themeName) {
+            const activeVars = MERMAID_THEME_VARS[themeName] || MERMAID_THEME_VARS.github;
+            return {
+                startOnLoad: false,
+                theme: 'default',
+                securityLevel: 'loose',
+                flowchart: {
+                    htmlLabels: false,
+                    useMaxWidth: true
+                },
+                themeVariables: {
+                    primaryColor: activeVars.primaryColor,
+                    primaryBorderColor: activeVars.primaryBorderColor,
+                    primaryTextColor: activeVars.primaryTextColor,
+                    lineColor: activeVars.lineColor,
+                    fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif',
+                    fontSize: '14px'
+                }
+            };
+        }
+
+        function initMermaid(themeName) {
+            if (!window.mermaid) return;
+
+            const config = getMermaidConfig(themeName);
+
+            if (!mermaidInitialized) {
+                // 初回のみ mermaid.initialize() を呼び出す
+                mermaid.initialize(config);
+                mermaidInitialized = true;
+            } else {
+                // 2回目以降はテーマ変数のみ更新し、プレビュー再描画で反映させる
+                mermaid.initialize(config);
+                // Note: Mermaid v11 では initialize を再呼び出ししても安全だが、
+                // 将来バージョンでの非推奨に備え、mermaidInitialized フラグで制御を分離しておく
+            }
+        }
+
+        function applyDocTheme(themeName, customCss) {
+            currentDocTheme = themeName;
+
+            let cssToApply = '';
+            if (themeName === 'custom' && customCss) {
+                cssToApply = scopeCustomCss(customCss);
+            } else if (PRESET_THEMES[themeName]) {
+                cssToApply = scopeCustomCss(PRESET_THEMES[themeName]);
+            }
+            
+            if (customThemeStyleTag) {
+                customThemeStyleTag.textContent = cssToApply;
+                document.head.appendChild(customThemeStyleTag);
+            }
+
+            // Mermaid用グローバルスタイルDOMクリア（初期化時のスタイル重複衝突を避けるため）
+            document.querySelectorAll('style[id^="mermaid"]').forEach(el => el.remove());
+            document.querySelectorAll('style[id^="dmermaid"]').forEach(el => el.remove());
+
+            // Mermaidのテーマを更新
+            initMermaid(themeName);
+            
+            // プレビューの再描画
+            if (window.editor) {
+                updatePreview(editor.getValue());
+            }
+
+            // メニューのactive表示切り替え
+            document.querySelectorAll('#doc-theme-menu .doc-theme-menu-item[data-theme]').forEach(item => {
+                const isActive = item.getAttribute('data-theme') === themeName;
+                item.classList.toggle('active', isActive);
+                const check = item.querySelector('.check-mark');
+                if (check) {
+                    check.textContent = isActive ? '✓' : '';
+                }
+            });
+
+            localStorage.setItem('lumina_doc_theme', themeName);
+            if (themeName === 'custom' && customCss) {
+                localStorage.setItem('lumina_custom_css', customCss);
+            }
+        }
+
+        function restoreDocTheme() {
+            const saved = localStorage.getItem('lumina_doc_theme') || 'github';
+            if (saved === 'custom') {
+                const css = localStorage.getItem('lumina_custom_css') || '';
+                applyDocTheme('custom', css);
+            } else {
+                applyDocTheme(saved);
+            }
+        }
+
+        // ── テーマ選択メニュー関連のイベントリスナー ──
+        
+        // テーマメニューのトグル表示
+        const btnDocTheme = document.getElementById('btn-doc-theme');
+        const docThemeMenu = document.getElementById('doc-theme-menu');
+        if (btnDocTheme && docThemeMenu) {
+            btnDocTheme.addEventListener('click', (e) => {
+                e.stopPropagation();
+                docThemeMenu.classList.toggle('show');
+            });
+        }
+
+        // メニュー外クリックで閉じる
+        document.addEventListener('click', () => {
+            if (docThemeMenu) {
+                docThemeMenu.classList.remove('show');
+            }
+        });
