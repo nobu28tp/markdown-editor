@@ -1,0 +1,597 @@
+               const cs = getComputedStyle(firstSection);
+                    const cw = parseFloat(cs.width) || 1280;
+                    const ch = parseFloat(cs.height) || 720;
+                    if (Math.abs((cw / ch) - (4 / 3)) < 0.1) {
+                        layoutName = 'LAYOUT_4x3';
+                        slideW = 960; slideH = 720;
+                    }
+                }
+                pptx.layout = layoutName;
+
+                // ──────────────────────────────────────────────────
+                // Marp CSS を SVG コンテキスト不要に変換（キャプチャ用）
+                // Marp Core は svg > foreignObject > section というDOM構造を使い、
+                // CSS セレクタもこの構造に依存している。html2canvas は foreignObject
+                // 内のHTMLを正しくレンダリングできないため、section を SVG の外に
+                // 取り出して通常の HTML として再構築する。その際に CSS セレクタも
+                // SVG パスを省略した形に変換する必要がある。
+                // ──────────────────────────────────────────────────
+                const marpStyleContent = document.getElementById('marp-style').textContent;
+                let captureCss = marpStyleContent
+                    // svg[data-marpit-svg] > foreignObject > section → .marp-slide-wrapper > section
+                    .replace(/>\s*svg[^{]*?>\s*foreignObject\s*>\s*/g, '> ')
+                    // svg[data-marpit-svg] 単独セレクタを除去
+                    .replace(/svg\[data-marpit-svg\]\s*/g, '')
+                    // 残った > svg パスを除去
+                    .replace(/>\s*svg\b/g, '');
+
+                // キャプチャ専用の確実なレイアウト上書きスタイル
+                captureCss += `
+                    .pptx-capture .marp-slide-wrapper {
+                        width: ${slideW}px !important;
+                        height: ${slideH}px !important;
+                        position: relative !important;
+                        overflow: hidden !important;
+                        box-shadow: none !important;
+                        border-radius: 0 !important;
+                    }
+                    .pptx-capture .marp-slide-wrapper > section {
+                        position: absolute !important;
+                        top: 0 !important;
+                        left: 0 !important;
+                        width: ${slideW}px !important;
+                        height: ${slideH}px !important;
+                        transform: none !important;
+                        transform-origin: top left !important;
+                        overflow: hidden !important;
+                        display: flex !important;
+                        flex-direction: column !important;
+                        box-sizing: border-box !important;
+                    }
+                `;
+
+                // 各スライドをループでキャプチャ
+                for (let i = 0; i < slideWrappers.length; i++) {
+                    updateStatus('saving', `スライド画像を生成中 (${i + 1}/${slideWrappers.length})...`);
+
+                    const origWrapper = slideWrappers[i];
+
+                    // ── キャプチャ用DOM構造を構築 ──
+                    // <div class="marpit pptx-capture">
+                    //   <style>...変換済みCSS...</style>
+                    //   <div class="marp-slide-wrapper">
+                    //     <section>...スライド内容...</section>  ← SVGの外に取り出す
+                    //   </div>
+                    // </div>
+                    const captureRoot = document.createElement('div');
+                    captureRoot.className = 'marpit pptx-capture';
+                    captureRoot.style.cssText = `position:fixed;left:-10000px;top:0;width:${slideW}px;height:${slideH}px;overflow:hidden;z-index:-9999;color-scheme:light;`;
+
+                    const styleTag = document.createElement('style');
+                    styleTag.textContent = captureCss;
+                    captureRoot.appendChild(styleTag);
+
+                    // wrapper を作成
+                    const wrapperDiv = document.createElement('div');
+                    wrapperDiv.className = 'marp-slide-wrapper';
+
+                    // section を取得
+                    // Marp Core: svg[data-marpit-svg] > foreignObject > section
+                    // Built-in: wrapper 直下の section
+                    const marpSvg = origWrapper.querySelector('svg[data-marpit-svg]');
+                    let sectionSource;
+                    if (marpSvg) {
+                        const fo = marpSvg.querySelector('foreignObject');
+                        sectionSource = fo ? fo.querySelector('section') : origWrapper.querySelector('section');
+                    } else {
+                        sectionSource = origWrapper.querySelector('section');
+                    }
+
+                    if (sectionSource) {
+                        const sectionClone = sectionSource.cloneNode(true);
+                        wrapperDiv.appendChild(sectionClone);
+                    }
+
+                    captureRoot.appendChild(wrapperDiv);
+                    document.body.appendChild(captureRoot);
+
+                    // Mermaid 図の SVG を PNG に事前変換（html2canvas の SVG レンダリング制限を回避）
+                    const mermaidSvgs = Array.from(wrapperDiv.querySelectorAll('.mermaid-container svg'));
+                    for (const mSvg of mermaidSvgs) {
+                        try {
+                            const pngResult = await convertSvgToPng(mSvg);
+                            if (pngResult && pngResult.src) {
+                                const img = document.createElement('img');
+                                img.src = pngResult.src;
+                                img.style.width = pngResult.width + 'px';
+                                img.style.height = pngResult.height + 'px';
+                                img.style.maxWidth = '100%';
+                                img.style.display = 'block';
+                                mSvg.parentNode.replaceChild(img, mSvg);
+                            }
+                        } catch (e) {
+                            console.warn('Mermaid SVG→PNG conversion failed:', e);
+                        }
+                    }
+
+                    // html2canvas でキャプチャ（foreignObject を介さない通常 HTML）
+                    const canvas = await html2canvas(captureRoot, {
+                        width: slideW,
+                        height: slideH,
+                        scale: 2, // 高解像度
+                        useCORS: true,
+                        backgroundColor: null,
+                        logging: false
+                    });
+
+                    document.body.removeChild(captureRoot);
+
+                    const imgData = canvas.toDataURL('image/png');
+
+                    const slide = pptx.addSlide();
+                    slide.addImage({
+                        data: imgData,
+                        x: 0,
+                        y: 0,
+                        w: '100%',
+                        h: '100%'
+                    });
+                }
+
+                updateStatus('saving', 'ファイルを生成中...');
+                const title = getDocTitle();
+                await pptx.writeFile({ fileName: title + '.pptx' });
+
+                updateStatus('saved', 'PowerPoint出力完了');
+            } catch (err) {
+                console.error("PowerPoint export failed:", err);
+                updateStatus('error', '出力失敗');
+                alert("PowerPointエクスポート中にエラーが発生しました: " + err.message);
+            }
+        }
+
+        // Export as .docx
+        async function handleExportWord() {
+            if (previewMode === 'slide') {
+                return handleExportPptx();
+            }
+            try {
+                updateStatus('saving', 'Word出力生成中...');
+
+                const exportContainer = document.createElement('div');
+                exportContainer.id = 'preview-content';
+                exportContainer.style.colorScheme = 'light';
+                exportContainer.innerHTML = previewContainer.innerHTML;
+
+                if (customThemeStyleTag && customThemeStyleTag.textContent) {
+                    const themeStyle = document.createElement('style');
+                    themeStyle.textContent = customThemeStyleTag.textContent;
+                    exportContainer.prepend(themeStyle);
+                }
+
+                const wrapper = document.createElement('div');
+                wrapper.style.position = 'absolute';
+                wrapper.style.left = '-9999px';
+                wrapper.style.width = '640px'; // Word A4 width estimate
+                wrapper.appendChild(exportContainer);
+
+                // 強制的にスタイルを適用してレイアウトを計算させる
+                const tempStyle = document.createElement('style');
+                tempStyle.textContent = `
+                    img, iframe, svg { max-width: 100% !important; height: auto !important; }
+                    table { max-width: 100% !important; table-layout: fixed !important; word-wrap: break-word !important; }
+                    a, p, span, div { overflow-wrap: break-word !important; word-break: break-word !important; }
+                `;
+                wrapper.appendChild(tempStyle);
+                document.body.appendChild(wrapper);
+
+                // Unwrap Marp Core SVGs so Word imports them as normal text blocks (same as built-in engine)
+                const marpSvgs = Array.from(exportContainer.querySelectorAll('svg[data-marpit-svg]'));
+                marpSvgs.forEach(svg => {
+                    const foreignObject = svg.querySelector('foreignObject');
+                    if (foreignObject) {
+                        while (foreignObject.firstChild) {
+                            svg.parentNode.insertBefore(foreignObject.firstChild, svg);
+                        }
+                    }
+                    svg.parentNode.removeChild(svg);
+                });
+
+                const svgs = Array.from(exportContainer.querySelectorAll('svg:not([data-marpit-svg])'));
+                let failedSvgCount = 0;
+                for (const svg of svgs) {
+                    try {
+                        const pngData = await convertSvgToPng(svg);
+                        if (pngData && pngData.src) {
+                            const img = document.createElement('img');
+                            img.src = pngData.src;
+                            img.style.width = pngData.width + 'px';
+                            img.style.height = pngData.height + 'px';
+                            svg.parentNode.replaceChild(img, svg);
+                        } else {
+                            failedSvgCount++;
+                            replaceSvgWithExportNotice(svg, 'Word');
+                        }
+                    } catch (err) {
+                        console.error('SVG conversion failed', err);
+                        failedSvgCount++;
+                        replaceSvgWithExportNotice(svg, 'Word');
+                    }
+                }
+
+                // WordはCSSのmax-widthを無視するため、計算されたレイアウト幅をHTML属性としてハードコードする
+                const mediaElements = Array.from(exportContainer.querySelectorAll('img, iframe'));
+                for (const el of mediaElements) {
+                    const rect = el.getBoundingClientRect();
+                    if (rect.width > 0) {
+                        el.setAttribute('width', Math.round(rect.width));
+                        el.setAttribute('height', Math.round(rect.height));
+                    }
+                }
+
+                wrapper.removeChild(tempStyle); // 実際の出力HTMLには不要なので削除
+
+                const title = (document.getElementById('doc-title-input').value || '').trim() || 'Document';
+                const isSlideMode = previewContainer.classList.contains('marp-mode');
+
+                // Inline css for Word Document styles
+                let content = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <title>${title}</title>
+            <style>
+                body { font-family: "Meiryo", "Yu Gothic", sans-serif; font-size: 14px; }
+                h1, h2, h3, h4 { color: #333333; margin-top: 24px; margin-bottom: 16px; font-weight: bold; }
+                h1 { font-size: 24px; border-bottom: 1px solid #cccccc; padding-bottom: 4px; }
+                h2 { font-size: 20px; border-bottom: 1px solid #cccccc; padding-bottom: 4px; }
+                p { line-height: 1.6; margin-bottom: 16px; }
+                code { background-color: #f6f8fa; padding: 2px 4px; border-radius: 4px; font-family: "Consolas", monospace; }
+                pre { background-color: #f6f8fa; padding: 16px; border-radius: 6px; font-family: "Consolas", monospace; font-size: 12px; white-space: pre-wrap; word-wrap: break-word; word-break: break-all; }
+                table { border-collapse: collapse; width: 100%; margin-bottom: 16px; table-layout: fixed; word-wrap: break-word; }
+                th, td { border: 1px solid #d0d7de; padding: 8px 12px; word-wrap: break-word; }
+                th { background-color: #f6f8fa; }
+                blockquote { border-left: 4px solid #d0d7de; padding-left: 16px; color: #57606a; margin-bottom: 16px; }
+                a { color: #0969da; text-decoration: none; word-break: break-all; overflow-wrap: break-word; }
+                p, span, div { overflow-wrap: break-word; word-break: break-word; }
+                ul, ol { margin-bottom: 16px; padding-left: 24px; }
+                img, iframe, svg { max-width: 100%; height: auto; }
+                ${isSlideMode ? (() => {
+                    const marpResult = renderWithMarp(editor.getValue());
+                    const css = marpResult ? marpResult.css : '';
+                    return css.replace(/\bsection\b/g, 'section') + `
+                    .marp-slide-wrapper { page-break-after: always; }
+                    .marp-page-number { display: none; }
+                    .header-bar, .page-number { display: none !important; }`;
+                })() : ''}
+            </style>
+        </head>
+        <body>
+            ${exportContainer.innerHTML}
+        </body>
+        </html>
+        `;
+                document.body.removeChild(wrapper);
+
+                // Convert to docx blob using html-docx-js
+                const converted = htmlDocx.asBlob(content);
+
+                // Download Word Document
+                triggerDownload(converted, getDocTitle() + '.docx');
+                if (failedSvgCount > 0) {
+                    updateStatus('saved', `Word出力完了（SVG ${failedSvgCount}件は変換できません）`);
+                    alert(`SVG ${failedSvgCount}件をPNGへ変換できませんでした。Wordには変換失敗の案内を出力しました。外部画像・外部フォント・外部CSSを使わないSVGで再度お試しください。`);
+                } else {
+                    updateStatus('saved', 'Word出力完了');
+                }
+
+            } catch (err) {
+                console.error("Word export failed:", err);
+                updateStatus('normal', '出力失敗');
+                alert("Wordエクスポート機能の実行中にエラーが発生しました。\\n※ブラウザによっては未対応のライブラリ可能性があります。");
+            }
+        }
+
+        function ensurePdfExportLibraries() {
+            if (!window.html2canvas || !window.jspdf || !window.jspdf.jsPDF) {
+                throw new Error('PDF生成ライブラリの読み込みに失敗しました。ネットワーク接続を確認してください。');
+            }
+        }
+
+        function cleanupPdfCaptureRoots() {
+            document.querySelectorAll('[data-pdf-capture-root="true"]').forEach(node => node.remove());
+        }
+
+        function replaceSvgWithExportNotice(svg, outputName) {
+            const notice = document.createElement('div');
+            notice.className = 'svg-export-notice';
+            notice.textContent = `[SVGをPNGへ変換できなかったため、${outputName}出力では図を省略しました]`;
+            notice.style.cssText = 'box-sizing:border-box;min-height:3em;padding:.75em;border:1px solid #b42318;color:#b42318;background:#fff5f5;font:14px/1.5 sans-serif;';
+            svg.parentNode.replaceChild(notice, svg);
+        }
+
+        async function replaceSvgsWithPngs(root) {
+            const svgs = Array.from(root.querySelectorAll('svg'));
+            let failedSvgCount = 0;
+            for (const svg of svgs) {
+                try {
+                    const pngResult = await convertSvgToPng(svg);
+                    if (pngResult && pngResult.src) {
+                        const img = document.createElement('img');
+                        img.src = pngResult.src;
+                        img.style.width = pngResult.width + 'px';
+                        img.style.height = pngResult.height + 'px';
+                        img.style.maxWidth = '100%';
+                        img.style.display = 'block';
+                        svg.parentNode.replaceChild(img, svg);
+                    } else {
+                        failedSvgCount++;
+                        replaceSvgWithExportNotice(svg, 'PDF');
+                    }
+                } catch (err) {
+                    console.warn('SVG to PNG conversion failed for PDF export:', err);
+                    failedSvgCount++;
+                    replaceSvgWithExportNotice(svg, 'PDF');
+                }
+            }
+            return failedSvgCount;
+        }
+
+        function getMarpPdfMetrics() {
+            let slideW = 1280;
+            let slideH = 720;
+            const firstSection = previewContainer.querySelector('.marp-slide-wrapper section');
+            if (firstSection) {
+                const cs = getComputedStyle(firstSection);
+                slideW = parseFloat(cs.width) || slideW;
+                slideH = parseFloat(cs.height) || slideH;
+            }
+            return { slideW, slideH };
+        }
+
+        function buildMarpCaptureCss(slideW, slideH) {
+            const marpStyleTag = document.getElementById('marp-style');
+            let captureCss = marpStyleTag ? marpStyleTag.textContent : '';
+            captureCss = captureCss
+                .replace(/>\s*svg[^{]*?>\s*foreignObject\s*>\s*/g, '> ')
+                .replace(/svg\[data-marpit-svg\]\s*/g, '')
+                .replace(/>\s*svg\b/g, '');
+
+            return captureCss + `
+                .pdf-capture .marp-slide-wrapper {
+                    width: ${slideW}px !important;
+                    height: ${slideH}px !important;
+                    position: relative !important;
+                    overflow: hidden !important;
+                    box-shadow: none !important;
+                    border-radius: 0 !important;
+                    background: #ffffff !important;
+                }
+                .pdf-capture .marp-slide-wrapper > section {
+                    position: absolute !important;
+                    top: 0 !important;
+                    left: 0 !important;
+                    width: ${slideW}px !important;
+                    height: ${slideH}px !important;
+                    transform: none !important;
+                    transform-origin: top left !important;
+                    overflow: hidden !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    box-sizing: border-box !important;
+                }
+            `;
+        }
+
+        async function renderMarpSlideToCanvas(origWrapper, slideW, slideH, captureCss) {
+            const captureRoot = document.createElement('div');
+            captureRoot.className = 'marpit pdf-capture';
+            captureRoot.dataset.pdfCaptureRoot = 'true';
+            captureRoot.style.cssText = `position:absolute;left:0;top:0;width:${slideW}px;height:${slideH}px;overflow:hidden;z-index:-1;pointer-events:none;color-scheme:light;background:#ffffff;`;
+
+            const styleTag = document.createElement('style');
+            styleTag.textContent = captureCss;
+            captureRoot.appendChild(styleTag);
+
+            const wrapperDiv = document.createElement('div');
+            wrapperDiv.className = 'marp-slide-wrapper';
+
+            const marpSvg = origWrapper.querySelector('svg[data-marpit-svg]');
+            let sectionSource;
+            if (marpSvg) {
+                const fo = marpSvg.querySelector('foreignObject');
+                sectionSource = fo ? fo.querySelector('section') : origWrapper.querySelector('section');
+            } else {
+                sectionSource = origWrapper.querySelector('section');
+            }
+
+            if (sectionSource) {
+                wrapperDiv.appendChild(sectionSource.cloneNode(true));
+            }
+
+            captureRoot.appendChild(wrapperDiv);
+            document.body.appendChild(captureRoot);
+
+            try {
+                const failedSvgCount = await replaceSvgsWithPngs(wrapperDiv);
+                const canvas = await html2canvas(captureRoot, {
+                    width: slideW,
+                    height: slideH,
+                    scale: 2,
+                    useCORS: true,
+                    allowTaint: false,
+                    backgroundColor: '#ffffff',
+                    logging: false,
+                    windowWidth: slideW,
+                    windowHeight: slideH,
+                    scrollX: 0,
+                    scrollY: 0
+                });
+                return { canvas, failedSvgCount };
+            } finally {
+                document.body.removeChild(captureRoot);
+            }
+        }
+
+        async function exportSlideModePdf(title) {
+            const slideWrappers = Array.from(previewContainer.querySelectorAll('.marp-slide-wrapper'));
+            if (slideWrappers.length === 0) {
+                throw new Error('スライドのレンダリングデータが見つかりません。プレビューを表示した状態で実行してください。');
+            }
+
+            const { slideW, slideH } = getMarpPdfMetrics();
+            const captureCss = buildMarpCaptureCss(slideW, slideH);
+            const jsPDF = window.jspdf.jsPDF;
+            const orientation = slideW >= slideH ? 'landscape' : 'portrait';
+            const pdf = new jsPDF({ orientation, unit: 'pt', format: [slideW, slideH], compress: true });
+            let failedSvgCount = 0;
+
+            for (let i = 0; i < slideWrappers.length; i++) {
+                updateStatus('saving', `PDF生成中 (${i + 1}/${slideWrappers.length})...`);
+                const renderedSlide = await renderMarpSlideToCanvas(slideWrappers[i], slideW, slideH, captureCss);
+                failedSvgCount += renderedSlide.failedSvgCount;
+                if (i > 0) pdf.addPage([slideW, slideH], orientation);
+                pdf.addImage(renderedSlide.canvas.toDataURL('image/png'), 'PNG', 0, 0, slideW, slideH, undefined, 'FAST');
+            }
+
+            pdf.save(title + '.pdf');
+            if (failedSvgCount > 0) {
+                alert(`SVG ${failedSvgCount}件をPNGへ変換できませんでした。PDFには変換失敗の案内を出力しました。外部画像・外部フォント・外部CSSを使わないSVGで再度お試しください。`);
+            }
+        }
+
+        async function exportDocumentModePdf(title) {
+            const iframe = document.createElement('iframe');
+            iframe.title = title;
+            iframe.setAttribute('aria-hidden', 'true');
+            iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
+            document.body.appendChild(iframe);
+
+            try {
+                const printWindow = iframe.contentWindow;
+                const printDocument = iframe.contentDocument || printWindow.document;
+                printDocument.open();
+                printDocument.write(generateHtmlExportContent({ forPrintPdf: true }));
+                printDocument.close();
+
+                await waitForPdfPrintFrameReady(iframe);
+                let cleanupTimer = null;
+                const cleanup = () => {
+                    if (cleanupTimer) clearTimeout(cleanupTimer);
+                    if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+                };
+                printWindow.addEventListener('afterprint', cleanup, { once: true });
+                cleanupTimer = setTimeout(cleanup, 5 * 60 * 1000);
+                printWindow.focus();
+                printWindow.print();
+            } catch (err) {
+                document.body.removeChild(iframe);
+                throw err;
+            }
+        }
+
+        function waitForPdfPrintFrameReady(iframe) {
+            return new Promise(resolve => {
+                const frameWindow = iframe.contentWindow;
+                const frameDocument = iframe.contentDocument || frameWindow.document;
+
+                function waitForAssets() {
+                    const images = Array.from(frameDocument.images || []);
+                    const imagePromises = images
+                        .filter(img => !img.complete)
+                        .map(img => new Promise(done => {
+                            img.onload = done;
+                            img.onerror = done;
+                        }));
+                    const fontPromise = frameDocument.fonts && frameDocument.fonts.ready
+                        ? frameDocument.fonts.ready.catch(() => undefined)
+                        : Promise.resolve();
+
+                    Promise.all([fontPromise, ...imagePromises]).then(() => {
+                        frameWindow.requestAnimationFrame(() => resolve());
+                    });
+                }
+
+                if (frameDocument.readyState === 'complete') {
+                    waitForAssets();
+                } else {
+                    iframe.onload = waitForAssets;
+                }
+            });
+        }
+
+        // Export as .pdf
+        async function handleExportPdf() {
+            try {
+                updateStatus('saving', 'PDF生成を準備中...');
+
+                const isSlideMode = previewContainer.classList.contains('marp-mode');
+                const title = getDocTitle();
+
+                if (isSlideMode) {
+                    ensurePdfExportLibraries();
+                    cleanupPdfCaptureRoots();
+                    await exportSlideModePdf(title);
+                    updateStatus('saved', 'PDF出力完了');
+                } else {
+                    await exportDocumentModePdf(title);
+                    updateStatus('saved', 'PDF印刷画面を開きました');
+                }
+            } catch (err) {
+                console.error('PDF export failed:', err);
+                updateStatus('error', 'PDF出力失敗');
+                alert('PDFエクスポート中にエラーが発生しました: ' + err.message);
+            }
+        }
+
+        const PDF_PRINT_CSS = `
+        @page {
+            size: A4;
+            margin: 18mm 16mm;
+        }
+
+        @media print {
+            html, body {
+                width: auto !important;
+                min-height: auto !important;
+                overflow: visible !important;
+                background: #ffffff !important;
+            }
+
+            body {
+                max-width: none !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                color: #24292f !important;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic", Meiryo, sans-serif !important;
+                font-size: 11pt !important;
+                line-height: 1.6 !important;
+            }
+
+            #preview-content.markdown-body {
+                width: 100% !important;
+                max-width: none !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: visible !important;
+            }
+
+            h1, h2, h3, h4 {
+                break-after: avoid-page;
+                page-break-after: avoid;
+            }
+
+            p, li, blockquote, pre, table, img, svg, figure, .mermaid-container {
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
+
+            pre {
+                white-space: pre-wrap !important;
+                overflow: visible !important;
+                overflow-wrap: anywhere !important;
+                word-break: break-word !important;
+            }
+
+            code {
