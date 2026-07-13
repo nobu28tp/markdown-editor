@@ -1,0 +1,569 @@
+]]+\]:\s*data:image\/[^\s]+/);
+            if (refMatch) {
+                const marks = doc.findMarks({ line: lineNum, ch: 0 }, { line: lineNum, ch: refMatch[0].length });
+                if (!marks.some(m => m.collapsed)) {
+                    doc.markText({ line: lineNum, ch: 0 }, { line: lineNum, ch: refMatch[0].length }, {
+                        collapsed: true,
+                        replacedWith: createHiddenWidget(false),
+                        atomic: true // カーソル移動時に一つの文字として扱う（BackSpaceで一括削除できる）
+                    });
+                }
+            }
+
+            // 2. インライン型: ![alt](data:image/...)
+            const inlineRegex = /!\[[^\]]*\]\((data:image\/[^\)]+)\)/g;
+            let match;
+            while ((match = inlineRegex.exec(lineText)) !== null) {
+                const startCh = match.index + match[0].indexOf('(') + 1; // data:image... の開始位置
+                const endCh = startCh + match[1].length; // base64部分の終了位置
+
+                const marks = doc.findMarks({ line: lineNum, ch: startCh }, { line: lineNum, ch: endCh });
+                if (!marks.some(m => m.collapsed)) {
+                    doc.markText({ line: lineNum, ch: startCh }, { line: lineNum, ch: endCh }, {
+                        collapsed: true,
+                        replacedWith: createHiddenWidget(true),
+                        atomic: true
+                    });
+                }
+            }
+        }
+
+        // Initial setup
+        function init() {
+            // テーマの初期化と復元
+            const savedTheme = localStorage.getItem('lumina_theme') || 'dark';
+            setTheme(savedTheme);
+
+            // テーマ切り替えボタンのイベント登録
+            const themeToggleBtn = document.getElementById('btn-theme-toggle');
+            if (themeToggleBtn) {
+                themeToggleBtn.addEventListener('click', toggleTheme);
+            }
+
+            // Start loading Marp Core in the background (non-blocking)
+            loadMarp().then(() => {
+                // Re-render preview once Marp is loaded
+                if (editor && editor.getValue()) {
+                    updatePreview(editor.getValue());
+                }
+            });
+
+            if (window.mermaid) {
+                const savedDocTheme = localStorage.getItem('lumina_doc_theme') || 'github';
+                initMermaid(savedDocTheme);
+            }
+
+            // Mode Switcher Logic
+            const modeBtns = document.querySelectorAll('.mode-btn');
+            modeBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    modeBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    previewMode = btn.dataset.mode;
+                    updatePreview(editor.getValue());
+                    updateExportButtonState();
+                });
+            });
+
+            // 1. Configure Marked with Highlight.js
+            marked.use({
+                breaks: true, // Allow line breaks
+                gfm: true, // GitHub Flavored Markdown
+                renderer: {
+                    code(token) {
+                        const { text, lang } = token;
+                        // Mermaid blocks should not be processed by highlight.js
+                        if (lang === 'mermaid') {
+                            return `<pre><code class="language-mermaid">${text}</code></pre>`;
+                        }
+
+                        let highlighted = text;
+                        let languageClass = '';
+
+                        try {
+                            if (lang && hljs.getLanguage(lang)) {
+                                highlighted = hljs.highlight(text, { language: lang }).value;
+                                languageClass = `language-${lang}`;
+                            } else {
+                                highlighted = hljs.highlightAuto(text).value;
+                            }
+                        } catch (e) {
+                            console.error('Highlight error:', e);
+                        }
+
+                        return `<pre><code class="hljs ${languageClass}">${highlighted}</code></pre>`;
+                    }
+                }
+            });
+
+            const SVG_TEMPLATE = `<svg width="320" height="180" viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="説明">
+  <rect width="320" height="180" rx="8" fill="#f3f4f6" />
+  <text x="160" y="96" text-anchor="middle" font-size="20" fill="#111827">SVG</text>
+</svg>`;
+
+            const SVG_ALLOWED_ATTRS = [
+                'viewBox', 'xmlns', 'width', 'height', 'x', 'y', 'cx', 'cy', 'r', 'rx', 'ry',
+                'x1', 'x2', 'y1', 'y2', 'd', 'points', 'fill', 'fill-opacity', 'fill-rule',
+                'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-opacity',
+                'opacity', 'transform', 'preserveAspectRatio', 'text-anchor', 'font-size',
+                'font-family', 'font-weight', 'dominant-baseline', 'offset', 'stop-color',
+                'stop-opacity', 'id', 'class', 'role', 'aria-label', 'clip-path', 'mask',
+                'gradientUnits', 'gradientTransform', 'patternUnits'
+            ];
+
+            function getSvgSanitizeOptions(options = {}) {
+                const allowForeignObject = options.allowForeignObject === true;
+                return {
+                    USE_PROFILES: { html: true, svg: true },
+                    ADD_TAGS: options.addTags || [],
+                    ADD_ATTR: [...SVG_ALLOWED_ATTRS, ...(options.addAttrs || [])],
+                    FORBID_TAGS: allowForeignObject
+                        ? ['script', 'image', 'use', 'animate', 'animateMotion', 'animateTransform', 'set', 'audio', 'video', 'iframe', 'object', 'embed']
+                        : ['script', 'foreignObject', 'image', 'use', 'animate', 'animateMotion', 'animateTransform', 'set', 'audio', 'video', 'iframe', 'object', 'embed'],
+                    FORBID_ATTR: ['onabort', 'onerror', 'onload', 'onclick', 'onfocus', 'onmouseenter', 'onmouseleave', 'onmouseover', 'onmouseup', 'onmousedown']
+                };
+            }
+
+            function isSvgMarkup(markup) {
+                return /^\s*(?:<\?xml[^>]*>\s*)?<svg[\s>]/i.test(markup || '');
+            }
+
+            function sanitizeSvgMarkupForInsert(markup) {
+                const source = (markup || '').trim();
+                if (!isSvgMarkup(source)) {
+                    throw new Error('SVG要素から始まるコードを入力してください。');
+                }
+
+                const parsed = new DOMParser().parseFromString(source, 'image/svg+xml');
+                if (parsed.querySelector('parsererror') || !parsed.documentElement || parsed.documentElement.localName !== 'svg') {
+                    throw new Error('SVGとして解析できませんでした。');
+                }
+
+                let cleanMarkup = DOMPurify.sanitize(source, getSvgSanitizeOptions());
+                cleanMarkup = cleanMarkup.replace(/viewbox=/g, 'viewBox=');
+                const cleanDocument = new DOMParser().parseFromString(cleanMarkup, 'image/svg+xml');
+                if (cleanDocument.querySelector('parsererror') || !cleanDocument.documentElement || cleanDocument.documentElement.localName !== 'svg') {
+                    throw new Error('安全なSVG要素が残りませんでした。');
+                }
+
+                const svgElement = cleanDocument.documentElement;
+                if (!svgElement.getAttribute('xmlns')) {
+                    svgElement.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+                }
+                return new XMLSerializer().serializeToString(svgElement);
+            }
+
+            function insertSvgMarkup(markup, cm = editor) {
+                const cleanMarkup = sanitizeSvgMarkupForInsert(markup);
+                const doc = cm.getDoc();
+                const insertionLine = doc.getCursor().line + 1;
+                doc.replaceSelection(`\n${cleanMarkup}\n`);
+                cm.focus();
+                updateStatus('saved', 'SVGコードを挿入しました');
+                // SVGが本文の後方に入る場合でも、プレビューを挿入位置へ移動して表示を確認できるようにする。
+                setTimeout(() => scrollToLineInPreview(insertionLine, true), getPreviewDebounceMs() + 100);
+            }
+
+            // 2. Initialize CodeMirror Editor
+            editor = CodeMirror.fromTextArea(editorTextarea, {
+                mode: "gfm", // GitHub Flavored Markdown
+                lineNumbers: true,
+                lineWrapping: true,
+                extraKeys: { 
+                    "Enter": "newlineAndIndentContinueMarkdownList"
+                }
+            });
+
+            // Set initial state of preview container
+            previewContainer.classList.add('markdown-body');
+
+            // Load initial content from LocalStorage (Resume function)
+            const savedContent = localStorage.getItem('lumina_autosave');
+            if (savedContent) {
+                setGeneratedFullReadOnly(false);
+                editor.setValue(savedContent);
+                setGeneratedFullReadOnly(isGeneratedFullDocument(savedContent));
+                currentDocumentLength = savedContent.length;
+                updatePreview(savedContent);
+                const restoredComments = restoreProofreadComments(savedContent);
+                updateStatus('saved', restoredComments ? '本文と校正コメントを復元しました' : '復元完了');
+            } else {
+                const defaultText = `# Markdown Editorへようこそ\n\nここに入力し始めると、**リアルタイム**で右側にプレビューが表示されます。`;
+                setGeneratedFullReadOnly(false);
+                editor.setValue(defaultText);
+                currentDocumentLength = defaultText.length;
+                updatePreview(defaultText);
+            }
+            hasUnsavedChanges = false;
+
+            // エクスポートボタンの状態を初期化
+            updateExportButtonState();
+
+            // ローカルフォルダ連携の自動接続試行
+            tryAutoConnectLocalFolder();
+
+            // 3. Set Event Listeners
+            let isTyping = false;
+            let typingTimer = null;
+            let wordCountTimeout = null;
+
+            editor.on('beforeChange', (cm, changeObj) => {
+                if (isGeneratedFullReadOnly && changeObj.origin !== 'setValue') {
+                    changeObj.cancel();
+                    updateStatus('normal', '全体版は閲覧専用です');
+                }
+            });
+
+            editor.on('keydown', (cm, event) => {
+                const key = event.key;
+                const ignoreKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End'];
+                
+                if (ignoreKeys.includes(key)) {
+                    isTyping = false;
+                    clearTimeout(typingTimer);
+                    return;
+                }
+
+                isTyping = true;
+                clearTimeout(typingTimer);
+                typingTimer = setTimeout(() => {
+                    isTyping = false;
+                }, 1000);
+            });
+
+            editor.on('change', (cm, changeObj) => {
+                isTyping = true;
+                clearTimeout(typingTimer);
+                typingTimer = setTimeout(() => {
+                    isTyping = false;
+                }, 1000); // 1秒間キー入力がなければタイピング終了とみなす
+
+                if (changeObj) {
+                    const removedText = (changeObj.removed || []).join('\n');
+                    const insertedText = (changeObj.text || []).join('\n');
+                    currentDocumentLength += insertedText.length - removedText.length;
+                } else {
+                    currentDocumentLength = cm.getValue().length;
+                }
+
+                // Base64画像データの行を検知して非表示ウィジェットに置き換える
+                if (changeObj && changeObj.text) {
+                    const doc = cm.getDoc();
+                    const fromLine = changeObj.from.line;
+                    const toLine = fromLine + changeObj.text.length;
+                    for (let i = fromLine; i < toLine; i++) {
+                        const lineText = doc.getLine(i);
+                        if (lineText && lineText.includes('data:image/')) {
+                            hideBase64Widget(doc, i, lineText);
+                        }
+                    }
+                }
+
+                hasUnsavedChanges = true;
+                updateStatus('normal', '編集中...');
+                // Debounce preview rendering to keep editor typing smooth
+                if (previewTimeout) clearTimeout(previewTimeout);
+                if (isPreviewPaneVisible()) {
+                    previewTimeout = setTimeout(() => {
+                        const content = editor.getValue();
+                        updatePreview(content);
+                    }, getPreviewDebounceMs());
+                }
+            });
+
+            // ワードカウント更新
+            editor.on('change', () => {
+                if (wordCountTimeout) clearTimeout(wordCountTimeout);
+                wordCountTimeout = setTimeout(updateWordCount, WORD_COUNT_DEBOUNCE_MS);
+            });
+            // 目次更新
+            editor.on('change', () => {
+                const outlinePane = document.getElementById('outline-pane');
+                if (outlinePane && outlinePane.style.display !== 'none') {
+                    if (outlineTimeout) clearTimeout(outlineTimeout);
+                    outlineTimeout = setTimeout(() => {
+                        updateOutline();
+                    }, OUTLINE_DEBOUNCE_MS);
+                }
+            });
+            // 初回カウント＆目次生成
+            updateWordCount();
+            updateOutline();
+
+            // Start autosave timer (every 5 minutes)
+            startAutosaveTimer();
+
+            // Prevent browser default Ctrl+F and Ctrl+H (History tab) in Chrome/Edge
+            window.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+                    const key = e.key.toLowerCase();
+                    if (key === 'f') {
+                        if (editor.hasFocus()) {
+                            e.preventDefault();
+                            openCustomSearch(false);
+                        }
+                    } else if (key === 'h') {
+                        if (editor.hasFocus()) {
+                            e.preventDefault();
+                            openCustomSearch(true);
+                        }
+                    }
+                }
+            });
+
+            // Handle image and SVG pasting. SVG remains editable source text; raster images use the existing compact Base64 flow.
+            editor.on('paste', (cm, event) => {
+                const clipboardData = event.clipboardData || event.originalEvent?.clipboardData;
+                if (!clipboardData) return;
+
+                const clipboardText = clipboardData.getData('text/plain');
+                if (isSvgMarkup(clipboardText)) {
+                    event.preventDefault();
+                    try {
+                        insertSvgMarkup(clipboardText, cm);
+                    } catch (err) {
+                        updateStatus('error', 'SVGを挿入できません');
+                        alert(err.message);
+                    }
+                    return;
+                }
+
+                const items = clipboardData.items || [];
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    if (item.type === 'image/svg+xml') {
+                        event.preventDefault();
+                        const svgFile = item.getAsFile();
+                        if (!svgFile) return;
+                        const svgReader = new FileReader();
+                        svgReader.onload = (e) => {
+                            try {
+                                insertSvgMarkup(e.target.result, cm);
+                            } catch (err) {
+                                updateStatus('error', 'SVGを挿入できません');
+                                alert(err.message);
+                            }
+                        };
+                        svgReader.readAsText(svgFile);
+                        return;
+                    }
+                    if (item.type.indexOf('image') !== -1) {
+                        event.preventDefault();
+                        const file = item.getAsFile();
+                        if (!file) continue;
+
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            const img = new Image();
+                            img.onload = () => {
+                                const canvas = document.createElement('canvas');
+                                let width = img.width;
+                                let height = img.height;
+
+                                // 画像が大きすぎる場合はリサイズ（最大1200px）
+                                const MAX_SIZE = 1200;
+                                if (width > MAX_SIZE || height > MAX_SIZE) {
+                                    if (width > height) {
+                                        height = Math.round((height * MAX_SIZE) / width);
+                                        width = MAX_SIZE;
+                                    } else {
+                                        width = Math.round((width * MAX_SIZE) / height);
+                                        height = MAX_SIZE;
+                                    }
+                                }
+
+                                canvas.width = width;
+                                canvas.height = height;
+                                const ctx = canvas.getContext('2d');
+                                ctx.drawImage(img, 0, 0, width, height);
+
+                                // JPEGとして圧縮し、データサイズを劇的に減らす
+                                // ※GIFなどアニメーションが重要な場合は元のデータを使うべきですが、今回は軽量化優先
+                                const compressedBase64 = canvas.toDataURL('image/jpeg', JPEG_QUALITY);
+
+                                const doc = cm.getDoc();
+                                const cursor = doc.getCursor();
+                                const fileName = file.name && file.name !== 'image.png' ? file.name : 'ペースト画像';
+
+                                // カーソル位置に直接Base64データを含んだMarkdownを挿入
+                                doc.replaceRange(`![${fileName}](${compressedBase64})`, cursor);
+                            };
+                            img.src = e.target.result;
+                        };
+                        reader.readAsDataURL(file);
+                        break; // 一度のペーストで複数処理しないようにする
+                    }
+                }
+            });
+
+            // Button functionalities
+            document.getElementById('btn-new').addEventListener('click', handleNewFile);
+            document.getElementById('btn-open').addEventListener('click', handleOpenFile);
+            document.getElementById('btn-save-md').addEventListener('click', handleSaveMd);
+            document.getElementById('btn-split-save').addEventListener('click', handleSplitSave);
+            document.getElementById('btn-export-word').addEventListener('click', handleExportWord);
+            document.getElementById('btn-export-pdf').addEventListener('click', handleExportPdf);
+            document.getElementById('btn-export-html').addEventListener('click', handleExportHtml);
+            document.getElementById('btn-preview-html').addEventListener('click', handlePreviewHtml);
+            document.getElementById('btn-toggle-proofread').addEventListener('click', () => {
+                if (proofreadPane.style.display === 'none') {
+                    openProofreadPane();
+                } else {
+                    closeProofreadPane();
+                }
+            });
+            document.getElementById('btn-close-proofread').addEventListener('click', closeProofreadPane);
+            document.getElementById('btn-manual-comment').addEventListener('click', addManualProofreadComment);
+            document.getElementById('btn-rule-proofread').addEventListener('click', runRuleProofread);
+            document.getElementById('btn-ai-proofread').addEventListener('click', runAiProofread);
+            document.getElementById('btn-proofread-settings').addEventListener('click', configureAiProofread);
+            document.getElementById('btn-proofread-refresh').addEventListener('click', refreshSharedProofreadComments);
+            document.querySelectorAll('.proofread-filter-btn').forEach(button => {
+                button.addEventListener('click', () => setProofreadFilter(button.dataset.filter));
+            });
+
+            // Mermaid Exporter を別タブで開く
+            document.getElementById('btn-open-exporter').addEventListener('click', () => {
+                window.open('https://nobu28tp.github.io/mermaid_exporter/', '_blank');
+            });
+
+            // GitHub連携モーダルの開閉
+            const githubModal = document.getElementById('github-modal');
+            document.getElementById('btn-github-sync').addEventListener('click', () => {
+                loadGitHubSettings();
+                githubModal.classList.add('active');
+            });
+            document.getElementById('btn-close-github').addEventListener('click', () => {
+                githubModal.classList.remove('active');
+            });
+            githubModal.addEventListener('click', (e) => {
+                if (e.target === githubModal) githubModal.classList.remove('active');
+            });
+
+            // GitHub連携ボタン群
+            document.getElementById('btn-save-gh-settings').addEventListener('click', saveGitHubSettings);
+            document.getElementById('btn-gh-load').addEventListener('click', loadFromGitHub);
+            document.getElementById('btn-gh-save').addEventListener('click', saveToGitHub);
+            document.getElementById('btn-gh-browse').addEventListener('click', browseGitHubRepo);
+
+            // GitHubリポジトリ名の入力クレンジングイベント
+            const ghRepoInput = document.getElementById('gh-repo');
+            if (ghRepoInput) {
+                ghRepoInput.addEventListener('blur', handleRepoInputCleansing);
+                ghRepoInput.addEventListener('change', handleRepoInputCleansing);
+            }
+
+            // ローカルフォルダ連携モーダルの開閉
+            const localFolderModal = document.getElementById('local-folder-modal');
+            document.getElementById('btn-local-sync').addEventListener('click', () => {
+                localFolderModal.classList.add('active');
+                tryAutoConnectLocalFolder(); // 自動接続を試みる
+            });
+            document.getElementById('btn-close-local-folder').addEventListener('click', () => {
+                localFolderModal.classList.remove('active');
+            });
+            localFolderModal.addEventListener('click', (e) => {
+                if (e.target === localFolderModal) localFolderModal.classList.remove('active');
+            });
+
+            // ローカルフォルダ連携ボタン群
+            document.getElementById('btn-local-folder-connect').addEventListener('click', connectLocalFolder);
+            document.getElementById('btn-local-file-load').addEventListener('click', loadSelectedLocalFile);
+            document.getElementById('btn-local-file-save').addEventListener('click', saveActiveLocalFile);
+
+            // ハンバーガーメニューの開閉
+            const hamburgerBtn = document.getElementById('btn-hamburger');
+            const hamburgerMenu = document.getElementById('hamburger-menu');
+            const hamburgerOverlay = document.getElementById('hamburger-overlay');
+
+            function toggleHamburger() {
+                const isActive = hamburgerMenu.classList.toggle('active');
+                hamburgerOverlay.classList.toggle('active', isActive);
+            }
+
+            function closeHamburger() {
+                hamburgerMenu.classList.remove('active');
+                hamburgerOverlay.classList.remove('active');
+            }
+
+            hamburgerBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleHamburger();
+            });
+
+            hamburgerOverlay.addEventListener('click', closeHamburger);
+
+            // Escキーでメニューを閉じる
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && hamburgerMenu.classList.contains('active')) {
+                    closeHamburger();
+                }
+            });
+
+            // メニュー内のボタンクリック時にメニューを閉じる（テーマメニュー以外）
+            hamburgerMenu.querySelectorAll('.btn:not(#btn-doc-theme)').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    // テーマメニューを開くボタンの場合は閉じない
+                    if (btn.id === 'btn-doc-theme') return;
+                    closeHamburger();
+                });
+            });
+
+            // Pane toggles
+            document.getElementById('btn-toggle-preview').addEventListener('click', () => {
+                const previewPane = document.getElementById('preview-pane');
+                const btnIcon = document.querySelector('#btn-toggle-preview i');
+
+                if (previewPane.style.display === 'none') {
+                    previewPane.style.display = 'flex';
+                    btnIcon.setAttribute('data-lucide', 'layout-panel-left');
+                    updatePreview(editor.getValue());
+                } else {
+                    previewPane.style.display = 'none';
+                    btnIcon.setAttribute('data-lucide', 'layout-panel-split');
+                    if (previewTimeout) clearTimeout(previewTimeout);
+                }
+                lucide.createIcons({ root: document.getElementById('btn-toggle-preview') });
+                // エディタのサイズが変化したため再描画
+                setTimeout(() => editor.refresh(), 10);
+            });
+
+            document.getElementById('btn-toggle-outline').addEventListener('click', () => {
+                const outlinePane = document.getElementById('outline-pane');
+                const btn = document.getElementById('btn-toggle-outline');
+                if (outlinePane.style.display === 'none') {
+                    outlinePane.style.display = 'flex';
+                    btn.classList.add('active');
+                    updateOutline();
+                } else {
+                    outlinePane.style.display = 'none';
+                    btn.classList.remove('active');
+                }
+                // エディタのサイズが変化したため再描画
+                setTimeout(() => editor.refresh(), 10);
+            });
+
+            document.getElementById('btn-popout-preview').addEventListener('click', () => {
+                const title = (document.getElementById('doc-title-input').value || '').trim() || 'Markdown Preview';
+                const isSlideMode = previewContainer.classList.contains('marp-mode');
+
+                const newWin = window.open('', '_blank');
+                if (!newWin) {
+                    alert('ポップアップがブロックされました。ブラウザの設定を確認してください。');
+                    return;
+                }
+
+                let extraStyles = '';
+                if (isSlideMode) {
+                    const marpStyle = document.getElementById('marp-style').textContent;
+                    extraStyles = `
+                        ${marpStyle}
+                        body { background-color: #1a1a2e; margin: 0; padding: 2rem; display: flex; flex-direction: column; align-items: center; gap: 1.5rem; }
+                        div.marpit {
+                            width: auto !important;
+                            height: auto !important;
+                            position: static !important;
+                            overflow: visible !important;
+                            display: flex !important;
+                            flex-direction: column !important;
+             
