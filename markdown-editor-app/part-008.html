@@ -1,0 +1,589 @@
+               align-items: center !important;
+                            gap: 1.5rem !important;
+                            background: transparent !important;
+                        }
+                        .marp-slide-wrapper { position: relative; box-shadow: 0 20px 60px rgba(0,0,0,0.6); border-radius: 4px; overflow: hidden; width: 1280px; height: 720px; flex-shrink: 0; }
+                        .marp-slide-wrapper section { transform-origin: top left !important; transform: scale(1) !important; position: absolute; top:0; left:0; width:100%; height:100%; display:block; }
+                        .marp-page-number { text-align: center; font-size: 0.8rem; color: rgba(255,255,255,0.5); font-family: sans-serif; letter-spacing: 0.1em; }
+                    `;
+                } else {
+                    extraStyles = `
+                        body { font-family: "Inter", "Meiryo", sans-serif; color: #24292f; background: #fff; line-height: 1.6; max-width: 1000px; margin: 0 auto; padding: 2rem; }
+                        h1, h2, h3, h4 { border-bottom: 1px solid #d0d7de; padding-bottom: 0.3em; }
+                        pre { background: #f6f8fa; padding: 16px; border-radius: 6px; overflow: auto; }
+                        code { font-family: "Fira Code", monospace; background: rgba(175,184,193,0.2); padding: 0.2em 0.4em; border-radius: 6px; }
+                        table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
+                        th, td { border: 1px solid #d0d7de; padding: 6px 13px; }
+                        th { background: #f6f8fa; }
+                        blockquote { border-left: 0.25em solid #d0d7de; padding: 0 1em; color: #57606a; }
+                        img, svg { max-width: 100%; height: auto; }
+                    `;
+                }
+
+                newWin.document.write(`<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <title>${title}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/atom-one-dark.min.css">
+    <style>${extraStyles}</style>
+</head>
+<body class="${isSlideMode ? '' : 'markdown-body'}">
+    ${previewContainer.innerHTML}
+</body>
+</html>`);
+                newWin.document.close();
+            });
+
+            // Help Modal functionalities
+            const helpModal = document.getElementById('help-modal');
+            document.getElementById('btn-help').addEventListener('click', () => {
+                helpModal.classList.add('active');
+            });
+            document.getElementById('btn-close-help').addEventListener('click', () => {
+                helpModal.classList.remove('active');
+            });
+            // Close modal when clicking outside
+            helpModal.addEventListener('click', (e) => {
+                if (e.target === helpModal) {
+                    helpModal.classList.remove('active');
+                }
+            });
+
+            // Live Preview Scaling Observer
+            const resizeObserver = new ResizeObserver(entries => {
+                for (let entry of entries) {
+                    if (previewContainer.classList.contains('marp-mode')) {
+                        const containerWidth = entry.contentRect.width;
+                        // Calculate scale (1280 is default Marp slide width, subtract padding approx 64px)
+                        const scale = Math.min(1, (containerWidth - 64) / 1280);
+                        previewContainer.style.setProperty('--preview-scale', scale);
+                    }
+                }
+            });
+            resizeObserver.observe(previewContainer);
+
+            // 4. Scroll Synchronization (One-way editor to preview tracking)
+            let lastCursorLine = -1;
+
+            // ワードカウントの更新関数
+            function updateWordCount() {
+                if (!editor) return;
+                const charCount = currentDocumentLength;
+                
+                // 英語の単語数カウント
+                let wordCountText = '-';
+                if (charCount <= LARGE_DOC_CHAR_THRESHOLD) {
+                    const text = editor.getValue();
+                    const words = text.trim().split(/\s+/).filter(w => w.length > 0);
+                    wordCountText = words.length.toLocaleString();
+                }
+                
+                const lineCount = editor.lineCount();
+                
+                // 読了目安時間（定数 CHARS_PER_MINUTE_JA = 500 を使用）
+                const readingTime = Math.ceil(charCount / CHARS_PER_MINUTE_JA);
+                
+                const statChars = document.getElementById('stat-chars');
+                const statWords = document.getElementById('stat-words');
+                const statLines = document.getElementById('stat-lines');
+                const statReading = document.getElementById('stat-reading');
+                
+                if (statChars) statChars.textContent = `${charCount.toLocaleString()} 文字`;
+                if (statWords) statWords.textContent = `${wordCountText} words`;
+                if (statLines) statLines.textContent = `${lineCount.toLocaleString()} 行`;
+                if (statReading) statReading.textContent = `約 ${readingTime} 分`;
+            }
+
+            // 目次の動的生成と更新関数
+            function updateOutline() {
+                if (!editor) return;
+                const outlineContent = document.getElementById('outline-content');
+                if (!outlineContent) return;
+
+                outlineContent.innerHTML = '';
+                const lineCount = editor.lineCount();
+                let headingsCount = 0;
+                let inCodeBlock = false;
+                let inCommentBlock = false;
+
+                for (let i = 0; i < lineCount; i++) {
+                    let lineText = editor.getLine(i).trim();
+                    
+                    // コードブロック内は見出しパースをスキップ
+                    if (lineText.startsWith('```')) {
+                        inCodeBlock = !inCodeBlock;
+                        continue;
+                    }
+                    if (inCodeBlock) continue;
+
+                    // HTMLコメント（<!-- ... -->）内は見出しパースをスキップ
+                    if (inCommentBlock) {
+                        if (lineText.includes('-->')) {
+                            inCommentBlock = false;
+                            // --> 以降の部分を取り出して判定継続
+                            lineText = lineText.split('-->')[1] || '';
+                        } else {
+                            continue;
+                        }
+                    } else {
+                        if (lineText.includes('<!--')) {
+                            if (lineText.includes('-->')) {
+                                // 1行内で完結するコメントを除去
+                                lineText = lineText.replace(/<!--[\s\S]*?-->/g, '').trim();
+                            } else {
+                                inCommentBlock = true;
+                                // <!-- 以前の部分を取り出して判定継続
+                                lineText = lineText.split('<!--')[0].trim();
+                            }
+                        }
+                    }
+
+                    if (!lineText) continue;
+
+                    // 見出し（#）をパースする
+                    const match = lineText.match(/^(#{1,6})\s+(.+)$/);
+                    if (match) {
+                        headingsCount++;
+                        const level = match[1].length; // # の数 (1〜6)
+                        const titleText = match[2];
+
+                        const itemEl = document.createElement('div');
+                        itemEl.className = `outline-item outline-h${level}`;
+                        itemEl.textContent = titleText;
+                        itemEl.title = titleText;
+                        
+                        // クリックしたらその見出し行へジャンプ
+                        const lineIndex = i;
+                        itemEl.addEventListener('click', () => {
+                            // アクティブクラスの切り替え
+                            document.querySelectorAll('.outline-item').forEach(el => el.classList.remove('active'));
+                            itemEl.classList.add('active');
+                            scrollToHeading(lineIndex);
+                        });
+
+                        outlineContent.appendChild(itemEl);
+                    }
+                }
+
+                if (headingsCount === 0) {
+                    outlineContent.innerHTML = '<div style="font-size: 0.85rem; color: var(--text-secondary); padding: 0.5rem 1rem; text-align: center;">見出しが見つかりません。</div>';
+                }
+            }
+
+            // 指定された見出し行へエディタとプレビューをスクロールさせる関数
+            function scrollToHeading(lineIndex) {
+                if (!editor) return;
+                
+                // エディタのカーソルを見出し行の先頭へ移動
+                editor.setCursor({ line: lineIndex, ch: 0 });
+                editor.focus();
+
+                // エディタのスクロール位置を調整（見出しが画面中央付近にくるように）
+                const charCoords = editor.charCoords({ line: lineIndex, ch: 0 }, 'local');
+                const scrollInfo = editor.getScrollInfo();
+                const targetTop = charCoords.top - (scrollInfo.clientHeight / 3);
+                editor.scrollTo(null, Math.max(0, targetTop));
+
+                // プレビューのスクロールも連動させる
+                scrollToLineInPreview(lineIndex, true);
+            }
+
+            // エディタへ特定の書式マークアップを挿入する関数
+            function insertFormatting(formatType) {
+                if (!editor) return;
+                const doc = editor.getDoc();
+                const selectedText = doc.getSelection() || "";
+                const cursor = doc.getCursor();
+                let newText = "";
+                let selectionOffsetStart = 0;
+                let selectionOffsetEnd = 0;
+
+                switch (formatType) {
+                    case 'bold':
+                        newText = `**${selectedText || "太字テキスト"}**`;
+                        selectionOffsetStart = 2;
+                        selectionOffsetEnd = selectedText ? newText.length - 2 : newText.length - 2;
+                        break;
+                    case 'italic':
+                        newText = `*${selectedText || "斜体テキスト"}*`;
+                        selectionOffsetStart = 1;
+                        selectionOffsetEnd = selectedText ? newText.length - 1 : newText.length - 1;
+                        break;
+                    case 'strikethrough':
+                        newText = `~~${selectedText || "打ち消しテキスト"}~~`;
+                        selectionOffsetStart = 2;
+                        selectionOffsetEnd = selectedText ? newText.length - 2 : newText.length - 2;
+                        break;
+                    case 'h1':
+                        newText = `\n# ${selectedText || "見出し1"}\n`;
+                        selectionOffsetStart = 3;
+                        selectionOffsetEnd = newText.length - 1;
+                        break;
+                    case 'h2':
+                        newText = `\n## ${selectedText || "見出し2"}\n`;
+                        selectionOffsetStart = 4;
+                        selectionOffsetEnd = newText.length - 1;
+                        break;
+                    case 'h3':
+                        newText = `\n### ${selectedText || "見出し3"}\n`;
+                        selectionOffsetStart = 5;
+                        selectionOffsetEnd = newText.length - 1;
+                        break;
+                    case 'link':
+                        newText = `[${selectedText || "リンクテキスト"}](https://example.com)`;
+                        selectionOffsetStart = 1;
+                        selectionOffsetEnd = selectedText ? selectedText.length + 1 : 8;
+                        break;
+                    case 'image':
+                        newText = `![${selectedText || "代替テキスト"}](https://example.com/image.png)`;
+                        selectionOffsetStart = 2;
+                        selectionOffsetEnd = selectedText ? selectedText.length + 2 : 8;
+                        break;
+                    case 'code':
+                        if (selectedText.includes('\n')) {
+                            newText = `\n\`\`\`javascript\n${selectedText}\n\`\`\`\n`;
+                            selectionOffsetStart = 15;
+                            selectionOffsetEnd = newText.length - 5;
+                        } else {
+                            newText = `\`${selectedText || "コード"}\``;
+                            selectionOffsetStart = 1;
+                            selectionOffsetEnd = newText.length - 1;
+                        }
+                        break;
+                    case 'ul':
+                        newText = `\n- ${selectedText || "リスト項目"}\n`;
+                        selectionOffsetStart = 3;
+                        selectionOffsetEnd = newText.length - 1;
+                        break;
+                    case 'ol':
+                        newText = `\n1. ${selectedText || "リスト項目"}\n`;
+                        selectionOffsetStart = 4;
+                        selectionOffsetEnd = newText.length - 1;
+                        break;
+                    case 'quote':
+                        newText = `\n> ${selectedText || "引用テキスト"}\n`;
+                        selectionOffsetStart = 3;
+                        selectionOffsetEnd = newText.length - 1;
+                        break;
+                }
+
+                doc.replaceSelection(newText);
+                
+                if (!selectedText) {
+                    const from = { line: cursor.line, ch: cursor.ch + selectionOffsetStart };
+                    const to = { line: cursor.line, ch: cursor.ch + selectionOffsetEnd };
+                    doc.setSelection(from, to);
+                }
+                editor.focus();
+            }
+
+            function scrollToLineInPreview(lineNum, smooth = false) {
+                if (!previewContainer) return;
+                
+                const targets = Array.from(previewContainer.querySelectorAll('[data-line]'));
+                if (targets.length === 0) return;
+                
+                let closestTarget = null;
+                let closestLineDiff = Infinity;
+                
+                targets.forEach(target => {
+                    const targetLine = parseInt(target.getAttribute('data-line'), 10);
+                    const diff = lineNum - targetLine;
+                    if (diff >= 0 && diff < closestLineDiff) {
+                        closestLineDiff = diff;
+                        closestTarget = target;
+                    }
+                });
+                
+                if (closestTarget) {
+                    const containerRect = previewContainer.getBoundingClientRect();
+                    const targetRect = closestTarget.getBoundingClientRect();
+                    const targetTop = targetRect.top - containerRect.top + previewContainer.scrollTop;
+                    
+                    previewContainer.scrollTo({
+                        top: targetTop,
+                        behavior: smooth ? 'smooth' : 'auto'
+                    });
+                }
+            }
+
+            // Sync Editor Scroll -> Preview
+            editor.on('scroll', () => {
+                if (isTyping) return;
+                const scrollInfo = editor.getScrollInfo();
+                
+                if (scrollInfo.top + scrollInfo.clientHeight >= scrollInfo.height - 10) {
+                    previewContainer.scrollTop = previewContainer.scrollHeight - previewContainer.clientHeight;
+                    return;
+                }
+                if (scrollInfo.top <= 2) {
+                    previewContainer.scrollTop = 0;
+                    return;
+                }
+
+                const topChar = editor.coordsChar({ left: 0, top: scrollInfo.top }, 'local');
+                scrollToLineInPreview(topChar.line, false);
+            });
+
+            // Sync Editor Cursor -> Preview
+            editor.on('cursorActivity', () => {
+                const cursor = editor.getDoc().getCursor();
+                const cursorLine = cursor.line;
+                
+                if (!isTyping && cursorLine !== lastCursorLine) {
+                    lastCursorLine = cursorLine;
+                    scrollToLineInPreview(cursorLine, true);
+                }
+
+                // テーブル編集アシスタントの表示制御
+                updateTableHelperVisibility(cursorLine);
+            });
+
+            // テーブル編集アシスタントの表示制御関数
+            function updateTableHelperVisibility(lineIndex) {
+                const helperTools = document.getElementById('table-helper-tools');
+                if (!helperTools) return;
+                
+                const lineText = editor.getLine(lineIndex);
+                if (lineText && lineText.trim().startsWith('|')) {
+                    helperTools.style.display = 'flex';
+                } else {
+                    helperTools.style.display = 'none';
+                }
+            }
+
+            // 書式ツールバーの各ボタンのクリックイベントバインド
+            document.querySelectorAll('.editor-toolbar .toolbar-btn').forEach(btn => {
+                const format = btn.getAttribute('data-format');
+                if (format) {
+                    btn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        if (format === 'table') {
+                            toggleTablePopover(e);
+                        } else {
+                            insertFormatting(format);
+                        }
+                    });
+                }
+            });
+
+            const imageInsertButton = document.getElementById('toolbar-btn-image');
+            const imageInsertMenu = document.getElementById('image-insert-menu');
+            const svgInsertModal = document.getElementById('svg-insert-modal');
+            const svgCodeInput = document.getElementById('svg-code-input');
+            const svgInsertMessage = document.getElementById('svg-insert-message');
+
+            function closeImageInsertMenu() {
+                imageInsertMenu.hidden = true;
+                imageInsertButton.setAttribute('aria-expanded', 'false');
+            }
+
+            function closeSvgInsertModal() {
+                svgInsertModal.classList.remove('active');
+                svgInsertModal.setAttribute('aria-hidden', 'true');
+                svgInsertMessage.style.display = 'none';
+                editor.focus();
+            }
+
+            function openSvgInsertModal() {
+                const selectedText = editor.getDoc().getSelection().trim();
+                svgCodeInput.value = isSvgMarkup(selectedText) ? selectedText : SVG_TEMPLATE;
+                svgInsertMessage.style.display = 'none';
+                svgInsertModal.classList.add('active');
+                svgInsertModal.setAttribute('aria-hidden', 'false');
+                setTimeout(() => svgCodeInput.focus(), 0);
+            }
+
+            imageInsertButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                const willOpen = imageInsertMenu.hidden;
+                imageInsertMenu.hidden = !willOpen;
+                imageInsertButton.setAttribute('aria-expanded', String(willOpen));
+            });
+            document.getElementById('btn-insert-image-url').addEventListener('click', () => {
+                closeImageInsertMenu();
+                insertFormatting('image');
+            });
+            document.getElementById('btn-insert-svg-code').addEventListener('click', () => {
+                closeImageInsertMenu();
+                openSvgInsertModal();
+            });
+            document.getElementById('btn-close-svg-insert').addEventListener('click', closeSvgInsertModal);
+            document.getElementById('btn-cancel-svg-insert').addEventListener('click', closeSvgInsertModal);
+            document.getElementById('btn-confirm-svg-insert').addEventListener('click', () => {
+                try {
+                    insertSvgMarkup(svgCodeInput.value);
+                    closeSvgInsertModal();
+                } catch (err) {
+                    svgInsertMessage.textContent = err.message;
+                    svgInsertMessage.style.display = 'block';
+                }
+            });
+            svgInsertModal.addEventListener('click', (e) => {
+                if (e.target === svgInsertModal) closeSvgInsertModal();
+            });
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.image-insert-wrap')) closeImageInsertMenu();
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    closeImageInsertMenu();
+                    if (svgInsertModal.classList.contains('active')) closeSvgInsertModal();
+                }
+            });
+
+            // テーブルグリッドの初期化
+            const tablePopover = document.getElementById('table-popover');
+            const tableGridContainer = document.getElementById('table-grid-container');
+            const tablePopoverStatus = document.getElementById('table-popover-status');
+            const tableBtn = document.getElementById('toolbar-btn-table');
+
+            // 8x8 グリッドを作成
+            const maxRows = 8;
+            const maxCols = 8;
+            if (tableGridContainer) {
+                for (let r = 1; r <= maxRows; r++) {
+                    for (let c = 1; c <= maxCols; c++) {
+                        const cell = document.createElement('div');
+                        cell.className = 'grid-cell';
+                        cell.dataset.row = r;
+                        cell.dataset.col = c;
+                        
+                        cell.addEventListener('mouseover', () => {
+                            highlightGrid(r, c);
+                        });
+                        
+                        cell.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            insertTable(r, c);
+                            tablePopover.style.display = 'none';
+                        });
+                        
+                        tableGridContainer.appendChild(cell);
+                    }
+                }
+            }
+
+            function highlightGrid(targetRow, targetCol) {
+                if (!tableGridContainer || !tablePopoverStatus) return;
+                const cells = tableGridContainer.querySelectorAll('.grid-cell');
+                cells.forEach(cell => {
+                    const r = parseInt(cell.dataset.row, 10);
+                    const c = parseInt(cell.dataset.col, 10);
+                    if (r <= targetRow && c <= targetCol) {
+                        cell.classList.add('highlighted');
+                    } else {
+                        cell.classList.remove('highlighted');
+                    }
+                });
+                tablePopoverStatus.textContent = `${targetRow} x ${targetCol}`;
+            }
+
+            function insertTable(rows, cols) {
+                if (!editor) return;
+                const doc = editor.getDoc();
+                const cursor = doc.getCursor();
+                const tableMd = generateMarkdownTable(rows, cols);
+                
+                const lineContent = doc.getLine(cursor.line) || '';
+                let before = '';
+                let after = '';
+                if (lineContent.trim() !== '') {
+                    before = '\n\n';
+                }
+                
+                const insertedText = before + tableMd + after;
+                doc.replaceSelection(insertedText);
+                
+                const newCursorLine = cursor.line + (before ? 2 : 0);
+                editor.setCursor({ line: newCursorLine, ch: 2 });
+                editor.focus();
+            }
+
+            function generateMarkdownTable(rows, cols) {
+                let md = '';
+                // ヘッダー行
+                md += '| ' + Array(cols).fill(' ').join(' | ') + ' |\n';
+                // 区切り行
+                md += '|' + Array(cols).fill('---').join('|') + '|\n';
+                // データ行
+                for (let r = 1; r < rows; r++) {
+                    md += '| ' + Array(cols).fill(' ').join(' | ') + ' |\n';
+                }
+                return md;
+            }
+
+            function toggleTablePopover(e) {
+                if (!tablePopover || !tableBtn) return;
+                
+                if (tablePopover.style.display === 'none') {
+                    const rect = tableBtn.getBoundingClientRect();
+                    const parentRect = document.getElementById('editor-container').getBoundingClientRect();
+                    
+                    tablePopover.style.left = `${rect.left - parentRect.left}px`;
+                    tablePopover.style.top = `${rect.bottom - parentRect.top + 5}px`;
+                    
+                    tablePopover.style.display = 'flex';
+                    highlightGrid(0, 0);
+                } else {
+                    tablePopover.style.display = 'none';
+                }
+            }
+
+            // ポップオーバーの外側をクリックしたときに閉じる
+            document.addEventListener('click', (e) => {
+                if (tablePopover && tablePopover.style.display !== 'none') {
+                    if (!tablePopover.contains(e.target) && e.target !== tableBtn && !tableBtn.contains(e.target)) {
+                        tablePopover.style.display = 'none';
+                    }
+                }
+            });
+
+            // 文字列中のn番目の出現位置を見つける補助関数
+            function findNthOccurrence(str, pat, n) {
+                let i = -1;
+                while (n-- > 0) {
+                    i = str.indexOf(pat, i + 1);
+                    if (i < 0) break;
+                }
+                return i;
+            }
+
+            // テーブル操作アシスタントのボタンイベント
+            const btnAddRow = document.getElementById('btn-table-add-row');
+            const btnDeleteRow = document.getElementById('btn-table-delete-row');
+            const btnAddCol = document.getElementById('btn-table-add-col');
+            const btnDeleteCol = document.getElementById('btn-table-delete-col');
+
+            if (btnAddRow) {
+                btnAddRow.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (!editor) return;
+                    const doc = editor.getDoc();
+                    const cursor = doc.getCursor();
+                    const lineText = doc.getLine(cursor.line);
+                    if (lineText && lineText.trim().startsWith('|')) {
+                        const columnsCount = lineText.split('|').length - 2;
+                        if (columnsCount > 0) {
+                            const newRow = '\n| ' + Array(columnsCount).fill(' ').join(' | ') + ' |';
+                            const lineLength = lineText.length;
+                            doc.replaceRange(newRow, { line: cursor.line, ch: lineLength });
+                            editor.setCursor({ line: cursor.line + 1, ch: 2 });
+                            editor.focus();
+                        }
+                    }
+                });
+            }
+
+            if (btnDeleteRow) {
+                btnDeleteRow.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (!editor) return;
+                    const doc = editor.getDoc();
+                    const cursor = doc.getCursor();
+                    const lineCount = doc.lineCount();
+                    if (lineCount > 1) {
+                        if (cursor.line === lineCount - 1) {
+                            const pre
