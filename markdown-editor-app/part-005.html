@@ -1,0 +1,601 @@
+      status: comment.status || 'open',
+                updatedAt: new Date().toISOString()
+            };
+        }
+
+        function collectCurrentProofreadComments() {
+            const text = editor ? editor.getValue() : '';
+            proofreadComments.forEach(comment => {
+                const mark = getProofreadMark(comment.id);
+                const found = mark ? mark.find() : null;
+                if (found) {
+                    comment.start = editor.indexFromPos(found.from);
+                    comment.end = editor.indexFromPos(found.to);
+                    comment.selectedText = text.slice(comment.start, comment.end);
+                }
+            });
+            return proofreadComments.map(normalizeCommentForStorage);
+        }
+
+        function mergeProofreadComments(localComments, remoteComments) {
+            const merged = new Map();
+            (Array.isArray(remoteComments) ? remoteComments : []).forEach(comment => {
+                if (comment && comment.id) merged.set(comment.id, normalizeCommentForStorage(comment));
+            });
+            (Array.isArray(localComments) ? localComments : []).forEach(comment => {
+                if (!comment || !comment.id) return;
+                const normalized = normalizeCommentForStorage(comment);
+                const existing = merged.get(comment.id);
+                if (existing && existing.status === 'deleted' && normalized.status === 'open') return;
+                merged.set(comment.id, normalized);
+            });
+            return Array.from(merged.values());
+        }
+
+        function saveProofreadComments() {
+            try {
+                const text = editor ? editor.getValue() : '';
+                const openComments = collectCurrentProofreadComments();
+                localStorage.setItem('lumina_autosave', text);
+                localStorage.setItem(PROOFREAD_STORAGE_KEY, JSON.stringify(getProofreadCommentPayload(text, openComments)));
+                saveSharedProofreadComments(openComments, text);
+            } catch (error) {
+                console.warn('Failed to save proofread comments:', error);
+            }
+        }
+
+        function restoreProofreadComments(text) {
+            try {
+                const raw = localStorage.getItem(PROOFREAD_STORAGE_KEY);
+                if (!raw) return false;
+                const saved = JSON.parse(raw);
+                if (!saved || saved.textHash !== getProofreadTextHash(text) || !Array.isArray(saved.comments)) {
+                    return false;
+                }
+                const ignoredRanges = buildIgnoredRanges(text);
+                const restored = saved.comments
+                    .filter(comment => !comment.status || comment.status === 'open')
+                    .map((comment, index) => normalizeProofreadComment(comment, index, comment.source || 'saved', text, ignoredRanges))
+                    .filter(Boolean);
+                setProofreadComments(restored, { skipSave: true });
+                return restored.length > 0;
+            } catch (error) {
+                console.warn('Failed to restore proofread comments:', error);
+                return false;
+            }
+        }
+
+        function setProofreadComments(comments, options = {}) {
+            clearProofreadMarks();
+            proofreadComments = comments;
+            activeProofreadId = null;
+            if (options.filter) proofreadFilter = options.filter;
+            refreshProofreadMarks();
+
+            renderProofreadComments();
+            if (!options.skipSave) saveProofreadComments();
+        }
+
+        function refreshProofreadMarks() {
+            clearProofreadMarks();
+            proofreadComments.forEach(comment => {
+                if (comment.status !== 'open') return;
+                const from = editor.posFromIndex(comment.start);
+                const to = editor.posFromIndex(comment.end);
+                const mark = editor.markText(from, to, {
+                    className: 'proofread-mark',
+                    title: comment.message
+                });
+                proofreadMarks.push({ id: comment.id, mark });
+            });
+        }
+
+        function renderProofreadComments() {
+            const openComments = proofreadComments.filter(comment => comment.status === 'open');
+            const manualCount = openComments.filter(comment => comment.source === 'manual').length;
+            const ruleCount = openComments.filter(comment => comment.source === 'rule').length;
+            const aiCount = openComments.filter(comment => ['openai', 'gemini', 'ai'].includes(comment.source)).length;
+            proofreadSummary.textContent = openComments.length
+                ? `全${openComments.length}件 / 手動${manualCount} / ルール${ruleCount} / AI${aiCount}`
+                : '校正コメントはありません';
+
+            updateProofreadFilterButtons();
+
+            const visibleComments = openComments.filter(comment => {
+                if (proofreadFilter === 'all') return true;
+                if (proofreadFilter === 'manual') return comment.source === 'manual';
+                if (proofreadFilter === 'rule') return comment.source === 'rule';
+                if (proofreadFilter === 'ai') return ['openai', 'gemini', 'ai'].includes(comment.source);
+                return true;
+            });
+
+            if (!openComments.length) {
+                proofreadList.innerHTML = '<div class="proofread-empty">本文を選択して「コメント追加」を押すか、「ルール校正」「AI校正」を実行すると、ここにコメントが表示されます。</div>';
+                return;
+            }
+
+            if (!visibleComments.length) {
+                proofreadList.innerHTML = `<div class="proofread-empty">${escapeHtml(getProofreadFilterLabel(proofreadFilter))}のコメントはありません。「すべて」に切り替えると他のコメントを確認できます。</div>`;
+                return;
+            }
+
+            proofreadList.innerHTML = visibleComments.map(comment => `
+                <article class="proofread-card ${comment.id === activeProofreadId ? 'active' : ''}" data-id="${comment.id}">
+                    <div class="proofread-card-head">
+                        <span class="proofread-badge">${escapeHtml(getProofreadCategoryLabel(comment.category))}</span>
+                        <span class="proofread-source">${escapeHtml(getProofreadSourceLabel(comment.source))}</span>
+                    </div>
+                    <div class="proofread-selected">${escapeHtml(comment.selectedText)}</div>
+                    <div class="proofread-message">${escapeHtml(comment.message)}</div>
+                    ${comment.suggestion ? `<div class="proofread-suggestion">修正案: ${escapeHtml(comment.suggestion)}</div>` : ''}
+                    <div class="proofread-card-actions">
+                        ${comment.suggestion && comment.canApply !== false ? `<button class="proofread-mini-btn" data-action="apply" data-id="${comment.id}">承認して適用</button>` : ''}
+                        ${comment.suggestion && comment.canApply === false ? `<span class="proofread-source">適用は手動確認</span>` : ''}
+                        <button class="proofread-mini-btn" data-action="delete" data-id="${comment.id}">削除</button>
+                    </div>
+                </article>
+            `).join('');
+
+            proofreadList.querySelectorAll('.proofread-card').forEach(card => {
+                card.addEventListener('click', () => focusProofreadComment(card.dataset.id));
+            });
+            proofreadList.querySelectorAll('.proofread-mini-btn').forEach(button => {
+                button.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    const id = button.dataset.id;
+                    if (button.dataset.action === 'apply') applyProofreadSuggestion(id);
+                    if (button.dataset.action === 'delete') removeProofreadComment(id);
+                });
+            });
+        }
+
+        function setProofreadFilter(filter) {
+            proofreadFilter = filter;
+            renderProofreadComments();
+        }
+
+        function updateProofreadFilterButtons() {
+            document.querySelectorAll('.proofread-filter-btn').forEach(button => {
+                button.classList.toggle('active', button.dataset.filter === proofreadFilter);
+            });
+        }
+
+        function getProofreadFilterLabel(filter) {
+            const labels = {
+                all: 'すべて',
+                manual: '手動',
+                rule: 'ルール',
+                ai: 'AI'
+            };
+            return labels[filter] || '選択中';
+        }
+
+        function getProofreadCategoryLabel(category) {
+            const labels = {
+                typo: '誤字',
+                grammar: '文法',
+                style: '表現',
+                consistency: '表記ゆれ',
+                markdown: 'Markdown',
+                comment: 'コメント'
+            };
+            return labels[category] || category || '確認';
+        }
+
+        function getProofreadSourceLabel(source) {
+            const labels = {
+                rule: 'Rule',
+                openai: 'OpenAI',
+                gemini: 'Gemini',
+                ai: 'AI',
+                manual: 'Manual',
+                shared: 'Shared',
+                saved: 'Saved'
+            };
+            return labels[source] || source || 'AI';
+        }
+
+        function addManualProofreadComment() {
+            if (!editor) return;
+            if (isGeneratedFullReadOnly) {
+                alert('全体版は閲覧専用です。コメントや修正は分割元ファイルで行ってください。');
+                return;
+            }
+            const selection = editor.getSelection();
+            if (!selection || !selection.trim()) {
+                alert('コメントを付けたい本文範囲を選択してください。');
+                editor.focus();
+                return;
+            }
+
+            const message = prompt('コメントを入力してください。');
+            if (message === null) return;
+            const trimmedMessage = message.trim();
+            if (!trimmedMessage) {
+                alert('コメント本文を入力してください。');
+                return;
+            }
+
+            const suggestion = prompt('修正案があれば入力してください。空欄でも追加できます。', '');
+            if (suggestion === null) return;
+
+            const from = editor.getCursor('from');
+            const to = editor.getCursor('to');
+            const start = editor.indexFromPos(from);
+            const end = editor.indexFromPos(to);
+            const text = editor.getValue();
+            const comment = {
+                id: `manual-${Date.now()}-${start}`,
+                start,
+                end,
+                selectedText: text.slice(start, end),
+                category: 'comment',
+                message: trimmedMessage,
+                suggestion: suggestion.trim(),
+                canApply: !!suggestion.trim(),
+                source: 'manual',
+                status: 'open'
+            };
+
+            proofreadComments.push(comment);
+            activeProofreadId = comment.id;
+            proofreadFilter = 'manual';
+            refreshProofreadMarks();
+            renderProofreadComments();
+            saveProofreadComments();
+            openProofreadPane();
+            focusProofreadComment(comment.id);
+            scrollProofreadCardIntoView(comment.id);
+            updateStatus('saved', 'コメントを追加しました');
+        }
+
+        function scrollProofreadCardIntoView(id) {
+            const card = proofreadList.querySelector(`[data-id="${CSS.escape(id)}"]`);
+            if (card) card.scrollIntoView({ block: 'nearest' });
+        }
+
+        function focusProofreadComment(id) {
+            const comment = proofreadComments.find(item => item.id === id);
+            if (!comment) return;
+            activeProofreadId = id;
+            clearProofreadMarks();
+            proofreadComments.forEach(item => {
+                if (item.status !== 'open') return;
+                const from = editor.posFromIndex(item.start);
+                const to = editor.posFromIndex(item.end);
+                const mark = editor.markText(from, to, {
+                    className: item.id === activeProofreadId ? 'proofread-mark active' : 'proofread-mark',
+                    title: item.message
+                });
+                proofreadMarks.push({ id: item.id, mark });
+            });
+
+            const mark = getProofreadMark(id);
+            const found = mark ? mark.find() : null;
+            const from = found ? found.from : editor.posFromIndex(comment.start);
+            const to = found ? found.to : editor.posFromIndex(comment.end);
+            editor.focus();
+            editor.setSelection(from, to);
+            editor.scrollIntoView({ from, to }, 80);
+            renderProofreadComments();
+        }
+
+        function applyProofreadSuggestion(id) {
+            const comment = proofreadComments.find(item => item.id === id);
+            if (!comment || !comment.suggestion) return;
+
+            const mark = getProofreadMark(id);
+            const found = mark ? mark.find() : null;
+            const from = found ? found.from : editor.posFromIndex(comment.start);
+            const to = found ? found.to : editor.posFromIndex(comment.end);
+            const currentText = editor.getRange(from, to);
+            if (currentText !== comment.selectedText) {
+                alert('本文が変更されているか、指摘位置が一致しないため自動適用できません。該当箇所を確認してください。');
+                focusProofreadComment(id);
+                return;
+            }
+            isApplyingProofreadChange = true;
+            editor.replaceRange(comment.suggestion, from, to);
+            isApplyingProofreadChange = false;
+            removeProofreadComment(id);
+        }
+
+        function removeProofreadComment(id) {
+            const mark = getProofreadMark(id);
+            if (mark) mark.clear();
+            proofreadMarks = proofreadMarks.filter(item => item.id !== id);
+            const comment = proofreadComments.find(item => item.id === id);
+            if (comment) {
+                comment.status = 'deleted';
+                comment.deletedAt = new Date().toISOString();
+            }
+            if (activeProofreadId === id) activeProofreadId = null;
+            renderProofreadComments();
+            saveProofreadComments();
+        }
+
+        function clearProofreadComments(options = {}) {
+            clearProofreadMarks();
+            proofreadComments = [];
+            activeProofreadId = null;
+            renderProofreadComments();
+            if (!options.skipSave) saveProofreadComments();
+        }
+
+        function restoreOrClearProofreadComments(text) {
+            if (!restoreProofreadComments(text)) {
+                clearProofreadComments({ skipSave: true });
+                return false;
+            }
+            return true;
+        }
+
+        async function restoreSharedOrLocalProofreadComments(text) {
+            if (await restoreSharedProofreadComments(text)) {
+                return true;
+            }
+            return restoreOrClearProofreadComments(text);
+        }
+
+        async function refreshSharedProofreadComments() {
+            if (!activeLocalFileHandle) {
+                alert('共有コメントを読むには、先にローカルフォルダ連携からMarkdownファイルを開いてください。');
+                return;
+            }
+
+            const loaded = await restoreSharedProofreadComments(editor.getValue());
+            if (loaded) {
+                openProofreadPane();
+                updateStatus('saved', '共有コメントを読み込みました');
+            } else {
+                updateStatus('normal', '共有コメントはありません');
+                alert('この本文に一致する共有コメントは見つかりませんでした。');
+            }
+        }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function runRuleProofread() {
+            if (isGeneratedFullReadOnly) {
+                alert('全体版は閲覧専用です。校正は分割元ファイルで行ってください。');
+                return;
+            }
+            openProofreadPane();
+            const text = editor.getValue();
+            const ignoredRanges = buildIgnoredRanges(text);
+            const comments = [];
+
+            const addPattern = (regex, category, message, suggestionFactory) => {
+                let match;
+                while ((match = regex.exec(text)) !== null) {
+                    const start = match.index;
+                    const end = start + match[0].length;
+                    if (overlapsIgnored(start, end, ignoredRanges)) continue;
+                    comments.push({
+                        start,
+                        end,
+                        selectedText: match[0],
+                        category,
+                        message,
+                        suggestion: typeof suggestionFactory === 'function' ? suggestionFactory(match) : suggestionFactory
+                    });
+                }
+            };
+
+            const typoWords = [
+                ['こんにちわ', 'こんにちは', '挨拶としては「こんにちは」が一般的です。'],
+                ['こんばんわ', 'こんばんは', '挨拶としては「こんばんは」が一般的です。'],
+                ['シュミレーション', 'シミュレーション', '一般的な表記は「シミュレーション」です。'],
+                ['コミニュケーション', 'コミュニケーション', '一般的な表記は「コミュニケーション」です。'],
+                ['完壁', '完璧', '誤変換の可能性があります。'],
+                ['雰囲気', '雰囲気', '表記は正しいです。']
+            ];
+
+            typoWords.forEach(([wrong, suggestion, message]) => {
+                if (wrong === suggestion) return;
+                addPattern(new RegExp(wrong, 'g'), 'typo', message, suggestion);
+            });
+
+            addPattern(/に取って/g, 'typo', 'この文脈では「取って」より「とって」が自然な場合があります。', 'にとって');
+            addPattern(/出来(る|ます|た|ない|ず|れば|て|そう)/g, 'style', 'ひらがなの「できる」にすると読みやすくなります。', match => `でき${match[1]}`);
+            addPattern(/事(が|を|は|に|で|と|の)/g, 'style', '形式名詞はひらがなの「こと」が自然な場合があります。', match => `こと${match[1]}`);
+            addPattern(/為(に|の|だ|で|、|。)/g, 'style', '形式名詞はひらがなの「ため」が自然な場合があります。', match => `ため${match[1]}`);
+            addPattern(/。。|、、|，，|．．/g, 'typo', '句読点が重複しています。', match => match[0][0]);
+            addPattern(/[ \t]+$/gm, 'style', '行末に不要な空白があります。', '');
+            addPattern(/([^\n])\n{3,}([^\n])/g, 'style', '空行が多すぎる可能性があります。', match => `${match[1]}\n\n${match[2]}`);
+
+            const normalized = comments
+                .map((comment, index) => normalizeProofreadComment(comment, index, 'rule', text, ignoredRanges))
+                .filter(Boolean);
+
+            setProofreadComments(normalized, { filter: 'rule' });
+            updateStatus('normal', normalized.length ? `ルール校正: ${normalized.length}件` : 'ルール校正: 指摘なし');
+        }
+
+        function configureAiProofread() {
+            const currentProvider = localStorage.getItem('lumina_ai_proofread_provider') || DEFAULT_AI_PROVIDER;
+            const providerInput = prompt('AIプロバイダを入力してください: openai / gemini', currentProvider);
+            if (providerInput === null) return false;
+
+            const provider = providerInput.trim().toLowerCase();
+            if (!['openai', 'gemini'].includes(provider)) {
+                alert('AIプロバイダは openai または gemini を入力してください。');
+                return false;
+            }
+
+            const keyStorageKey = `lumina_ai_proofread_key_${provider}`;
+            const modelStorageKey = `lumina_ai_proofread_model_${provider}`;
+            const currentKey = localStorage.getItem(keyStorageKey) || localStorage.getItem('lumina_ai_proofread_key') || '';
+            const currentModel = localStorage.getItem(modelStorageKey) || DEFAULT_AI_PROOFREAD_MODELS[provider];
+            const keyLabel = provider === 'gemini' ? 'Gemini APIキー' : 'OpenAI APIキー';
+            const key = prompt(`${keyLabel}を入力してください。ブラウザのlocalStorageに保存されます。`, currentKey);
+            if (key === null) return false;
+            const model = prompt('AI校正に使うモデル名を入力してください。', currentModel);
+            if (model === null) return false;
+
+            localStorage.setItem('lumina_ai_proofread_provider', provider);
+            if (key.trim()) localStorage.setItem(keyStorageKey, key.trim());
+            if (model.trim()) localStorage.setItem(modelStorageKey, model.trim());
+            updateStatus('saved', `AI校正設定を保存しました (${getProofreadSourceLabel(provider)})`);
+            return true;
+        }
+
+        async function runAiProofread() {
+            if (isGeneratedFullReadOnly) {
+                alert('全体版は閲覧専用です。AI校正は分割元ファイルで行ってください。');
+                return;
+            }
+            openProofreadPane();
+            let provider = localStorage.getItem('lumina_ai_proofread_provider') || DEFAULT_AI_PROVIDER;
+            let apiKey = localStorage.getItem(`lumina_ai_proofread_key_${provider}`) || localStorage.getItem('lumina_ai_proofread_key') || '';
+            if (!apiKey && !configureAiProofread()) return;
+            provider = localStorage.getItem('lumina_ai_proofread_provider') || DEFAULT_AI_PROVIDER;
+            apiKey = localStorage.getItem(`lumina_ai_proofread_key_${provider}`) || localStorage.getItem('lumina_ai_proofread_key') || '';
+            const model = localStorage.getItem(`lumina_ai_proofread_model_${provider}`) || DEFAULT_AI_PROOFREAD_MODELS[provider] || DEFAULT_AI_PROOFREAD_MODELS.openai;
+            const text = editor.getValue();
+            const ignoredRanges = buildIgnoredRanges(text);
+            const targetText = text.length > PROOFREAD_MAX_CHARS ? text.slice(0, PROOFREAD_MAX_CHARS) : text;
+
+            proofreadSummary.textContent = `${getProofreadSourceLabel(provider)}でAI校正中...`;
+            updateStatus('saving', `${getProofreadSourceLabel(provider)}でAI校正中...`);
+
+            const instructions = [
+                'あなたは日本語Markdown文書の校正者です。',
+                '本文を直接書き換えず、校正コメントだけをJSONで返してください。',
+                '誤字脱字、誤変換、表記ゆれ、文法、読みづらい表現を指摘してください。',
+                'Markdown記法、URL、コード、固有名詞を不用意に指摘しないでください。',
+                'comments配列の各要素は start, end, selectedText, category, message, suggestion を持つJSONオブジェクトにしてください。',
+                'start/endは入力文字列全体に対する0始まりの文字オフセットです。',
+                'selectedTextは入力本文からそのままコピーした完全一致文字列にしてください。Markdownの区切り記号や隣接文字を余計に含めないでください。',
+                'suggestionはselectedTextだけを置き換える修正案にしてください。文全体の書き換えや別の箇所の修正案は出さないでください。',
+                'categoryは typo, grammar, style, consistency, markdown のどれかにしてください。',
+                '確信度が低いものは出さないでください。'
+            ].join('\n');
+
+            try {
+                const outputText = provider === 'gemini'
+                    ? await requestGeminiProofread({ apiKey, model, instructions, text: targetText })
+                    : await requestOpenAiProofread({ apiKey, model, instructions, text: targetText });
+                const parsed = parseProofreadJson(outputText);
+                const normalized = parsed
+                    .map((comment, index) => normalizeProofreadComment(comment, index, provider, targetText, ignoredRanges))
+                    .filter(Boolean);
+
+                setProofreadComments(normalized, { filter: 'ai' });
+                updateStatus('normal', normalized.length ? `AI校正: ${normalized.length}件 (${getProofreadSourceLabel(provider)})` : `AI校正: 指摘なし (${getProofreadSourceLabel(provider)})`);
+            } catch (error) {
+                console.error('AI proofread failed:', error);
+                proofreadSummary.textContent = 'AI校正に失敗しました';
+                proofreadList.innerHTML = `<div class="proofread-empty">AI校正に失敗しました。プロバイダ、APIキー、モデル名、ブラウザの通信制限を確認してください。<br><br>${escapeHtml(error.message || error)}</div>`;
+                updateStatus('error', 'AI校正エラー');
+            }
+        }
+
+        async function requestOpenAiProofread({ apiKey, model, instructions, text }) {
+            const response = await fetch('https://api.openai.com/v1/responses', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                    model,
+                    instructions,
+                    input: text,
+                    text: {
+                        format: getProofreadJsonSchemaFormat()
+                    },
+                    temperature: 0.2,
+                    max_output_tokens: 1800,
+                    store: false
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || `HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            return extractOpenAiText(data);
+        }
+
+        async function requestGeminiProofread({ apiKey, model, instructions, text }) {
+            const modelName = model.startsWith('models/') ? model : `models/${model}`;
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/${encodeURIComponent(modelName).replace(/%2F/g, '/')}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    systemInstruction: {
+                        parts: [{ text: instructions }]
+                    },
+                    contents: [{
+                        role: 'user',
+                        parts: [{ text }]
+                    }],
+                    generationConfig: {
+                        temperature: 0.2,
+                        maxOutputTokens: 1800,
+                        responseMimeType: 'application/json',
+                        responseSchema: getGeminiProofreadResponseSchema()
+                    }
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || `HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            return extractGeminiText(data);
+        }
+
+        function extractOpenAiText(data) {
+            if (data.output_text) return data.output_text;
+            const chunks = [];
+            (data.output || []).forEach(item => {
+                (item.content || []).forEach(content => {
+                    if (content.type === 'output_text' && content.text) chunks.push(content.text);
+                });
+            });
+            return chunks.join('\n').trim();
+        }
+
+        function extractGeminiText(data) {
+            const chunks = [];
+            (data.candidates || []).forEach(candidate => {
+                ((candidate.content && candidate.content.parts) || []).forEach(part => {
+                    if (part.text) chunks.push(part.text);
+                });
+            });
+            return chunks.join('\n').trim();
+        }
+
+        function getProofreadJsonSchemaFormat() {
+            return {
+                type: 'json_schema',
+                name: 'proofread_comments',
+                strict: true,
+                schema: {
+                    type: 'object',
+                    additionalProperties: false,
+                    required: ['comments'],
+                    properties: {
+                        comments: {
+                            type: 'array',
+                            items: {
+                                type: 'object',
+                                additionalProperties: false,
+                                required: ['start', 'end', 'selectedText', 'category', 'message', 'suggestion'],
+                                properties: {
+                                    start: { type: 'inte
