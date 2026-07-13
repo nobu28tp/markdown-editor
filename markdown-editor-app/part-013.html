@@ -1,0 +1,677 @@
+                white-space: pre-wrap !important;
+            }
+
+            table {
+                display: table !important;
+                width: 100% !important;
+                overflow: visible !important;
+                table-layout: fixed !important;
+            }
+
+            thead {
+                display: table-header-group;
+            }
+
+            tr {
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
+
+            th, td {
+                word-break: break-word;
+                overflow-wrap: anywhere;
+            }
+
+            img, svg {
+                max-width: 100% !important;
+                height: auto !important;
+            }
+
+            a {
+                color: #0969da !important;
+                text-decoration: none !important;
+            }
+        }
+        `;
+
+        // HTML出力・プレビュー用の共通HTML生成関数
+        function generateHtmlExportContent(options = {}) {
+            const title = (document.getElementById('doc-title-input').value || '').trim() || 'Document';
+            const isSlideMode = previewContainer.classList.contains('marp-mode');
+            const forPrintPdf = !!options.forPrintPdf;
+            let content;
+
+            if (isSlideMode) {
+                // Slide mode: generate a full-featured slideshow HTML
+                const markdown = editor.getValue();
+                const marpResultH = renderWithMarp(markdown);
+                const { css: marpCss } = marpResultH;
+
+                // プレビューコンテナ内にすでに完璧にレンダリング済みのスライド要素（Mermaid描画完了済み）を直接利用する
+                const slideWrappers = Array.from(previewContainer.querySelectorAll('.marp-slide-wrapper'));
+                if (slideWrappers.length === 0) {
+                    throw new Error("スライドのレンダリングデータが見つかりません。プレビューを表示した状態でエクスポートしてください。");
+                }
+                const marpSlides = slideWrappers.map(wrapper => wrapper.innerHTML);
+                const totalSlides = marpSlides.length;
+
+                // Build individual slide divs (hidden by default except first)
+                const slidesHtml = marpSlides.map((slideHtml, i) =>
+                    '<div class="slide" data-index="' + i + '" style="display:' + (i === 0 ? 'flex' : 'none') + '">' + slideHtml + '</div>'
+                ).join('\n');
+
+                // Scope the theme CSS based on engine source
+                let scopedCss = '';
+                if (marpResultH.source === 'marp-core') {
+                    scopedCss = marpCss.replace(/div\.marpit\s*>\s*svg/g, '#slideshow.marpit .slide > svg');
+                } else {
+                    scopedCss = marpCss.replace(/\bsection\b/g, '.slide section');
+                }
+                
+                if (customThemeStyleTag && customThemeStyleTag.textContent) {
+                    scopedCss += '\n\n/* Custom Theme */\n' + customThemeStyleTag.textContent.replace(/#preview-content\.markdown-body/g, 'body').replace(/#preview-content \.marp-slide-wrapper/g, '#slideshow .slide');
+                }
+
+                content = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${title}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: #0d0d1a;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            user-select: none;
+        }
+
+        /* Progress bar */
+        #progress-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #58a6ff, #a371f7);
+            transition: width 0.3s ease;
+            z-index: 100;
+        }
+
+        /* Slide container */
+        #slideshow {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Individual slide */
+        .slide {
+            position: absolute;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+        }
+
+        /* Scale slide content to fill viewport for built-in engine */
+        ${marpResultH.source !== 'marp-core' ? `
+        .slide > * {
+            transform-origin: center center !important;
+            transform: scale(var(--slide-scale, 1)) !important;
+        }
+        ` : `
+        .slide > svg {
+            width: 100vw !important;
+            height: 100vh !important;
+        }
+        `}
+
+        /* Scoped theme CSS */
+        ${scopedCss}
+
+        /* Navigation controls */
+        #controls {
+            position: fixed;
+            bottom: 1.5rem;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            background: rgba(255,255,255,0.08);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 40px;
+            padding: 0.5rem 1.2rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 200;
+        }
+
+        body:hover #controls { opacity: 1; }
+
+        .ctrl-btn {
+            background: transparent;
+            border: none;
+            color: rgba(255,255,255,0.8);
+            font-size: 1.2rem;
+            cursor: pointer;
+            padding: 0.3rem 0.6rem;
+            border-radius: 6px;
+            transition: background 0.2s, color 0.2s;
+            line-height: 1;
+        }
+        .ctrl-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+        .ctrl-btn:disabled { opacity: 0.3; cursor: default; }
+
+        #slide-counter {
+            font-size: 0.85rem;
+            color: rgba(255,255,255,0.7);
+            min-width: 4em;
+            text-align: center;
+            font-variant-numeric: tabular-nums;
+        }
+
+        #btn-fullscreen {
+            font-size: 1rem;
+        }
+
+        /* Click zones */
+        #zone-prev, #zone-next {
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            width: 20%;
+            cursor: pointer;
+            z-index: 50;
+        }
+        #zone-prev { left: 0; }
+        #zone-next { right: 0; }
+
+        /* Slide number (paginate) */
+        .slide section .page-number { display: block; }
+
+        /* Print: show all slides */
+        @media print {
+            body { background: #fff; height: auto; overflow: visible; }
+            #controls, #progress-bar, #zone-prev, #zone-next { display: none !important; }
+            .slide { position: static; display: flex !important; page-break-after: always; }
+        }
+        ${MERMAID_CSS_PROTECTION}
+    </style>
+</head>
+<body>
+    <div id="progress-bar"></div>
+
+    <div id="zone-prev" onclick="changeSlide(-1)"></div>
+    <div id="zone-next" onclick="changeSlide(1)"></div>
+
+    <div id="slideshow" class="marpit" style="color-scheme: light;">
+${slidesHtml}
+    </div>
+
+    <div id="controls">
+        <button class="ctrl-btn" id="btn-prev" onclick="changeSlide(-1)" title="前のスライド (←)">&#8592;</button>
+        <span id="slide-counter">1 / ${totalSlides}</span>
+        <button class="ctrl-btn" id="btn-next" onclick="changeSlide(1)" title="次のスライド (→)">&#8594;</button>
+        <button class="ctrl-btn" id="btn-fullscreen" onclick="toggleFullscreen()" title="フルスクリーン (F)">&#x26F6;</button>
+    </div>
+
+    \x3cscript\x3e
+        let current = 0;
+        const total = ${totalSlides};
+        const slides = document.querySelectorAll('.slide');
+
+        function goTo(n) {
+            if (n < 0 || n >= total) return;
+            slides[current].style.display = 'none';
+            current = n;
+            slides[current].style.display = 'flex';
+            document.getElementById('slide-counter').textContent = (current + 1) + ' / ' + total;
+            document.getElementById('progress-bar').style.width = ((current + 1) / total * 100) + '%';
+            document.getElementById('btn-prev').disabled = current === 0;
+            document.getElementById('btn-next').disabled = current === total - 1;
+        }
+
+        function changeSlide(dir) { goTo(current + dir); }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', e => {
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') { e.preventDefault(); changeSlide(1); }
+            if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   { e.preventDefault(); changeSlide(-1); }
+            if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+            if (e.key === 'Home') goTo(0);
+            if (e.key === 'End')  goTo(total - 1);
+        });
+
+        // Touch swipe
+        let touchStartX = 0;
+        document.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; }, { passive: true });
+        document.addEventListener('touchend', e => {
+            const dx = e.changedTouches[0].clientX - touchStartX;
+            if (Math.abs(dx) > 50) changeSlide(dx < 0 ? 1 : -1);
+        }, { passive: true });
+
+        // Fit slide to viewport
+        function updateScale() {
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+            // Read actual section size (fallback to 1280x720)
+            const sec = document.querySelector('.slide section');
+            const slideW = sec ? sec.offsetWidth  || 1280 : 1280;
+            const slideH = sec ? sec.offsetHeight || 720  : 720;
+            const scale = Math.min(vw / slideW, vh / slideH);
+            document.documentElement.style.setProperty('--slide-scale', scale);
+            // Also size each .slide wrapper to match scaled dimensions
+            const scaledW = slideW * scale;
+            const scaledH = slideH * scale;
+            document.querySelectorAll('.slide').forEach(el => {
+                el.style.width  = scaledW + 'px';
+                el.style.height = scaledH + 'px';
+            });
+        }
+        window.addEventListener('resize', updateScale);
+
+        // Init
+        goTo(0);
+        // Delay scale calc until section is rendered
+        setTimeout(updateScale, 50);
+
+        // 表示ロード後、すべてのMermaid要素から再度ドット化属性を削除する（iOS Safari等の表示測定ズレ・バグに対する最終防壁）
+        function cleanupMermaidAttributes() {
+            document.querySelectorAll('.mermaid-container [textLength], .mermaid-container [lengthAdjust]').forEach(el => {
+                el.removeAttribute('textLength');
+                el.removeAttribute('lengthAdjust');
+            });
+            document.querySelectorAll('.mermaid-container text, .mermaid-container tspan').forEach(el => {
+                el.style.setProperty('dominant-baseline', 'auto', '');
+            });
+            document.querySelectorAll('.mermaid-container foreignObject, .mermaid-container foreignObject div, .mermaid-container foreignObject span, .mermaid-container .nodeLabel, .mermaid-container .edgeLabel, .mermaid-container .label').forEach(el => {
+                el.style.setProperty('background-color', 'transparent', '');
+                el.style.setProperty('visibility', 'visible', '');
+                el.style.setProperty('opacity', '1', '');
+            });
+        }
+        cleanupMermaidAttributes();
+        // 画面サイズ変更時などにも繰り返し実行
+        window.addEventListener('resize', () => {
+            setTimeout(cleanupMermaidAttributes, 100);
+        });
+    \x3c/script\x3e
+</body>
+</html>`;
+            } else {
+                // Document mode
+                content = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${title}</title>
+    <style>
+        body { font-family: 'Inter', -apple-system, sans-serif; color: #24292f; background: #fff; line-height: 1.6; max-width: 1200px; margin: 0 auto; padding: 2rem; }
+        h1, h2, h3, h4 { color: #000; margin-top: 24px; margin-bottom: 16px; font-weight: 600; }
+        h1 { font-size: 2em; border-bottom: 1px solid #d0d7de; padding-bottom: .3em; }
+        h2 { font-size: 1.5em; border-bottom: 1px solid #d0d7de; padding-bottom: .3em; }
+        p, blockquote, ul, ol, dl, table, pre { margin-top: 0; margin-bottom: 16px; }
+        a { color: #0969da; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        code { background: rgba(175,184,193,0.2); padding: .2em .4em; border-radius: 6px; font-family: monospace; font-size: 85%; }
+        pre { background: #f6f8fa; padding: 16px; border-radius: 6px; overflow: auto; }
+        pre code { background: transparent; padding: 0; font-size: 100%; }
+        blockquote { border-left: .25em solid #d0d7de; padding: 0 1em; color: #57606a; }
+        img, svg { display: block; max-width: min(1000px, 100%); height: auto; margin: 0 auto; }
+        table { border-collapse: collapse; width: 100%; display: block; overflow: auto; }
+        th, td { border: 1px solid #d0d7de; padding: 6px 13px; }
+        th { background: #fff; font-weight: 600; }
+        tr:nth-child(2n) { background: #f6f8fa; }
+        ${MERMAID_CSS_PROTECTION}
+        ${customThemeStyleTag && customThemeStyleTag.textContent ? customThemeStyleTag.textContent : ''}
+        ${forPrintPdf ? PDF_PRINT_CSS : ''}
+    </style>
+</head>
+<body>
+    <div id="preview-content" class="markdown-body">${previewContainer.innerHTML}</div>
+    \x3cscript\x3e
+        function cleanupMermaidAttributes() {
+            document.querySelectorAll('.mermaid-container [textLength], .mermaid-container [lengthAdjust]').forEach(el => {
+                el.removeAttribute('textLength');
+                el.removeAttribute('lengthAdjust');
+            });
+            document.querySelectorAll('.mermaid-container text, .mermaid-container tspan').forEach(el => {
+                el.style.setProperty('dominant-baseline', 'auto', 'important');
+            });
+            document.querySelectorAll('.mermaid-container foreignObject, .mermaid-container foreignObject div, .mermaid-container foreignObject span, .mermaid-container .nodeLabel, .mermaid-container .edgeLabel, .mermaid-container .label').forEach(el => {
+                el.style.setProperty('background-color', 'transparent', 'important');
+                el.style.setProperty('visibility', 'visible', 'important');
+                el.style.setProperty('opacity', '1', 'important');
+            });
+        }
+        cleanupMermaidAttributes();
+        window.addEventListener('resize', () => {
+            setTimeout(cleanupMermaidAttributes, 100);
+        });
+    \x3c/script\x3e
+</body>
+</html>`;
+            }
+            return content;
+        }
+
+        async function handleExportHtml() {
+            try {
+                updateStatus('saving', 'HTML出力生成中...');
+                const content = generateHtmlExportContent();
+                const blob = new Blob([content], { type: 'text/html;charset=utf-8' });
+                triggerDownload(blob, getDocTitle() + '.html');
+                updateStatus('saved', 'HTML出力完了');
+            } catch (err) {
+                console.error('HTML export failed:', err);
+                updateStatus('normal', '出力失敗');
+                alert(err.message || 'HTMLエクスポート機能の実行中にエラーが発生しました。');
+            }
+        }
+
+        // Preview HTML in a new tab (same content as handleExportHtml but opens in browser)
+        async function handlePreviewHtml() {
+            try {
+                updateStatus('saving', 'HTMLプレビュー生成中...');
+                const content = generateHtmlExportContent();
+
+                // 別タブでHTMLプレビューを開く
+                const newWin = window.open('', '_blank');
+                if (!newWin) {
+                    alert('ポップアップがブロックされました。ブラウザの設定を確認してください。');
+                    updateStatus('normal', '');
+                    return;
+                }
+                newWin.document.write(content);
+                newWin.document.close();
+                updateStatus('saved', 'HTMLプレビュー表示完了');
+
+            } catch (err) {
+                console.error('HTML preview failed:', err);
+                updateStatus('normal', 'プレビュー失敗');
+                alert(err.message || 'HTMLプレビュー生成中にエラーが発生しました。');
+            }
+        }
+
+        // ===== GitHub連携機能 =====
+
+        // UTF-8対応のBase64エンコーダ（日本語文字化け防止）
+        function utf8ToBase64(str) {
+            return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => {
+                return String.fromCharCode(parseInt(p1, 16));
+            }));
+        }
+
+        // UTF-8対応のBase64デコーダ
+        function base64ToUtf8(str) {
+            return decodeURIComponent(Array.prototype.map.call(atob(str), (c) => {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+        }
+
+        // GitHub設定をLocalStorageに保存
+        function saveGitHubSettings() {
+            const settings = {
+                token: document.getElementById('gh-token').value,
+                repo: document.getElementById('gh-repo').value,
+                branch: document.getElementById('gh-branch').value || 'main',
+                path: document.getElementById('gh-path').value
+            };
+            localStorage.setItem('lumina_github_settings', JSON.stringify(settings));
+            showGhStatus('✅ 設定を保存しました', '#3fb950');
+        }
+
+        // URLからGitHub Pagesのリポジトリ情報を自動解析
+        function detectGitHubPagesInfo() {
+            const hn = window.location.hostname;
+            const pn = window.location.pathname;
+
+            // GitHub Pages のドメイン構造 <username>.github.io
+            if (hn.endsWith('.github.io')) {
+                const username = hn.split('.')[0];
+                const pathParts = pn.split('/').filter(Boolean);
+                if (pathParts.length >= 1) {
+                    const repo = pathParts[0];
+                    return {
+                        owner: username,
+                        repo: `${username}/${repo}`,
+                        branch: 'main'
+                    };
+                }
+            }
+
+            // ローカル実行やその他環境で、nobu28tp/test_markdown_editor がパスに含まれる場合は同期を支援
+            if (pn.includes('test_markdown_editor')) {
+                return {
+                    owner: 'nobu28tp',
+                    repo: 'nobu28tp/test_markdown_editor',
+                    branch: 'main'
+                };
+            }
+            return null;
+        }
+
+        // ===== テーマ（ライト/ダーク）切り替え機能 =====
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            setTheme(newTheme);
+        }
+
+        function setTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('lumina_theme', theme);
+            
+            // ボタンのアイコンとテキストを更新
+            const themeBtn = document.getElementById('btn-theme-toggle');
+            if (themeBtn) {
+                const icon = themeBtn.querySelector('i');
+                const text = themeBtn.querySelector('span');
+                if (theme === 'light') {
+                    if (icon) icon.setAttribute('data-lucide', 'moon');
+                    if (text) text.textContent = 'ダークモード';
+                } else {
+                    if (icon) icon.setAttribute('data-lucide', 'sun');
+                    if (text) text.textContent = 'ライトモード';
+                }
+                if (window.lucide) {
+                    window.lucide.createIcons({ root: themeBtn });
+                }
+            }
+        }
+
+        // リポジトリ名 (owner/repo) のクレンジング
+        function sanitizeGitHubRepo(input) {
+            let val = input.trim();
+            if (!val) return '';
+
+            // GitHubのURL全体が入力された場合の処理 (https://github.com/owner/repo/...)
+            if (val.includes('github.com/')) {
+                const urlParts = val.split('github.com/')[1].split('/');
+                if (urlParts.length >= 2) {
+                    return `${urlParts[0]}/${urlParts[1]}`;
+                }
+            }
+
+            // owner/repo/folder などのように3階層以上ある場合、最初の2階層だけを owner/repo として抽出
+            const parts = val.split('/').filter(Boolean);
+            if (parts.length >= 2) {
+                // もし末尾が .git で終わっていたら除去
+                const repoName = parts[1].replace(/\.git$/, '');
+                return `${parts[0]}/${repoName}`;
+            }
+
+            return val;
+        }
+
+        // リポジトリ名 (owner/repo) のクレンジングとUIアシスト
+        function handleRepoInputCleansing() {
+            const repoEl = document.getElementById('gh-repo');
+            const pathEl = document.getElementById('gh-path');
+            if (!repoEl || !pathEl) return;
+            
+            let repo = repoEl.value.trim();
+            if (!repo) return;
+
+            // クレンジング前の値にスラッシュが3つ以上ある、または末尾にパスが含まれているかチェック
+            // 例: nobu28tp/test_markdown_editor/document
+            const parts = repo.split('/').filter(Boolean);
+            if (parts.length > 2) {
+                const cleanedRepo = `${parts[0]}/${parts[1].replace(/\.git$/, '')}`;
+                
+                // 削られたパス部分を抽出 (例: 'document')
+                const extractedPath = parts.slice(2).join('/');
+                
+                repoEl.value = cleanedRepo;
+                
+                // ファイルパス入力欄が空、またはプレースホルダーに近い場合、抽出したパスをセット
+                const currentPath = pathEl.value.trim();
+                if (!currentPath || currentPath === 'document/') {
+                    // もしファイル名が含まれていなければ、フォルダパスとして末尾にスラッシュを付ける
+                    const newPath = extractedPath.endsWith('.md') ? extractedPath : `${extractedPath}/`;
+                    pathEl.value = newPath;
+                }
+                
+                showGhStatus(`ℹ️ リポジトリ名を自動クレンジングし、パスに「${extractedPath}」を設定しました`, '#58a6ff');
+            } else {
+                // 通常のクレンジング（URLからのコピペなど）
+                const cleanedRepo = sanitizeGitHubRepo(repo);
+                if (cleanedRepo !== repo) {
+                    repoEl.value = cleanedRepo;
+                }
+            }
+        }
+
+        // GitHub設定をLocalStorageから読み込み
+        function loadGitHubSettings() {
+            try {
+                const raw = localStorage.getItem('lumina_github_settings');
+                let s = {};
+                if (raw) {
+                    s = JSON.parse(raw);
+                }
+
+                // URLからの自動検出マージ
+                const detected = detectGitHubPagesInfo();
+                if (detected) {
+                    if (!s.repo) s.repo = detected.repo;
+                    if (!s.branch) s.branch = detected.branch;
+                    if (!s.path) s.path = 'document/';
+                } else {
+                    if (!s.branch) s.branch = 'main';
+                    if (!s.path) s.path = 'document/';
+                }
+
+                if (s.token) document.getElementById('gh-token').value = s.token;
+                if (s.repo) document.getElementById('gh-repo').value = s.repo;
+                if (s.branch) document.getElementById('gh-branch').value = s.branch;
+                if (s.path) document.getElementById('gh-path').value = s.path;
+                
+                // 読み込み直後に自動クレンジングを実行して不整合を解消
+                handleRepoInputCleansing();
+            } catch (e) {
+                console.warn('GitHub設定の読込に失敗:', e);
+            }
+        }
+
+        // モーダル内ステータス表示
+        function showGhStatus(msg, color) {
+            const el = document.getElementById('gh-modal-status');
+            el.textContent = msg;
+            el.style.color = color || '#58a6ff';
+            el.style.display = 'block';
+            setTimeout(() => { el.style.display = 'none'; }, 5000);
+        }
+
+        // GitHub連携の入力値バリデーション
+        function getGitHubInputs(requireToken = true) {
+            const token = document.getElementById('gh-token').value.trim();
+            let repo = document.getElementById('gh-repo').value.trim();
+            const branch = document.getElementById('gh-branch').value.trim() || 'main';
+            let path = document.getElementById('gh-path').value.trim();
+
+            // リポジトリ名の自動クレンジング
+            if (repo) {
+                const cleanedRepo = sanitizeGitHubRepo(repo);
+                if (cleanedRepo !== repo) {
+                    repo = cleanedRepo;
+                    document.getElementById('gh-repo').value = repo; // 画面の入力欄に書き戻し
+                    showGhStatus('ℹ️ リポジトリ名を owner/repo 形式に自動修正しました', '#58a6ff');
+                }
+            }
+
+            if (requireToken && !token) { showGhStatus('⚠️ 保存するにはパーソナルアクセストークンを入力してください', '#d29922'); return null; }
+            if (!repo) { showGhStatus('⚠️ リポジトリ名 (owner/repo) を入力してください', '#d29922'); return null; }
+            if (!path) { showGhStatus('⚠️ ファイルパスを入力してください', '#d29922'); return null; }
+
+            // 入力されたファイルパスにスラッシュが含まれず、.mdで終わる単純なファイル名の場合、
+            // 自動的に 'document/' プレフィックスを付与して補完する
+            if (!path.includes('/') && path.endsWith('.md')) {
+                path = 'document/' + path;
+                document.getElementById('gh-path').value = path;
+                showGhStatus('ℹ️ パスを自動的に document/ 配下に補完しました', '#58a6ff');
+            }
+
+            return { token, repo, branch, path };
+        }
+
+        // GitHubからファイルを読み込む
+        async function loadFromGitHub() {
+            const inputs = getGitHubInputs(false); // 読込時はトークン不要
+            if (!inputs) return;
+            const { token, repo, branch, path } = inputs;
+
+            showGhStatus('📥 GitHubから読み込み中...', '#58a6ff');
+            try {
+                const url = `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}&_=${Date.now()}`;
+                const headers = {
+                    'Accept': 'application/vnd.github.v3.raw'
+                };
+                if (token) {
+                    headers['Authorization'] = `token ${token}`;
+                }
+
+                let res = await fetch(url, { headers });
+
+                // トークン無効による隠蔽404または401エラーの場合、トークンなし（パブリック匿名）で自動フォールバック再試行
+                if (!res.ok && token && (res.status === 404 || res.status === 401)) {
+                    console.warn("GitHub API load failed with token, retrying without token...");
+                    const publicHeaders = {
+                        'Accept': 'application/vnd.github.v3.raw'
+                    };
+                    const retryRes = await fetch(url, { headers: publicHeaders });
+                    if (retryRes.ok) {
+                        res = retryRes;
+                        showGhStatus('ℹ️ トークンが無効なため、トークンなし（公開情報）として読み込みました', '#58a6ff');
+                    }
+                }
+
+   
