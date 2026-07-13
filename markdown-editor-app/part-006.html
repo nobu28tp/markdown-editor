@@ -1,0 +1,540 @@
+ger' },
+                                    end: { type: 'integer' },
+                                    selectedText: { type: 'string' },
+                                    category: {
+                                        type: 'string',
+                                        enum: ['typo', 'grammar', 'style', 'consistency', 'markdown']
+                                    },
+                                    message: { type: 'string' },
+                                    suggestion: { type: 'string' }
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+        }
+
+        function getGeminiProofreadResponseSchema() {
+            return {
+                type: 'OBJECT',
+                properties: {
+                    comments: {
+                        type: 'ARRAY',
+                        items: {
+                            type: 'OBJECT',
+                            properties: {
+                                start: { type: 'INTEGER' },
+                                end: { type: 'INTEGER' },
+                                selectedText: { type: 'STRING' },
+                                category: {
+                                    type: 'STRING',
+                                    enum: ['typo', 'grammar', 'style', 'consistency', 'markdown']
+                                },
+                                message: { type: 'STRING' },
+                                suggestion: { type: 'STRING' }
+                            },
+                            required: ['start', 'end', 'selectedText', 'category', 'message', 'suggestion']
+                        }
+                    }
+                },
+                required: ['comments']
+            };
+        }
+
+        function parseProofreadJson(outputText) {
+            const clean = String(outputText || '')
+                .replace(/^```json\s*/i, '')
+                .replace(/^```\s*/i, '')
+                .replace(/```$/i, '')
+                .trim();
+            const parsed = JSON.parse(repairJsonPayload(extractJsonPayload(clean)));
+            if (Array.isArray(parsed)) return parsed;
+            if (Array.isArray(parsed.comments)) return parsed.comments;
+            return [];
+        }
+
+        function repairJsonPayload(jsonText) {
+            return jsonText
+                .replace(/,\s*([}\]])/g, '$1')
+                .replace(/[\u0000-\u001F]+/g, match => {
+                    if (match === '\n' || match === '\r' || match === '\t') return match;
+                    return '';
+                });
+        }
+
+        function extractJsonPayload(text) {
+            if (text.startsWith('{') || text.startsWith('[')) return text;
+
+            const objectStart = text.indexOf('{');
+            const arrayStart = text.indexOf('[');
+            const starts = [objectStart, arrayStart].filter(index => index >= 0);
+            if (!starts.length) return text;
+
+            const start = Math.min(...starts);
+            const openChar = text[start];
+            const closeChar = openChar === '{' ? '}' : ']';
+            const end = text.lastIndexOf(closeChar);
+            return end > start ? text.slice(start, end + 1).trim() : text;
+        }
+
+        // Mermaidグラフ描画崩れ・白飛び防止用の共通CSS保護ルール
+        const MERMAID_CSS_PROTECTION = `
+        /* Force override Mermaid baseline styles */
+        .mermaid-container,
+        #slideshow .mermaid-container,
+        .markdown-body .mermaid-container,
+        .mermaid-container text,
+        .mermaid-container tspan,
+        div.marpit .mermaid-container,
+        div.marpit .mermaid-container text,
+        div.marpit .mermaid-container tspan,
+        svg[data-marpit-svg] .mermaid-container text,
+        svg[data-marpit-svg] .mermaid-container tspan,
+        div.marpit svg[data-marpit-svg] .mermaid-container text,
+        div.marpit svg[data-marpit-svg] .mermaid-container tspan,
+        .marp-slide-wrapper section .mermaid-container text,
+        .marp-slide-wrapper section .mermaid-container tspan,
+        .slide section .mermaid-container text,
+        .slide section .mermaid-container tspan,
+        .markdown-body .mermaid-container text,
+        .markdown-body .mermaid-container tspan {
+            font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif !important;
+            dominant-baseline: auto !important;
+            alignment-baseline: auto !important;
+            baseline-shift: normal !important;
+        }
+
+        /* Force override HTML-based Mermaid labels */
+        .mermaid-container foreignObject,
+        .mermaid-container foreignObject div,
+        .mermaid-container foreignObject span,
+        .mermaid-container .nodeLabel,
+        .mermaid-container .edgeLabel,
+        .mermaid-container .label,
+        div.marpit .mermaid-container foreignObject,
+        div.marpit .mermaid-container foreignObject div,
+        div.marpit .mermaid-container foreignObject span,
+        div.marpit .mermaid-container .nodeLabel,
+        svg[data-marpit-svg] .mermaid-container foreignObject,
+        svg[data-marpit-svg] .mermaid-container foreignObject div,
+        svg[data-marpit-svg] .mermaid-container foreignObject span,
+        svg[data-marpit-svg] .mermaid-container .nodeLabel,
+        div.marpit svg[data-marpit-svg] .mermaid-container foreignObject,
+        div.marpit svg[data-marpit-svg] .mermaid-container foreignObject div,
+        div.marpit svg[data-marpit-svg] .mermaid-container foreignObject span,
+        div.marpit svg[data-marpit-svg] .mermaid-container .nodeLabel,
+        .marp-slide-wrapper section .mermaid-container foreignObject,
+        .marp-slide-wrapper section .mermaid-container foreignObject div,
+        .marp-slide-wrapper section .mermaid-container .nodeLabel,
+        .slide section .mermaid-container foreignObject,
+        .slide section .mermaid-container foreignObject div,
+        .slide section .mermaid-container .nodeLabel,
+        .markdown-body .mermaid-container foreignObject,
+        .markdown-body .mermaid-container foreignObject div,
+        .markdown-body .mermaid-container .nodeLabel {
+            background-color: transparent !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+        }
+        `;
+
+        // ============================================================
+        // Marp Core - Dynamic Loading (Non-blocking)
+        // ============================================================
+        let MarpClass = null;
+        let marpLoadPromise = null;
+
+        function loadMarp() {
+            if (marpLoadPromise) return marpLoadPromise;
+            marpLoadPromise = new Promise((resolve, reject) => {
+                if (window.Marp) {
+                    MarpClass = window.Marp;
+                    resolve(MarpClass);
+                    return;
+                }
+                const script = document.createElement('script');
+                script.src = 'marp-bundle.js';
+                script.onload = () => {
+                    if (window.Marp) {
+                        MarpClass = window.Marp;
+                        console.log('Marp Core loaded successfully from local bundle');
+
+                        // バッジの色も青（公式ローカル版）に更新できるようにする準備
+                        const engineIndicator = document.getElementById('engine-indicator');
+                        if (engineIndicator && previewMode === 'slide') {
+                            engineIndicator.textContent = '公式 Marp Core (Local)';
+                            engineIndicator.style.color = '#58a6ff';
+                            engineIndicator.style.background = 'rgba(88, 166, 255, 0.1)';
+                        }
+
+                        resolve(MarpClass);
+                    } else {
+                        reject(new Error('Marp class not found in bundle'));
+                    }
+                };
+                script.onerror = () => {
+                    console.warn('Failed to load local marp-bundle.js, using built-in engine.');
+                    reject(new Error('Failed to load local bundle'));
+                };
+                document.head.appendChild(script);
+            }).catch(err => {
+                console.warn('Marp Core unavailable:', err.message || err);
+                MarpClass = null;
+                return null;
+            });
+            return marpLoadPromise;
+        }
+
+        // ============================================================
+        // Built-in Marp-compatible Slide Engine (Fallback)
+        // ============================================================
+        const MARP_THEMES = {
+            default: `
+                section {
+                    width: 1280px; height: 720px; padding: 70px 80px;
+                    background: #fff; color: #333;
+                    font-family: 'Inter', 'Meiryo', sans-serif;
+                    font-size: 32px; line-height: 1.5;
+                    display: flex; flex-direction: column;
+                    justify-content: flex-start; align-items: flex-start;
+                    box-sizing: border-box; overflow: hidden;
+                    position: relative;
+                }
+                section.lead { justify-content: center; align-items: center; text-align: center; }
+                h1 { font-size: 1.6em; color: #1a1a2e; border-bottom: 3px solid #58a6ff; padding-bottom: 0.3em; margin: 0 0 0.5em; width: 100%; }
+                h2 { font-size: 1.3em; color: #1a1a2e; margin: 0 0 0.4em; }
+                h3 { font-size: 1.1em; color: #555; margin: 0 0 0.3em; }
+                p { margin: 0.3em 0; font-size: 0.85em; }
+                ul, ol { margin: 0.3em 0 0.3em 1.2em; padding: 0; }
+                li { margin: 0.2em 0; font-size: 0.82em; }
+                strong { color: #0969da; }
+                em { color: #6f42c1; }
+                code { background: #f0f4f8; border: 1px solid #d0d7de; border-radius: 4px; padding: 1px 6px; font-family: 'Fira Code', monospace; font-size: 0.78em; color: #c9105a; }
+                pre { background: #1a1a2e; border-radius: 8px; padding: 1em 1.2em; width: 100%; box-sizing: border-box; overflow: hidden; margin: 0.5em 0; }
+                pre code { background: transparent; border: none; color: #a5d6ff; font-size: 0.72em; padding: 0; }
+                blockquote { border-left: 4px solid #58a6ff; margin: 0.5em 0; padding: 0.3em 0 0.3em 1em; color: #555; font-style: italic; }
+                table { border-collapse: collapse; width: 100%; font-size: 0.75em; margin: 0.5em 0; }
+                th { background: #1a1a2e; color: #fff; padding: 8px 12px; }
+                td { border: 1px solid #d0d7de; padding: 6px 12px; }
+                tr:nth-child(even) td { background: #f6f8fa; }
+                img { max-width: 100%; max-height: 60%; object-fit: contain; }
+                .page-number { position: absolute; bottom: 20px; right: 30px; font-size: 0.55em; color: #aaa; }
+                .header-bar { position: absolute; top: 0; left: 0; right: 0; height: 6px; background: linear-gradient(90deg, #58a6ff, #a371f7); }
+            `,
+            gaia: `
+                section {
+                    width: 1280px; height: 720px; padding: 70px 80px;
+                    background: #1a1a2e; color: #e6edf3;
+                    font-family: 'Inter', 'Meiryo', sans-serif;
+                    font-size: 32px; line-height: 1.5;
+                    display: flex; flex-direction: column;
+                    justify-content: flex-start; align-items: flex-start;
+                    box-sizing: border-box; overflow: hidden;
+                    position: relative;
+                }
+                section.lead { justify-content: center; align-items: center; text-align: center; }
+                h1 { font-size: 1.6em; color: #58a6ff; border-bottom: 3px solid #a371f7; padding-bottom: 0.3em; margin: 0 0 0.5em; width: 100%; }
+                h2 { font-size: 1.3em; color: #79c0ff; margin: 0 0 0.4em; }
+                h3 { font-size: 1.1em; color: #a5d6ff; margin: 0 0 0.3em; }
+                p { margin: 0.3em 0; font-size: 0.85em; color: #c9d1d9; }
+                ul, ol { margin: 0.3em 0 0.3em 1.2em; padding: 0; }
+                li { margin: 0.2em 0; font-size: 0.82em; color: #c9d1d9; }
+                strong { color: #ffa657; }
+                em { color: #d2a8ff; }
+                code { background: rgba(255,255,255,0.1); border-radius: 4px; padding: 1px 6px; font-family: 'Fira Code', monospace; font-size: 0.78em; color: #79c0ff; }
+                pre { background: #0d1117; border-radius: 8px; padding: 1em 1.2em; width: 100%; box-sizing: border-box; overflow: hidden; margin: 0.5em 0; border: 1px solid #30363d; }
+                pre code { background: transparent; color: #e6edf3; font-size: 0.72em; padding: 0; }
+                blockquote { border-left: 4px solid #58a6ff; margin: 0.5em 0; padding: 0.3em 0 0.3em 1em; color: #8b949e; font-style: italic; }
+                table { border-collapse: collapse; width: 100%; font-size: 0.75em; margin: 0.5em 0; }
+                th { background: #0d1117; color: #58a6ff; padding: 8px 12px; border-bottom: 2px solid #30363d; }
+                td { border: 1px solid #30363d; padding: 6px 12px; color: #c9d1d9; }
+                tr:nth-child(even) td { background: rgba(255,255,255,0.03); }
+                img { max-width: 100%; max-height: 60%; object-fit: contain; }
+                .page-number { position: absolute; bottom: 20px; right: 30px; font-size: 0.55em; color: #555; }
+                .header-bar { position: absolute; top: 0; left: 0; right: 0; height: 6px; background: linear-gradient(90deg, #1f6feb, #a371f7); }
+            `,
+            uncover: `
+                section {
+                    width: 1280px; height: 720px; padding: 70px 80px;
+                    background: #f8fafc; color: #1e293b;
+                    font-family: 'Inter', 'Meiryo', sans-serif;
+                    font-size: 32px; line-height: 1.5;
+                    display: flex; flex-direction: column;
+                    justify-content: flex-start; align-items: flex-start;
+                    box-sizing: border-box; overflow: hidden;
+                    position: relative;
+                    border-left: 8px solid #3b82f6;
+                }
+                section.lead { justify-content: center; align-items: center; text-align: center; border-left: none; border-top: 8px solid #3b82f6; }
+                h1 { font-size: 1.6em; color: #1e293b; font-weight: 800; margin: 0 0 0.5em; letter-spacing: -0.02em; }
+                h2 { font-size: 1.3em; color: #334155; font-weight: 700; margin: 0 0 0.4em; }
+                h3 { font-size: 1.1em; color: #475569; margin: 0 0 0.3em; }
+                p { margin: 0.3em 0; font-size: 0.85em; color: #475569; }
+                ul, ol { margin: 0.3em 0 0.3em 1.2em; padding: 0; }
+                li { margin: 0.2em 0; font-size: 0.82em; color: #475569; }
+                strong { color: #3b82f6; font-weight: 700; }
+                em { color: #8b5cf6; }
+                code { background: #e2e8f0; border-radius: 4px; padding: 1px 6px; font-family: 'Fira Code', monospace; font-size: 0.78em; color: #be185d; }
+                pre { background: #1e293b; border-radius: 8px; padding: 1em 1.2em; width: 100%; box-sizing: border-box; overflow: hidden; margin: 0.5em 0; }
+                pre code { background: transparent; color: #e2e8f0; font-size: 0.72em; padding: 0; }
+                blockquote { border-left: 4px solid #3b82f6; margin: 0.5em 0; padding: 0.3em 0 0.3em 1em; color: #64748b; font-style: italic; background: #f1f5f9; }
+                table { border-collapse: collapse; width: 100%; font-size: 0.75em; margin: 0.5em 0; }
+                th { background: #3b82f6; color: #fff; padding: 8px 12px; }
+                td { border: 1px solid #e2e8f0; padding: 6px 12px; }
+                tr:nth-child(even) td { background: #f8fafc; }
+                img { max-width: 100%; max-height: 60%; object-fit: contain; }
+                .page-number { position: absolute; bottom: 20px; right: 30px; font-size: 0.55em; color: #94a3b8; }
+            `
+        };
+
+        class MarpEngine {
+            parseFrontmatter(markdown) {
+                const fm = { marp: false, theme: 'default', size: '16:9', paginate: false, header: '', footer: '' };
+                const match = markdown.match(/^---\s*\n([\s\S]*?)\n---\s*\n/);
+                if (!match) return { frontmatter: fm, body: markdown };
+                const body = markdown.slice(match[0].length);
+                const lines = match[1].split('\n');
+                for (const line of lines) {
+                    const [key, ...vals] = line.split(':');
+                    const val = vals.join(':').trim();
+                    if (!key) continue;
+                    const k = key.trim().toLowerCase();
+                    if (k === 'marp') fm.marp = val === 'true';
+                    else if (k === 'theme') fm.theme = val;
+                    else if (k === 'size') fm.size = val;
+                    else if (k === 'paginate') fm.paginate = val === 'true';
+                    else if (k === 'header') fm.header = val;
+                    else if (k === 'footer') fm.footer = val;
+                }
+                return { frontmatter: fm, body };
+            }
+
+            splitSlides(body) {
+                const lines = body.split('\n');
+                const slides = [];
+                let current = [];
+                let inCode = false;
+                for (const line of lines) {
+                    if (line.startsWith('`' + '`' + '`')) inCode = !inCode;
+                    if (!inCode && /^---\s*$/.test(line)) {
+                        slides.push(current.join('\n'));
+                        current = [];
+                    } else {
+                        current.push(line);
+                    }
+                }
+                if (current.length > 0) slides.push(current.join('\n'));
+                return slides.filter(s => s.trim().length > 0);
+            }
+
+            parseSlideDirectives(content) {
+                const directives = { class: '', backgroundColor: '', color: '' };
+                const matches = content.matchAll(/<!--\s*_([\w]+):\s*([^>]+?)\s*-->/g);
+                for (const m of matches) {
+                    const k = m[1].trim();
+                    const v = m[2].trim();
+                    if (k === 'class') directives.class = v;
+                    else if (k === 'backgroundColor' || k === 'background-color') directives.backgroundColor = v;
+                    else if (k === 'color') directives.color = v;
+                }
+                const cleanContent = content.replace(/<!--\s*_[\w]+:\s*[^>]+?\s*-->/g, '');
+                return { directives, content: cleanContent };
+            }
+
+            renderSlide(rawContent, index, total, fm) {
+                const { directives, content } = this.parseSlideDirectives(rawContent);
+                const htmlContent = marked.parse(content);
+                const classes = ['marp-slide-inner', directives.class].filter(Boolean).join(' ');
+                let inlineStyle = '';
+                if (directives.backgroundColor) inlineStyle += 'background-color:' + directives.backgroundColor + ';';
+                if (directives.color) inlineStyle += 'color:' + directives.color + ';';
+
+                let extras = '';
+                if (index === 0 && MARP_THEMES[fm.theme] !== MARP_THEMES.gaia) {
+                    extras += '<div class="header-bar"></div>';
+                }
+                if (fm.paginate) {
+                    extras += '<div class="page-number">' + (index + 1) + ' / ' + total + '</div>';
+                }
+                if (fm.header) {
+                    extras += '<div style="position:absolute;top:16px;left:80px;right:80px;font-size:0.55em;color:#888;">' + fm.header + '</div>';
+                }
+                if (fm.footer) {
+                    extras += '<div style="position:absolute;bottom:16px;left:80px;right:80px;font-size:0.55em;color:#888;">' + fm.footer + '</div>';
+                }
+
+                return '<section class="' + classes + '" style="' + inlineStyle + '">' + extras + htmlContent + '</section>';
+            }
+
+            render(markdown) {
+                const { frontmatter: fm, body } = this.parseFrontmatter(markdown);
+                const rawSlides = this.splitSlides(body);
+                const total = rawSlides.length;
+                const theme = MARP_THEMES[fm.theme] || MARP_THEMES.default;
+                const slides = rawSlides.map((s, i) => this.renderSlide(s, i, total, fm));
+                return { slides, css: theme, fm };
+            }
+        }
+
+        const marpEngine = new MarpEngine();
+
+        // ============================================================
+        // Unified Render Helper (Official Marp > Fallback Engine)
+        // ============================================================
+        // Returns { html, css, slides, fm, source } - normalized output
+        function renderWithMarp(markdownText) {
+            // Try official Marp Core first
+            if (MarpClass) {
+                try {
+                    const marp = new MarpClass({ html: true });
+                    const result = marp.render(markdownText);
+                    // Parse sections for slide array
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(result.html, 'text/html');
+                    // Marp Core outputs <svg data-marpit-svg> for each slide
+                    const svgs = Array.from(doc.querySelectorAll('svg[data-marpit-svg]'));
+                    return {
+                        html: result.html,
+                        css: result.css,
+                        slides: svgs.map(s => s.outerHTML),
+                        fm: null,
+                        source: 'marp-core'
+                    };
+                } catch (e) {
+                    console.error('Marp Core render error, falling back:', e);
+                }
+            }
+            // Fallback to built-in engine
+            const result = marpEngine.render(markdownText);
+            return {
+                html: null,
+                css: result.css,
+                slides: result.slides,
+                fm: result.fm,
+                source: 'built-in'
+            };
+        }
+
+        function injectLineMarkers(markdownText) {
+            if (!markdownText) return '';
+            const lines = markdownText.split('\n');
+            let inCodeBlock = false;
+            let inFrontMatter = false;
+            const newLines = [];
+
+            if (lines.length > 0 && lines[0].trim() === '---') {
+                inFrontMatter = true;
+            }
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                const trimmed = line.trim();
+
+                // YAMLフロントマターのスキップ処理（Marpのパース破壊を防ぐ）
+                if (inFrontMatter) {
+                    newLines.push(line);
+                    if (i > 0 && trimmed === '---') {
+                        inFrontMatter = false;
+                    }
+                    continue;
+                }
+
+                // コードブロックの判定
+                if (trimmed.startsWith('```')) {
+                    inCodeBlock = !inCodeBlock;
+                    if (inCodeBlock) {
+                        newLines.push(`\n<div class="line-marker" data-line="${i}"></div>\n`);
+                    }
+                    newLines.push(line);
+                    continue;
+                }
+
+                if (inCodeBlock) {
+                    newLines.push(line);
+                    continue;
+                }
+
+                const isHeader = trimmed.startsWith('#');
+                const isList = /^(?:[*+-]|\d+\.)\s/.test(trimmed);
+                const isQuote = trimmed.startsWith('>');
+                const isTable = trimmed.startsWith('|');
+                const isEmpty = trimmed === '';
+
+                const prevLine = i > 0 ? lines[i-1].trim() : '';
+                const prevIsList = /^(?:[*+-]|\d+\.)\s/.test(prevLine);
+                const prevIsTable = prevLine.startsWith('|');
+                const prevIsQuote = prevLine.startsWith('>');
+                const prevIsHeader = prevLine.startsWith('#');
+                const prevIsCodeBlockEnd = prevLine.startsWith('```');
+
+                const isNewList = isList && !prevIsList;
+                const isNewTable = isTable && !prevIsTable;
+                const isNewQuote = isQuote && !prevIsQuote;
+
+                const isNormalText = !isEmpty && !isHeader && !isList && !isQuote && !isTable;
+                const isNewParagraph = isNormalText && (
+                    i === 0 || 
+                    prevLine === '' || 
+                    prevIsList || 
+                    prevIsTable || 
+                    prevIsQuote || 
+                    prevIsHeader ||
+                    prevIsCodeBlockEnd
+                );
+
+                const isBlockStart = isHeader || isNewList || isNewQuote || isNewTable || isNewParagraph;
+
+                if (isBlockStart) {
+                    newLines.push(`\n<div class="line-marker" data-line="${i}"></div>\n`);
+                }
+                newLines.push(line);
+            }
+            return newLines.join('\n');
+        }
+
+        function applyLineMarkers(container) {
+            if (!container) return;
+            const markers = container.querySelectorAll('.line-marker');
+            markers.forEach(marker => {
+                const line = marker.getAttribute('data-line');
+                let nextEl = marker.nextElementSibling;
+                
+                while (nextEl && nextEl.classList.contains('line-marker')) {
+                    nextEl = nextEl.nextElementSibling;
+                }
+                
+                if (nextEl) {
+                    nextEl.setAttribute('data-line', line);
+                }
+                marker.remove();
+            });
+        }
+
+        // ウィジェット作成関数（非表示になったBase64データの代わりに見せるUI）
+        function createHiddenWidget(isInline = false) {
+            const widget = document.createElement('span');
+            widget.innerHTML = `<i data-lucide="image" style="width:14px;height:14px;margin-right:4px;vertical-align:middle;"></i><span style="vertical-align:middle;">画像データ</span>`;
+            widget.style.backgroundColor = 'rgba(48, 54, 61, 0.4)';
+            widget.style.color = 'var(--text-secondary)';
+            widget.style.padding = isInline ? '0 4px' : '2px 8px';
+            widget.style.borderRadius = '4px';
+            widget.style.fontSize = '0.85em';
+            widget.style.fontFamily = 'var(--font-ui)';
+            widget.style.cursor = 'default';
+            widget.style.display = 'inline-flex';
+            widget.style.alignItems = 'center';
+            widget.style.userSelect = 'none';
+            if (isInline) widget.style.verticalAlign = 'middle';
+
+            // Lucideアイコンをウィジェット内に描画
+            setTimeout(() => {
+                if (window.lucide) window.lucide.createIcons({ root: widget });
+            }, 0);
+            return widget;
+        }
+
+        // 行内のBase64文字列を検知してCodeMirror上で折りたたむ（非表示にする）
+        function hideBase64Widget(doc, lineNum, lineText) {
+            // 1. 参照リンク型: [img-xxx]: data:image/...
+            const refMatch = lineText.match(/^\[[^\
