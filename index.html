@@ -5,7 +5,7 @@
 <p id="loading">Markdown Editor を読み込んでいます…</p>
 <script>
 (async () => {
-  const paths = Array.from({ length: 15 }, (_, i) => './markdown-editor-app/part-' + String(i + 1).padStart(3, '0') + '.html?v=20260713-5');
+  const paths = Array.from({ length: 15 }, (_, i) => './markdown-editor-app/part-' + String(i + 1).padStart(3, '0') + '.html?v=20260714-6');
   try {
     const responses = await Promise.all(paths.map(path => fetch(path)));
     const failed = responses.find((response, index) => !response.ok ? paths[index] : null);
