@@ -1,4 +1,205 @@
-gify(payload, null, 2));
+ueryPermission(options)) === 'granted') {
+                return true;
+            }
+            if ((await fileHandle.requestPermission(options)) === 'granted') {
+                return true;
+            }
+            return false;
+        }
+
+        async function readTextFromFileHandle(fileHandle) {
+            if (!(await verifyLocalPermission(fileHandle, false))) {
+                throw new Error('ファイルの読み込み権限がありません。');
+            }
+            const file = await fileHandle.getFile();
+            return await file.text();
+        }
+
+        async function writeTextToFileHandle(fileHandle, text) {
+            if (!(await verifyLocalPermission(fileHandle, true))) {
+                throw new Error('ファイルの書き込み権限がありません。');
+            }
+            const writable = await fileHandle.createWritable();
+            await writable.write(text);
+            await writable.close();
+        }
+
+        async function createLocalFileBackup(dirHandle, fileName, existingText) {
+            const backupName = `${fileName}.backup-${getTimestampForFilename()}`;
+            const backupHandle = await dirHandle.getFileHandle(backupName, { create: true });
+            await writeTextToFileHandle(backupHandle, existingText);
+            return backupName;
+        }
+
+        async function getFileHandleIfExists(dirHandle, fileName) {
+            try {
+                return await dirHandle.getFileHandle(fileName, { create: false });
+            } catch (err) {
+                if (err.name === 'NotFoundError') return null;
+                throw err;
+            }
+        }
+
+        async function checkMarkdownSaveConflict(dirHandle, fileName, expectedHash, nextText) {
+            const existingHandle = await getFileHandleIfExists(dirHandle, fileName);
+            if (!existingHandle) {
+                return { status: 'new', fileHandle: null };
+            }
+
+            const existingText = await readTextFromFileHandle(existingHandle);
+            const existingHash = getDocumentHash(existingText);
+            const nextHash = getDocumentHash(nextText);
+
+            if (existingHash === nextHash || (expectedHash && existingHash === expectedHash)) {
+                return { status: 'clean', fileHandle: existingHandle, existingText, existingHash };
+            }
+
+            return { status: 'conflict', fileHandle: existingHandle, existingText, existingHash };
+        }
+
+        async function resolveSingleMarkdownConflict(dirHandle, fileName, conflict, nextText) {
+            const choice = prompt(
+                `保存先のMarkdownが、読み込み後に他の人によって更新されています。\n\n対象: ${fileName}\n\n次のどれかを入力してください。\nreload: 保存を中止して最新版を読み込む\ncopy: 自分の変更を別名保存する\noverwrite: 既存ファイルをバックアップして上書きする\ncancel: 何もしない`,
+                'reload'
+            );
+            const normalized = (choice || '').trim().toLowerCase();
+
+            if (normalized === 'overwrite') {
+                const backupName = await createLocalFileBackup(dirHandle, fileName, conflict.existingText);
+                return { action: 'overwrite', fileHandle: conflict.fileHandle, backupName };
+            }
+
+            if (normalized === 'copy') {
+                const copyName = `${fileName.replace(/\.md$/i, '')}.conflict-${getTimestampForFilename()}.md`;
+                const copyHandle = await dirHandle.getFileHandle(copyName, { create: true });
+                await writeTextToFileHandle(copyHandle, nextText);
+                return { action: 'copy', fileHandle: copyHandle, copyName };
+            }
+
+            if (normalized === 'reload') {
+                setGeneratedFullReadOnly(false);
+                editor.setValue(conflict.existingText);
+                setGeneratedFullReadOnly(isGeneratedFullDocument(conflict.existingText));
+                currentDocumentLength = conflict.existingText.length;
+                updatePreview(conflict.existingText);
+                localStorage.setItem('lumina_autosave', conflict.existingText);
+                activeLocalFileOriginalHash = conflict.existingHash;
+                hasUnsavedChanges = false;
+                return { action: 'reload' };
+            }
+
+            return { action: 'cancel' };
+        }
+
+        async function ensureSplitSaveCanOverwrite(targets) {
+            const conflicts = [];
+            for (const target of targets) {
+                const check = await checkMarkdownSaveConflict(
+                    target.dirHandle,
+                    target.fileName,
+                    target.expectedHash || '',
+                    target.content
+                );
+                target.fileHandle = check.fileHandle;
+                if (target.generatedFull && check.status === 'conflict' && isGeneratedFullDocument(check.existingText)) {
+                    continue;
+                }
+                if (check.status === 'conflict') {
+                    conflicts.push({ target, check });
+                }
+            }
+
+            if (!conflicts.length) return { ok: true, backups: [] };
+
+            const conflictNames = conflicts.map(item => item.target.fileName).join('\n- ');
+            const choice = prompt(
+                `分割保存の対象ファイルが、読み込み後に他の人によって更新されています。\n\n- ${conflictNames}\n\n次のどれかを入力してください。\noverwrite: 既存ファイルをバックアップして分割保存を続行する\ncancel: 保存を中止する`,
+                'cancel'
+            );
+
+            if ((choice || '').trim().toLowerCase() !== 'overwrite') {
+                return { ok: false, backups: [] };
+            }
+
+            const backups = [];
+            for (const { target, check } of conflicts) {
+                const backupName = await createLocalFileBackup(target.dirHandle, target.fileName, check.existingText);
+                backups.push(backupName);
+            }
+            return { ok: true, backups };
+        }
+
+        async function getActiveLocalFileDirectoryHandle() {
+            if (!activeLocalDirectoryHandle) return null;
+            let dirHandle = activeLocalDirectoryHandle;
+            if (activeLocalFileDirectoryPath) {
+                const parts = activeLocalFileDirectoryPath.split('/');
+                for (const part of parts) {
+                    dirHandle = await dirHandle.getDirectoryHandle(part);
+                }
+            }
+            return dirHandle;
+        }
+
+        function getActiveLocalCommentFileName() {
+            if (!activeLocalFileHandle || !activeLocalFileHandle.name) return '';
+            return `${activeLocalFileHandle.name}.comments.json`;
+        }
+
+        async function readSharedProofreadPayload() {
+            const dirHandle = await getActiveLocalFileDirectoryHandle();
+            const commentFileName = getActiveLocalCommentFileName();
+            if (!dirHandle || !commentFileName) return null;
+
+            try {
+                const commentHandle = await dirHandle.getFileHandle(commentFileName, { create: false });
+                if (!(await verifyLocalPermission(commentHandle, false))) return null;
+                const file = await commentHandle.getFile();
+                const text = await file.text();
+                return JSON.parse(text);
+            } catch (err) {
+                if (err.name !== 'NotFoundError') {
+                    console.warn('Shared proofread comments load failed:', err);
+                }
+                return null;
+            }
+        }
+
+        async function restoreSharedProofreadComments(text) {
+            const saved = await readSharedProofreadPayload();
+            if (!saved || saved.textHash !== getProofreadTextHash(text) || !Array.isArray(saved.comments)) {
+                return false;
+            }
+            sharedProofreadRevision = saved.revision || saved.updatedAt || '';
+
+            const ignoredRanges = buildIgnoredRanges(text);
+            const restored = saved.comments
+                .filter(comment => !comment.status || comment.status === 'open')
+                .map((comment, index) => normalizeProofreadComment(comment, index, comment.source || 'shared', text, ignoredRanges))
+                .filter(Boolean);
+            setProofreadComments(restored, { skipSave: true });
+            return true;
+        }
+
+        async function saveSharedProofreadComments(comments, text) {
+            const dirHandle = await getActiveLocalFileDirectoryHandle();
+            const commentFileName = getActiveLocalCommentFileName();
+            if (!dirHandle || !commentFileName) return;
+
+            try {
+                const remote = await readSharedProofreadPayload();
+                const remoteChanged = remote
+                    && remote.textHash === getProofreadTextHash(text)
+                    && (remote.revision || remote.updatedAt || '') !== sharedProofreadRevision
+                    && Array.isArray(remote.comments);
+                const mergedComments = remoteChanged
+                    ? mergeProofreadComments(comments, remote.comments)
+                    : comments;
+                const commentHandle = await dirHandle.getFileHandle(commentFileName, { create: true });
+                if (!(await verifyLocalPermission(commentHandle, true))) return;
+                const payload = getProofreadCommentPayload(text, mergedComments);
+                const writable = await commentHandle.createWritable();
+                await writable.write(JSON.stringify(payload, null, 2));
                 await writable.close();
                 sharedProofreadRevision = payload.revision || payload.updatedAt || '';
                 if (remoteChanged) {
