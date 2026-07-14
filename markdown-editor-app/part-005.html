@@ -1,6 +1,4 @@
-const matches = [];
-            let index = text.indexOf(selectedText);
-            while (index !== -1) {
+(index !== -1) {
                 matches.push(index);
                 index = text.indexOf(selectedText, index + Math.max(1, selectedText.length));
             }
@@ -589,4 +587,5 @@ const matches = [];
             return extractOpenAiText(data);
         }
 
-        async function 
+        async function requestGeminiProofread({ apiKey, model, instructions, text }) {
+            const modelName = model.startsWith('mo
