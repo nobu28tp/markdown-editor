@@ -1,4 +1,83 @@
-]]+\]:\s*data:image\/[^\s]+/);
+ const isTable = trimmed.startsWith('|');
+                const isEmpty = trimmed === '';
+
+                const prevLine = i > 0 ? lines[i-1].trim() : '';
+                const prevIsList = /^(?:[*+-]|\d+\.)\s/.test(prevLine);
+                const prevIsTable = prevLine.startsWith('|');
+                const prevIsQuote = prevLine.startsWith('>');
+                const prevIsHeader = prevLine.startsWith('#');
+                const prevIsCodeBlockEnd = prevLine.startsWith('```');
+
+                const isNewList = isList && !prevIsList;
+                const isNewTable = isTable && !prevIsTable;
+                const isNewQuote = isQuote && !prevIsQuote;
+
+                const isNormalText = !isEmpty && !isHeader && !isList && !isQuote && !isTable;
+                const isNewParagraph = isNormalText && (
+                    i === 0 || 
+                    prevLine === '' || 
+                    prevIsList || 
+                    prevIsTable || 
+                    prevIsQuote || 
+                    prevIsHeader ||
+                    prevIsCodeBlockEnd
+                );
+
+                const isBlockStart = isHeader || isNewList || isNewQuote || isNewTable || isNewParagraph;
+
+                if (isBlockStart) {
+                    newLines.push(`\n<div class="line-marker" data-line="${i}"></div>\n`);
+                }
+                newLines.push(line);
+            }
+            return newLines.join('\n');
+        }
+
+        function applyLineMarkers(container) {
+            if (!container) return;
+            const markers = container.querySelectorAll('.line-marker');
+            markers.forEach(marker => {
+                const line = marker.getAttribute('data-line');
+                let nextEl = marker.nextElementSibling;
+                
+                while (nextEl && nextEl.classList.contains('line-marker')) {
+                    nextEl = nextEl.nextElementSibling;
+                }
+                
+                if (nextEl) {
+                    nextEl.setAttribute('data-line', line);
+                }
+                marker.remove();
+            });
+        }
+
+        // ウィジェット作成関数（非表示になったBase64データの代わりに見せるUI）
+        function createHiddenWidget(isInline = false) {
+            const widget = document.createElement('span');
+            widget.innerHTML = `<i data-lucide="image" style="width:14px;height:14px;margin-right:4px;vertical-align:middle;"></i><span style="vertical-align:middle;">画像データ</span>`;
+            widget.style.backgroundColor = 'rgba(48, 54, 61, 0.4)';
+            widget.style.color = 'var(--text-secondary)';
+            widget.style.padding = isInline ? '0 4px' : '2px 8px';
+            widget.style.borderRadius = '4px';
+            widget.style.fontSize = '0.85em';
+            widget.style.fontFamily = 'var(--font-ui)';
+            widget.style.cursor = 'default';
+            widget.style.display = 'inline-flex';
+            widget.style.alignItems = 'center';
+            widget.style.userSelect = 'none';
+            if (isInline) widget.style.verticalAlign = 'middle';
+
+            // Lucideアイコンをウィジェット内に描画
+            setTimeout(() => {
+                if (window.lucide) window.lucide.createIcons({ root: widget });
+            }, 0);
+            return widget;
+        }
+
+        // 行内のBase64文字列を検知してCodeMirror上で折りたたむ（非表示にする）
+        function hideBase64Widget(doc, lineNum, lineText) {
+            // 1. 参照リンク型: [img-xxx]: data:image/...
+            const refMatch = lineText.match(/^\[[^\]]+\]:\s*data:image\/[^\s]+/);
             if (refMatch) {
                 const marks = doc.findMarks({ line: lineNum, ch: 0 }, { line: lineNum, ch: refMatch[0].length });
                 if (!marks.some(m => m.collapsed)) {
@@ -156,12 +235,9 @@
             function insertSvgMarkup(markup, cm = editor) {
                 const cleanMarkup = sanitizeSvgMarkupForInsert(markup);
                 const doc = cm.getDoc();
-                const insertionLine = doc.getCursor().line + 1;
                 doc.replaceSelection(`\n${cleanMarkup}\n`);
                 cm.focus();
                 updateStatus('saved', 'SVGコードを挿入しました');
-                // SVGが本文の後方に入る場合でも、プレビューを挿入位置へ移動して表示を確認できるようにする。
-                setTimeout(() => scrollToLineInPreview(insertionLine, true), getPreviewDebounceMs() + 100);
             }
 
             // 2. Initialize CodeMirror Editor
@@ -261,14 +337,8 @@
 
                 hasUnsavedChanges = true;
                 updateStatus('normal', '編集中...');
-                // Debounce preview rendering to keep editor typing smooth
-                if (previewTimeout) clearTimeout(previewTimeout);
-                if (isPreviewPaneVisible()) {
-                    previewTimeout = setTimeout(() => {
-                        const content = editor.getValue();
-                        updatePreview(content);
-                    }, getPreviewDebounceMs());
-                }
+                // 入力停止後に最新の本文だけを描画する。
+                requestPreviewUpdate();
             });
 
             // ワードカウント更新
@@ -496,74 +566,4 @@
             // Escキーでメニューを閉じる
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape' && hamburgerMenu.classList.contains('active')) {
-                    closeHamburger();
-                }
-            });
-
-            // メニュー内のボタンクリック時にメニューを閉じる（テーマメニュー以外）
-            hamburgerMenu.querySelectorAll('.btn:not(#btn-doc-theme)').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    // テーマメニューを開くボタンの場合は閉じない
-                    if (btn.id === 'btn-doc-theme') return;
-                    closeHamburger();
-                });
-            });
-
-            // Pane toggles
-            document.getElementById('btn-toggle-preview').addEventListener('click', () => {
-                const previewPane = document.getElementById('preview-pane');
-                const btnIcon = document.querySelector('#btn-toggle-preview i');
-
-                if (previewPane.style.display === 'none') {
-                    previewPane.style.display = 'flex';
-                    btnIcon.setAttribute('data-lucide', 'layout-panel-left');
-                    updatePreview(editor.getValue());
-                } else {
-                    previewPane.style.display = 'none';
-                    btnIcon.setAttribute('data-lucide', 'layout-panel-split');
-                    if (previewTimeout) clearTimeout(previewTimeout);
-                }
-                lucide.createIcons({ root: document.getElementById('btn-toggle-preview') });
-                // エディタのサイズが変化したため再描画
-                setTimeout(() => editor.refresh(), 10);
-            });
-
-            document.getElementById('btn-toggle-outline').addEventListener('click', () => {
-                const outlinePane = document.getElementById('outline-pane');
-                const btn = document.getElementById('btn-toggle-outline');
-                if (outlinePane.style.display === 'none') {
-                    outlinePane.style.display = 'flex';
-                    btn.classList.add('active');
-                    updateOutline();
-                } else {
-                    outlinePane.style.display = 'none';
-                    btn.classList.remove('active');
-                }
-                // エディタのサイズが変化したため再描画
-                setTimeout(() => editor.refresh(), 10);
-            });
-
-            document.getElementById('btn-popout-preview').addEventListener('click', () => {
-                const title = (document.getElementById('doc-title-input').value || '').trim() || 'Markdown Preview';
-                const isSlideMode = previewContainer.classList.contains('marp-mode');
-
-                const newWin = window.open('', '_blank');
-                if (!newWin) {
-                    alert('ポップアップがブロックされました。ブラウザの設定を確認してください。');
-                    return;
-                }
-
-                let extraStyles = '';
-                if (isSlideMode) {
-                    const marpStyle = document.getElementById('marp-style').textContent;
-                    extraStyles = `
-                        ${marpStyle}
-                        body { background-color: #1a1a2e; margin: 0; padding: 2rem; display: flex; flex-direction: column; align-items: center; gap: 1.5rem; }
-                        div.marpit {
-                            width: auto !important;
-                            height: auto !important;
-                            position: static !important;
-                            overflow: visible !important;
-                            display: flex !important;
-                            flex-direction: column !important;
-             
+                    cl
