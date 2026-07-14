@@ -1,9 +1,4 @@
-oseHamburger();
-                }
-            });
-
-            // メニュー内のボタンクリック時にメニューを閉じる（テーマメニュー以外）
-            hamburgerMenu.querySelectorAll('.btn:not(#btn-doc-theme)').forEach(btn => {
+tn-doc-theme)').forEach(btn => {
                 btn.addEventListener('click', () => {
                     // テーマメニューを開くボタンの場合は閉じない
                     if (btn.id === 'btn-doc-theme') return;
@@ -568,4 +563,11 @@ oseHamburger();
                 doc.replaceSelection(insertedText);
                 
                 const newCursorLine = cursor.line + (before ? 2 : 0);
-                editor.setCursor({ line: newCursorL
+                editor.setCursor({ line: newCursorLine, ch: 2 });
+                editor.focus();
+            }
+
+            function generateMarkdownTable(rows, cols) {
+                let md = '';
+                // ヘッダー行
+    
