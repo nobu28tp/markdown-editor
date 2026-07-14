@@ -1,11 +1,4 @@
-ine, ch: 2 });
-                editor.focus();
-            }
-
-            function generateMarkdownTable(rows, cols) {
-                let md = '';
-                // ヘッダー行
-                md += '| ' + Array(cols).fill(' ').join(' | ') + ' |\n';
+            md += '| ' + Array(cols).fill(' ').join(' | ') + ' |\n';
                 // 区切り行
                 md += '|' + Array(cols).fill('---').join('|') + '|\n';
                 // データ行
@@ -236,6 +229,13 @@ ine, ch: 2 });
         const previewSvgMarkupCache = new Map();
         const mermaidValidationCache = new Map();
 
+        function setBoundedPreviewCache(cache, key, value, maxEntries = 100) {
+            if (!cache.has(key) && cache.size >= maxEntries) {
+                cache.delete(cache.keys().next().value);
+            }
+            cache.set(key, value);
+        }
+
         function sanitizeSvgMarkupForPreview(markup) {
             const cached = previewSvgMarkupCache.get(markup);
             if (cached !== undefined) return cached;
@@ -243,7 +243,7 @@ ine, ch: 2 });
             const markupWithoutComments = markup.replace(/<!--[\s\S]*?-->/g, '');
             const parsed = new DOMParser().parseFromString(markupWithoutComments, 'image/svg+xml');
             if (parsed.querySelector('parsererror') || parsed.documentElement?.localName !== 'svg') {
-                previewSvgMarkupCache.set(markup, null);
+                setBoundedPreviewCache(previewSvgMarkupCache, markup, null);
                 return null;
             }
 
@@ -251,7 +251,7 @@ ine, ch: 2 });
                 .replace(/viewbox=/g, 'viewBox=');
             const cleanDocument = new DOMParser().parseFromString(cleanMarkup, 'image/svg+xml');
             if (cleanDocument.querySelector('parsererror') || cleanDocument.documentElement?.localName !== 'svg') {
-                previewSvgMarkupCache.set(markup, null);
+                setBoundedPreviewCache(previewSvgMarkupCache, markup, null);
                 return null;
             }
 
@@ -260,7 +260,7 @@ ine, ch: 2 });
                 svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
             }
             const safeMarkup = new XMLSerializer().serializeToString(svg);
-            previewSvgMarkupCache.set(markup, safeMarkup);
+            setBoundedPreviewCache(previewSvgMarkupCache, markup, safeMarkup);
             return safeMarkup;
         }
 
@@ -348,7 +348,7 @@ ine, ch: 2 });
                                 }
                                 validationResult.errorOffset = errorOffset;
                             }
-                            mermaidValidationCache.set(code, validationResult);
+                            setBoundedPreviewCache(mermaidValidationCache, code, validationResult);
                         }
 
                         // await中に新しい入力があれば、古いプレビューは適用しない。
@@ -500,5 +500,4 @@ ine, ch: 2 });
                                 el.style.setProperty('baseline-shift', 'normal', 'important');
                             });
                             // HTMLベースのMermaidラベル（foreignObject内の要素）に対するインラインスタイルの強制注入
-                            container.querySelectorAll('foreignObject, foreignObject div, foreignObject span, .nodeLabel, .edgeLabel, .label').forEach(el => {
-                           
+                            container.querySelectorAll(
