@@ -1,4 +1,19 @@
-, 255, 0.08);
+       padding: 0.75rem;
+        }
+
+        .proofread-card {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 0.7rem;
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+        }
+
+        .proofread-card:hover,
+        .proofread-card.active {
+            border-color: var(--accent-color);
+            background: rgba(88, 166, 255, 0.08);
         }
 
         .proofread-card.resolved {
@@ -921,42 +936,4 @@
             gap: 8px;
         }
 
-        .table-popover-title {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            font-weight: 600;
-        }
-
-        .grid-container {
-            display: grid;
-            grid-template-columns: repeat(8, 1fr);
-            gap: 3px;
-        }
-
-        .grid-cell {
-            width: 18px;
-            height: 18px;
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            border-radius: 2px;
-            cursor: pointer;
-            transition: background-color 0.1s, border-color 0.1s;
-        }
-
-        .grid-cell.highlighted {
-            background-color: rgba(88, 166, 255, 0.4);
-            border-color: #58a6ff;
-        }
-
-        .table-popover-status {
-            font-size: 0.75rem;
-            color: var(--text-primary);
-            text-align: center;
-            font-weight: bold;
-        }
-    </style>
-</head>
-
-<body>
-    <div class="app-container">
-        <!-- Header -->
-  
+        .tab
