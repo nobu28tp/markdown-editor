@@ -1,4 +1,5 @@
-Hash: splitSourceFileHashes[part.filename] || ''
+                  content: part.contentLines.join('\n'),
+                    expectedHash: splitSourceFileHashes[part.filename] || ''
                 }));
                 targets.push({
                     dirHandle: activeLocalDirectoryHandle,
@@ -567,4 +568,4 @@ Hash: splitSourceFileHashes[part.filename] || ''
             const captureRoot = document.createElement('div');
             captureRoot.className = 'marpit pdf-capture';
             captureRoot.dataset.pdfCaptureRoot = 'true';
-            captureRoot.style.cssText = `position:absolute;left:0;top:0;width:${slideW}px;height:${slideH}px;overflow:hidden;z-inde
+            captureRoot.style.cssText = `position:absolute;left:0;to
