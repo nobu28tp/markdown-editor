@@ -1,3 +1,210 @@
+x:-1;pointer-events:none;color-scheme:light;background:#ffffff;`;
+
+            const styleTag = document.createElement('style');
+            styleTag.textContent = captureCss;
+            captureRoot.appendChild(styleTag);
+
+            const wrapperDiv = document.createElement('div');
+            wrapperDiv.className = 'marp-slide-wrapper';
+
+            const marpSvg = origWrapper.querySelector('svg[data-marpit-svg]');
+            let sectionSource;
+            if (marpSvg) {
+                const fo = marpSvg.querySelector('foreignObject');
+                sectionSource = fo ? fo.querySelector('section') : origWrapper.querySelector('section');
+            } else {
+                sectionSource = origWrapper.querySelector('section');
+            }
+
+            if (sectionSource) {
+                wrapperDiv.appendChild(sectionSource.cloneNode(true));
+            }
+
+            captureRoot.appendChild(wrapperDiv);
+            document.body.appendChild(captureRoot);
+
+            try {
+                const failedSvgCount = await replaceSvgsWithPngs(wrapperDiv);
+                const canvas = await html2canvas(captureRoot, {
+                    width: slideW,
+                    height: slideH,
+                    scale: 2,
+                    useCORS: true,
+                    allowTaint: false,
+                    backgroundColor: '#ffffff',
+                    logging: false,
+                    windowWidth: slideW,
+                    windowHeight: slideH,
+                    scrollX: 0,
+                    scrollY: 0
+                });
+                return { canvas, failedSvgCount };
+            } finally {
+                document.body.removeChild(captureRoot);
+            }
+        }
+
+        async function exportSlideModePdf(title) {
+            const slideWrappers = Array.from(previewContainer.querySelectorAll('.marp-slide-wrapper'));
+            if (slideWrappers.length === 0) {
+                throw new Error('スライドのレンダリングデータが見つかりません。プレビューを表示した状態で実行してください。');
+            }
+
+            const { slideW, slideH } = getMarpPdfMetrics();
+            const captureCss = buildMarpCaptureCss(slideW, slideH);
+            const jsPDF = window.jspdf.jsPDF;
+            const orientation = slideW >= slideH ? 'landscape' : 'portrait';
+            const pdf = new jsPDF({ orientation, unit: 'pt', format: [slideW, slideH], compress: true });
+            let failedSvgCount = 0;
+
+            for (let i = 0; i < slideWrappers.length; i++) {
+                updateStatus('saving', `PDF生成中 (${i + 1}/${slideWrappers.length})...`);
+                const renderedSlide = await renderMarpSlideToCanvas(slideWrappers[i], slideW, slideH, captureCss);
+                failedSvgCount += renderedSlide.failedSvgCount;
+                if (i > 0) pdf.addPage([slideW, slideH], orientation);
+                pdf.addImage(renderedSlide.canvas.toDataURL('image/png'), 'PNG', 0, 0, slideW, slideH, undefined, 'FAST');
+            }
+
+            pdf.save(title + '.pdf');
+            if (failedSvgCount > 0) {
+                alert(`SVG ${failedSvgCount}件をPNGへ変換できませんでした。PDFには変換失敗の案内を出力しました。外部画像・外部フォント・外部CSSを使わないSVGで再度お試しください。`);
+            }
+        }
+
+        async function exportDocumentModePdf(title) {
+            const iframe = document.createElement('iframe');
+            iframe.title = title;
+            iframe.setAttribute('aria-hidden', 'true');
+            iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
+            document.body.appendChild(iframe);
+
+            try {
+                const printWindow = iframe.contentWindow;
+                const printDocument = iframe.contentDocument || printWindow.document;
+                printDocument.open();
+                printDocument.write(generateHtmlExportContent({ forPrintPdf: true }));
+                printDocument.close();
+
+                await waitForPdfPrintFrameReady(iframe);
+                let cleanupTimer = null;
+                const cleanup = () => {
+                    if (cleanupTimer) clearTimeout(cleanupTimer);
+                    if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+                };
+                printWindow.addEventListener('afterprint', cleanup, { once: true });
+                cleanupTimer = setTimeout(cleanup, 5 * 60 * 1000);
+                printWindow.focus();
+                printWindow.print();
+            } catch (err) {
+                document.body.removeChild(iframe);
+                throw err;
+            }
+        }
+
+        function waitForPdfPrintFrameReady(iframe) {
+            return new Promise(resolve => {
+                const frameWindow = iframe.contentWindow;
+                const frameDocument = iframe.contentDocument || frameWindow.document;
+
+                function waitForAssets() {
+                    const images = Array.from(frameDocument.images || []);
+                    const imagePromises = images
+                        .filter(img => !img.complete)
+                        .map(img => new Promise(done => {
+                            img.onload = done;
+                            img.onerror = done;
+                        }));
+                    const fontPromise = frameDocument.fonts && frameDocument.fonts.ready
+                        ? frameDocument.fonts.ready.catch(() => undefined)
+                        : Promise.resolve();
+
+                    Promise.all([fontPromise, ...imagePromises]).then(() => {
+                        frameWindow.requestAnimationFrame(() => resolve());
+                    });
+                }
+
+                if (frameDocument.readyState === 'complete') {
+                    waitForAssets();
+                } else {
+                    iframe.onload = waitForAssets;
+                }
+            });
+        }
+
+        // Export as .pdf
+        async function handleExportPdf() {
+            try {
+                updateStatus('saving', 'PDF生成を準備中...');
+
+                const isSlideMode = previewContainer.classList.contains('marp-mode');
+                const title = getDocTitle();
+
+                if (isSlideMode) {
+                    ensurePdfExportLibraries();
+                    cleanupPdfCaptureRoots();
+                    await exportSlideModePdf(title);
+                    updateStatus('saved', 'PDF出力完了');
+                } else {
+                    await exportDocumentModePdf(title);
+                    updateStatus('saved', 'PDF印刷画面を開きました');
+                }
+            } catch (err) {
+                console.error('PDF export failed:', err);
+                updateStatus('error', 'PDF出力失敗');
+                alert('PDFエクスポート中にエラーが発生しました: ' + err.message);
+            }
+        }
+
+        const PDF_PRINT_CSS = `
+        @page {
+            size: A4;
+            margin: 18mm 16mm;
+        }
+
+        @media print {
+            html, body {
+                width: auto !important;
+                min-height: auto !important;
+                overflow: visible !important;
+                background: #ffffff !important;
+            }
+
+            body {
+                max-width: none !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                color: #24292f !important;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic", Meiryo, sans-serif !important;
+                font-size: 11pt !important;
+                line-height: 1.6 !important;
+            }
+
+            #preview-content.markdown-body {
+                width: 100% !important;
+                max-width: none !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: visible !important;
+            }
+
+            h1, h2, h3, h4 {
+                break-after: avoid-page;
+                page-break-after: avoid;
+            }
+
+            p, li, blockquote, pre, table, img, svg, figure, .mermaid-container {
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
+
+            pre {
+                white-space: pre-wrap !important;
+                overflow: visible !important;
+                overflow-wrap: anywhere !important;
+                word-break: break-word !important;
+            }
+
+            code {
                 white-space: pre-wrap !important;
             }
 
@@ -462,216 +669,3 @@ ${slidesHtml}
                     const repo = pathParts[0];
                     return {
                         owner: username,
-                        repo: `${username}/${repo}`,
-                        branch: 'main'
-                    };
-                }
-            }
-
-            // ローカル実行やその他環境で、nobu28tp/test_markdown_editor がパスに含まれる場合は同期を支援
-            if (pn.includes('test_markdown_editor')) {
-                return {
-                    owner: 'nobu28tp',
-                    repo: 'nobu28tp/test_markdown_editor',
-                    branch: 'main'
-                };
-            }
-            return null;
-        }
-
-        // ===== テーマ（ライト/ダーク）切り替え機能 =====
-        function toggleTheme() {
-            const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            setTheme(newTheme);
-        }
-
-        function setTheme(theme) {
-            document.documentElement.setAttribute('data-theme', theme);
-            localStorage.setItem('lumina_theme', theme);
-            
-            // ボタンのアイコンとテキストを更新
-            const themeBtn = document.getElementById('btn-theme-toggle');
-            if (themeBtn) {
-                const icon = themeBtn.querySelector('i');
-                const text = themeBtn.querySelector('span');
-                if (theme === 'light') {
-                    if (icon) icon.setAttribute('data-lucide', 'moon');
-                    if (text) text.textContent = 'ダークモード';
-                } else {
-                    if (icon) icon.setAttribute('data-lucide', 'sun');
-                    if (text) text.textContent = 'ライトモード';
-                }
-                if (window.lucide) {
-                    window.lucide.createIcons({ root: themeBtn });
-                }
-            }
-        }
-
-        // リポジトリ名 (owner/repo) のクレンジング
-        function sanitizeGitHubRepo(input) {
-            let val = input.trim();
-            if (!val) return '';
-
-            // GitHubのURL全体が入力された場合の処理 (https://github.com/owner/repo/...)
-            if (val.includes('github.com/')) {
-                const urlParts = val.split('github.com/')[1].split('/');
-                if (urlParts.length >= 2) {
-                    return `${urlParts[0]}/${urlParts[1]}`;
-                }
-            }
-
-            // owner/repo/folder などのように3階層以上ある場合、最初の2階層だけを owner/repo として抽出
-            const parts = val.split('/').filter(Boolean);
-            if (parts.length >= 2) {
-                // もし末尾が .git で終わっていたら除去
-                const repoName = parts[1].replace(/\.git$/, '');
-                return `${parts[0]}/${repoName}`;
-            }
-
-            return val;
-        }
-
-        // リポジトリ名 (owner/repo) のクレンジングとUIアシスト
-        function handleRepoInputCleansing() {
-            const repoEl = document.getElementById('gh-repo');
-            const pathEl = document.getElementById('gh-path');
-            if (!repoEl || !pathEl) return;
-            
-            let repo = repoEl.value.trim();
-            if (!repo) return;
-
-            // クレンジング前の値にスラッシュが3つ以上ある、または末尾にパスが含まれているかチェック
-            // 例: nobu28tp/test_markdown_editor/document
-            const parts = repo.split('/').filter(Boolean);
-            if (parts.length > 2) {
-                const cleanedRepo = `${parts[0]}/${parts[1].replace(/\.git$/, '')}`;
-                
-                // 削られたパス部分を抽出 (例: 'document')
-                const extractedPath = parts.slice(2).join('/');
-                
-                repoEl.value = cleanedRepo;
-                
-                // ファイルパス入力欄が空、またはプレースホルダーに近い場合、抽出したパスをセット
-                const currentPath = pathEl.value.trim();
-                if (!currentPath || currentPath === 'document/') {
-                    // もしファイル名が含まれていなければ、フォルダパスとして末尾にスラッシュを付ける
-                    const newPath = extractedPath.endsWith('.md') ? extractedPath : `${extractedPath}/`;
-                    pathEl.value = newPath;
-                }
-                
-                showGhStatus(`ℹ️ リポジトリ名を自動クレンジングし、パスに「${extractedPath}」を設定しました`, '#58a6ff');
-            } else {
-                // 通常のクレンジング（URLからのコピペなど）
-                const cleanedRepo = sanitizeGitHubRepo(repo);
-                if (cleanedRepo !== repo) {
-                    repoEl.value = cleanedRepo;
-                }
-            }
-        }
-
-        // GitHub設定をLocalStorageから読み込み
-        function loadGitHubSettings() {
-            try {
-                const raw = localStorage.getItem('lumina_github_settings');
-                let s = {};
-                if (raw) {
-                    s = JSON.parse(raw);
-                }
-
-                // URLからの自動検出マージ
-                const detected = detectGitHubPagesInfo();
-                if (detected) {
-                    if (!s.repo) s.repo = detected.repo;
-                    if (!s.branch) s.branch = detected.branch;
-                    if (!s.path) s.path = 'document/';
-                } else {
-                    if (!s.branch) s.branch = 'main';
-                    if (!s.path) s.path = 'document/';
-                }
-
-                if (s.token) document.getElementById('gh-token').value = s.token;
-                if (s.repo) document.getElementById('gh-repo').value = s.repo;
-                if (s.branch) document.getElementById('gh-branch').value = s.branch;
-                if (s.path) document.getElementById('gh-path').value = s.path;
-                
-                // 読み込み直後に自動クレンジングを実行して不整合を解消
-                handleRepoInputCleansing();
-            } catch (e) {
-                console.warn('GitHub設定の読込に失敗:', e);
-            }
-        }
-
-        // モーダル内ステータス表示
-        function showGhStatus(msg, color) {
-            const el = document.getElementById('gh-modal-status');
-            el.textContent = msg;
-            el.style.color = color || '#58a6ff';
-            el.style.display = 'block';
-            setTimeout(() => { el.style.display = 'none'; }, 5000);
-        }
-
-        // GitHub連携の入力値バリデーション
-        function getGitHubInputs(requireToken = true) {
-            const token = document.getElementById('gh-token').value.trim();
-            let repo = document.getElementById('gh-repo').value.trim();
-            const branch = document.getElementById('gh-branch').value.trim() || 'main';
-            let path = document.getElementById('gh-path').value.trim();
-
-            // リポジトリ名の自動クレンジング
-            if (repo) {
-                const cleanedRepo = sanitizeGitHubRepo(repo);
-                if (cleanedRepo !== repo) {
-                    repo = cleanedRepo;
-                    document.getElementById('gh-repo').value = repo; // 画面の入力欄に書き戻し
-                    showGhStatus('ℹ️ リポジトリ名を owner/repo 形式に自動修正しました', '#58a6ff');
-                }
-            }
-
-            if (requireToken && !token) { showGhStatus('⚠️ 保存するにはパーソナルアクセストークンを入力してください', '#d29922'); return null; }
-            if (!repo) { showGhStatus('⚠️ リポジトリ名 (owner/repo) を入力してください', '#d29922'); return null; }
-            if (!path) { showGhStatus('⚠️ ファイルパスを入力してください', '#d29922'); return null; }
-
-            // 入力されたファイルパスにスラッシュが含まれず、.mdで終わる単純なファイル名の場合、
-            // 自動的に 'document/' プレフィックスを付与して補完する
-            if (!path.includes('/') && path.endsWith('.md')) {
-                path = 'document/' + path;
-                document.getElementById('gh-path').value = path;
-                showGhStatus('ℹ️ パスを自動的に document/ 配下に補完しました', '#58a6ff');
-            }
-
-            return { token, repo, branch, path };
-        }
-
-        // GitHubからファイルを読み込む
-        async function loadFromGitHub() {
-            const inputs = getGitHubInputs(false); // 読込時はトークン不要
-            if (!inputs) return;
-            const { token, repo, branch, path } = inputs;
-
-            showGhStatus('📥 GitHubから読み込み中...', '#58a6ff');
-            try {
-                const url = `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}&_=${Date.now()}`;
-                const headers = {
-                    'Accept': 'application/vnd.github.v3.raw'
-                };
-                if (token) {
-                    headers['Authorization'] = `token ${token}`;
-                }
-
-                let res = await fetch(url, { headers });
-
-                // トークン無効による隠蔽404または401エラーの場合、トークンなし（パブリック匿名）で自動フォールバック再試行
-                if (!res.ok && token && (res.status === 404 || res.status === 401)) {
-                    console.warn("GitHub API load failed with token, retrying without token...");
-                    const publicHeaders = {
-                        'Accept': 'application/vnd.github.v3.raw'
-                    };
-                    const retryRes = await fetch(url, { headers: publicHeaders });
-                    if (retryRes.ok) {
-                        res = retryRes;
-                        showGhStatus('ℹ️ トークンが無効なため、トークンなし（公開情報）として読み込みました', '#58a6ff');
-                    }
-                }
-
-   
