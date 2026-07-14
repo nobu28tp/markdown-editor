@@ -1,7 +1,4 @@
- const isTable = trimmed.startsWith('|');
-                const isEmpty = trimmed === '';
-
-                const prevLine = i > 0 ? lines[i-1].trim() : '';
+es[i-1].trim() : '';
                 const prevIsList = /^(?:[*+-]|\d+\.)\s/.test(prevLine);
                 const prevIsTable = prevLine.startsWith('|');
                 const prevIsQuote = prevLine.startsWith('>');
@@ -566,4 +563,9 @@
             // Escキーでメニューを閉じる
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape' && hamburgerMenu.classList.contains('active')) {
-                    cl
+                    closeHamburger();
+                }
+            });
+
+            // メニュー内のボタンクリック時にメニューを閉じる（テーマメニュー以外）
+            hamburgerMenu.querySelectorAll('.btn:not(#b
