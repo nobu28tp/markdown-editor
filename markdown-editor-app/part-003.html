@@ -1,8 +1,46 @@
-      <header class="glass-header">
+le-popover-title {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 3px;
+        }
+
+        .grid-cell {
+            width: 18px;
+            height: 18px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 2px;
+            cursor: pointer;
+            transition: background-color 0.1s, border-color 0.1s;
+        }
+
+        .grid-cell.highlighted {
+            background-color: rgba(88, 166, 255, 0.4);
+            border-color: #58a6ff;
+        }
+
+        .table-popover-status {
+            font-size: 0.75rem;
+            color: var(--text-primary);
+            text-align: center;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="glass-header">
             <div class="header-left">
                 <div class="logo">
                     <i data-lucide="pen-tool"></i>
-                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.5.11)</span>
+                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.5.12)</span>
                     </h1>
                 </div>
                 <div class="status-indicator" id="save-status">
@@ -439,39 +477,4 @@
                     </tbody>
                 </table>
 
-                <h3 style="margin: 1.5rem 0.75rem 0.5rem; font-size: 1.1em; color: var(--text-primary);">Mermaid
-                    グラフの方向（flowchart / graph）</h3>
-                <table class="cheat-sheet-table">
-                    <thead>
-                        <tr>
-                            <th>コード (xx部分)</th>
-                            <th>方向</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><code>TB</code> または <code>TD</code></td>
-                            <td>上から下 (Top to Bottom / Down)</td>
-                        </tr>
-                        <tr>
-                            <td><code>BT</code></td>
-                            <td>下から上 (Bottom to Top)</td>
-                        </tr>
-                        <tr>
-                            <td><code>LR</code></td>
-                            <td>左から右 (Left to Right)</td>
-                        </tr>
-                        <tr>
-                            <td><code>RL</code></td>
-                            <td>右から左 (Right to Left)</td>
-                        </tr>
-                    </tbody>
-                </table>
-
-                <h3 style="margin: 1.5rem 0.75rem 0.5rem; font-size: 1.1em; color: var(--text-primary);">Mermaid
-                    記号一覧（フローチャート）</h3>
-                <table class="cheat-sheet-table">
-                    <thead>
-                        <tr>
-                            <th>コード</th>
-             
+                <h3 style="margin: 1.5rem 0.75rem 0.5rem; font-size: 1.1em; color: var(--text-p
