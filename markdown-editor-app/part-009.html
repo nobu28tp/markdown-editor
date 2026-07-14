@@ -1,4 +1,92 @@
-vLineText = doc.getLine(cursor.line - 1);
+ine, ch: 2 });
+                editor.focus();
+            }
+
+            function generateMarkdownTable(rows, cols) {
+                let md = '';
+                // ヘッダー行
+                md += '| ' + Array(cols).fill(' ').join(' | ') + ' |\n';
+                // 区切り行
+                md += '|' + Array(cols).fill('---').join('|') + '|\n';
+                // データ行
+                for (let r = 1; r < rows; r++) {
+                    md += '| ' + Array(cols).fill(' ').join(' | ') + ' |\n';
+                }
+                return md;
+            }
+
+            function toggleTablePopover(e) {
+                if (!tablePopover || !tableBtn) return;
+                
+                if (tablePopover.style.display === 'none') {
+                    const rect = tableBtn.getBoundingClientRect();
+                    const parentRect = document.getElementById('editor-container').getBoundingClientRect();
+                    
+                    tablePopover.style.left = `${rect.left - parentRect.left}px`;
+                    tablePopover.style.top = `${rect.bottom - parentRect.top + 5}px`;
+                    
+                    tablePopover.style.display = 'flex';
+                    highlightGrid(0, 0);
+                } else {
+                    tablePopover.style.display = 'none';
+                }
+            }
+
+            // ポップオーバーの外側をクリックしたときに閉じる
+            document.addEventListener('click', (e) => {
+                if (tablePopover && tablePopover.style.display !== 'none') {
+                    if (!tablePopover.contains(e.target) && e.target !== tableBtn && !tableBtn.contains(e.target)) {
+                        tablePopover.style.display = 'none';
+                    }
+                }
+            });
+
+            // 文字列中のn番目の出現位置を見つける補助関数
+            function findNthOccurrence(str, pat, n) {
+                let i = -1;
+                while (n-- > 0) {
+                    i = str.indexOf(pat, i + 1);
+                    if (i < 0) break;
+                }
+                return i;
+            }
+
+            // テーブル操作アシスタントのボタンイベント
+            const btnAddRow = document.getElementById('btn-table-add-row');
+            const btnDeleteRow = document.getElementById('btn-table-delete-row');
+            const btnAddCol = document.getElementById('btn-table-add-col');
+            const btnDeleteCol = document.getElementById('btn-table-delete-col');
+
+            if (btnAddRow) {
+                btnAddRow.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (!editor) return;
+                    const doc = editor.getDoc();
+                    const cursor = doc.getCursor();
+                    const lineText = doc.getLine(cursor.line);
+                    if (lineText && lineText.trim().startsWith('|')) {
+                        const columnsCount = lineText.split('|').length - 2;
+                        if (columnsCount > 0) {
+                            const newRow = '\n| ' + Array(columnsCount).fill(' ').join(' | ') + ' |';
+                            const lineLength = lineText.length;
+                            doc.replaceRange(newRow, { line: cursor.line, ch: lineLength });
+                            editor.setCursor({ line: cursor.line + 1, ch: 2 });
+                            editor.focus();
+                        }
+                    }
+                });
+            }
+
+            if (btnDeleteRow) {
+                btnDeleteRow.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (!editor) return;
+                    const doc = editor.getDoc();
+                    const cursor = doc.getCursor();
+                    const lineCount = doc.lineCount();
+                    if (lineCount > 1) {
+                        if (cursor.line === lineCount - 1) {
+                            const prevLineText = doc.getLine(cursor.line - 1);
                             doc.replaceRange('', { line: cursor.line - 1, ch: prevLineText.length }, { line: cursor.line, ch: doc.getLine(cursor.line).length });
                         } else {
                             doc.replaceRange('', { line: cursor.line, ch: 0 }, { line: cursor.line + 1, ch: 0 });
@@ -145,39 +233,70 @@ vLineText = doc.getLine(cursor.line - 1);
 
         // Marp Core の生成結果は foreignObject を含むため、そのまま全体をサニタイズすると
         // レイアウトが壊れる。本文に直接書かれた SVG だけをレンダリング前に安全化する。
-        function sanitizeInlineSvgMarkupForPreview(markdownText) {
-            return (markdownText || '').replace(/<svg\b[\s\S]*?<\/svg\s*>/gi, (markup) => {
-                // SVGコメント内の未許可要素は、HTMLとしてのサニタイズ時に後続要素まで
-                // 巻き込んで除去される場合があるため、表示前にはコメントを残さない。
-                const markupWithoutComments = markup.replace(/<!--[\s\S]*?-->/g, '');
-                const parsed = new DOMParser().parseFromString(markupWithoutComments, 'image/svg+xml');
-                if (parsed.querySelector('parsererror') || parsed.documentElement?.localName !== 'svg') {
-                    // 行番号の対応を保つため、拒否したSVGと同じ改行数だけを残す。
-                    return markup.replace(/[^\n]/g, '');
-                }
+        const previewSvgMarkupCache = new Map();
+        const mermaidValidationCache = new Map();
 
-                const cleanMarkup = DOMPurify.sanitize(markupWithoutComments, getPreviewSvgSanitizeOptions())
-                    .replace(/viewbox=/g, 'viewBox=');
-                const cleanDocument = new DOMParser().parseFromString(cleanMarkup, 'image/svg+xml');
-                if (cleanDocument.querySelector('parsererror') || cleanDocument.documentElement?.localName !== 'svg') {
-                    return markup.replace(/[^\n]/g, '');
-                }
+        function sanitizeSvgMarkupForPreview(markup) {
+            const cached = previewSvgMarkupCache.get(markup);
+            if (cached !== undefined) return cached;
 
-                const svg = cleanDocument.documentElement;
-                if (!svg.getAttribute('xmlns')) {
-                    svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-                }
-                // MarkdownのHTMLブロック解析はSVG内の空行でブロックを分断することがある。
-                // プレビュー用だけは1行のSVGに正規化し、図形と後続Markdownを同じSVGとして扱わせる。
-                return new XMLSerializer().serializeToString(svg).replace(/[\r\n]+/g, '');
+            const markupWithoutComments = markup.replace(/<!--[\s\S]*?-->/g, '');
+            const parsed = new DOMParser().parseFromString(markupWithoutComments, 'image/svg+xml');
+            if (parsed.querySelector('parsererror') || parsed.documentElement?.localName !== 'svg') {
+                previewSvgMarkupCache.set(markup, null);
+                return null;
+            }
+
+            const cleanMarkup = DOMPurify.sanitize(markupWithoutComments, getPreviewSvgSanitizeOptions())
+                .replace(/viewbox=/g, 'viewBox=');
+            const cleanDocument = new DOMParser().parseFromString(cleanMarkup, 'image/svg+xml');
+            if (cleanDocument.querySelector('parsererror') || cleanDocument.documentElement?.localName !== 'svg') {
+                previewSvgMarkupCache.set(markup, null);
+                return null;
+            }
+
+            const svg = cleanDocument.documentElement;
+            if (!svg.getAttribute('xmlns')) {
+                svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+            }
+            const safeMarkup = new XMLSerializer().serializeToString(svg);
+            previewSvgMarkupCache.set(markup, safeMarkup);
+            return safeMarkup;
+        }
+
+        function prepareInlineSvgMarkupForPreview(markdownText) {
+            const svgRecords = [];
+            const preparedMarkdown = (markdownText || '').replace(/<svg\b[\s\S]*?<\/svg\s*>/gi, (markup) => {
+                const safeMarkup = sanitizeSvgMarkupForPreview(markup);
+                const newlinePadding = '\n'.repeat((markup.match(/\n/g) || []).length);
+                if (!safeMarkup) return newlinePadding;
+
+                const id = `inline-svg-${svgRecords.length}`;
+                svgRecords.push({ id, markup: safeMarkup });
+                // SVGをプレースホルダーに置き換えても、元のMarkdownと同じ行数を維持する。
+                return `<span class="inline-svg-placeholder" data-inline-svg-id="${id}"></span>${newlinePadding}`;
+            });
+            return { markdownText: preparedMarkdown, svgRecords };
+        }
+
+        function restoreInlineSvgMarkup(container, svgRecords) {
+            if (!container || !svgRecords.length) return;
+            const records = new Map(svgRecords.map(record => [record.id, record.markup]));
+            container.querySelectorAll('[data-inline-svg-id]').forEach((placeholder) => {
+                const markup = records.get(placeholder.getAttribute('data-inline-svg-id'));
+                if (!markup) return;
+                const parsed = new DOMParser().parseFromString(markup, 'image/svg+xml');
+                const svg = parsed.documentElement;
+                if (svg?.localName === 'svg') placeholder.replaceWith(document.importNode(svg, true));
             });
         }
 
-        async function updatePreview(markdownText) {
+        async function updatePreview(markdownText, renderRevision = ++previewRenderRevision) {
             if (!isPreviewPaneVisible()) return;
             const savedScrollTop = previewContainer ? previewContainer.scrollTop : 0;
             try {
-                const previewMarkdownText = sanitizeInlineSvgMarkupForPreview(markdownText);
+                const previewSource = prepareInlineSvgMarkupForPreview(markdownText);
+                const previewMarkdownText = previewSource.markdownText;
                 // エディタ内のすべての Mermaid ブロックの位置をスキャンして記録し、パースエラーを検出する
                 if (window.mermaid && markdownText.includes('```mermaid')) {
                     // 既存のエラー行ハイライトをクリア
@@ -208,26 +327,34 @@ vLineText = doc.getLine(cursor.line - 1);
 
                     for (const block of mermaidBlocksInDoc) {
                         const code = block.codeLines.join('\n');
-                        try {
-                            await mermaid.parse(code);
-                        } catch (err) {
-                            console.warn('Mermaid parse validation error:', err);
-                            let errorOffset = 0;
-                            
-                            // エラーオブジェクトから行番号を探す
-                            if (err.hash && typeof err.hash.line === 'number') {
-                                errorOffset = err.hash.line - 1;
-                            } else if (err.loc && typeof err.loc.first_line === 'number') {
-                                errorOffset = err.loc.first_line - 1;
-                            } else {
-                                const msg = err.message || '';
-                                const lineMatch = msg.match(/(?:line|行)\s*(\d+)/i) || msg.match(/(\d+):/);
-                                if (lineMatch) {
-                                    errorOffset = parseInt(lineMatch[1], 10) - 1;
-                                }
-                            }
+                        let validationResult = mermaidValidationCache.get(code);
+                        if (validationResult === undefined) {
+                            validationResult = { errorOffset: null };
+                            try {
+                                await mermaid.parse(code);
+                            } catch (err) {
+                                console.warn('Mermaid parse validation error:', err);
+                                let errorOffset = 0;
 
-                            const actualLine = block.start + 1 + errorOffset;
+                                // エラーオブジェクトから行番号を探す
+                                if (err.hash && typeof err.hash.line === 'number') {
+                                    errorOffset = err.hash.line - 1;
+                                } else if (err.loc && typeof err.loc.first_line === 'number') {
+                                    errorOffset = err.loc.first_line - 1;
+                                } else {
+                                    const msg = err.message || '';
+                                    const lineMatch = msg.match(/(?:line|行)\s*(\d+)/i) || msg.match(/(\d+):/);
+                                    if (lineMatch) errorOffset = parseInt(lineMatch[1], 10) - 1;
+                                }
+                                validationResult.errorOffset = errorOffset;
+                            }
+                            mermaidValidationCache.set(code, validationResult);
+                        }
+
+                        // await中に新しい入力があれば、古いプレビューは適用しない。
+                        if (renderRevision !== previewRenderRevision) return;
+                        if (validationResult.errorOffset !== null) {
+                            const actualLine = block.start + 1 + validationResult.errorOffset;
                             if (actualLine < lineCount) {
                                 editor.addLineClass(actualLine, "background", "cm-error-line");
                                 window.activeErrorLines.push(actualLine);
@@ -240,6 +367,8 @@ vLineText = doc.getLine(cursor.line - 1);
                     });
                     window.activeErrorLines = [];
                 }
+
+                if (renderRevision !== previewRenderRevision) return;
 
                 const isMarpDetected = /^---\s*\n[\s\S]*?marp:\s*true[\s\S]*?\n---/.test(markdownText);
 
@@ -307,12 +436,13 @@ vLineText = doc.getLine(cursor.line - 1);
                         cleanHtml = DOMPurify.sanitize(slidesHtml, getPreviewSvgSanitizeOptions({
                             allowForeignObject: true,
                             addTags: ['section', 'style', 'svg', 'foreignObject', 'path', 'g', 'figure', 'figcaption', 'div'],
-                            addAttrs: ['data-theme', 'style', 'data-marpit-svg', 'data-marpit-pagination', 'data-marpit-pagination-total', 'data-marpit-advanced-background', 'data-marpit-advanced-background-container', 'data-marpit-advanced-background-direction', 'data-bg-image', 'data-color', 'data-line']
+                            addAttrs: ['data-theme', 'style', 'data-marpit-svg', 'data-marpit-pagination', 'data-marpit-pagination-total', 'data-marpit-advanced-background', 'data-marpit-advanced-background-container', 'data-marpit-advanced-background-direction', 'data-bg-image', 'data-color', 'data-line', 'data-inline-svg-id']
                         }));
                         cleanHtml = cleanHtml.replace(/viewbox=/g, 'viewBox=');
                     }
 
                     previewContainer.innerHTML = cleanHtml;
+                    restoreInlineSvgMarkup(previewContainer, previewSource.svgRecords);
                     applyLineMarkers(previewContainer);
                     previewContainer.scrollTop = savedScrollTop;
 
@@ -327,9 +457,10 @@ vLineText = doc.getLine(cursor.line - 1);
                     const rawHtml = marked.parse(markedTextWithMarkers);
                     const cleanHtml = DOMPurify.sanitize(rawHtml, getPreviewSvgSanitizeOptions({
                         addTags: ['iframe', 'input', 'div'],
-                        addAttrs: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'target', 'type', 'checked', 'disabled', 'start', 'data-line']
+                        addAttrs: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'target', 'type', 'checked', 'disabled', 'start', 'data-line', 'data-inline-svg-id']
                     }));
                     previewContainer.innerHTML = cleanHtml;
+                    restoreInlineSvgMarkup(previewContainer, previewSource.svgRecords);
                     applyLineMarkers(previewContainer);
                     previewContainer.scrollTop = savedScrollTop;
                     marpStyleTag.textContent = '';
@@ -349,6 +480,7 @@ vLineText = doc.getLine(cursor.line - 1);
                             // 独自スタイルのインライン直接注入（DOMハック）は行わず、
                             // MermaidのネイティブのSVGレンダリング機能と設定のみを使用する
                             const { svg } = await mermaid.render(diagramId, code);
+                            if (renderRevision !== previewRenderRevision) return;
                             
                             // SVG文字列からtextLengthとlengthAdjustを正規表現で完全に除去（DOM操作では効かないケースがあるため文字列レベルで処理）
                             const cleanSvg = svg.replace(/\s+textLength="[^"]*"/g, '').replace(/\s+lengthAdjust="[^"]*"/g, '');
@@ -369,133 +501,4 @@ vLineText = doc.getLine(cursor.line - 1);
                             });
                             // HTMLベースのMermaidラベル（foreignObject内の要素）に対するインラインスタイルの強制注入
                             container.querySelectorAll('foreignObject, foreignObject div, foreignObject span, .nodeLabel, .edgeLabel, .label').forEach(el => {
-                                el.style.setProperty('background-color', 'transparent', 'important');
-                                el.style.setProperty('visibility', 'visible', 'important');
-                                el.style.setProperty('opacity', '1', 'important');
-                            });
-                        } catch (err) {
-                            console.error('Mermaid render error:', err);
-                            // プレビュー側でもエラー内容とエラーメッセージを表示する
-                            const errorDiv = document.createElement('div');
-                            errorDiv.className = 'mermaid-error-preview';
-                            errorDiv.style.cssText = 'color: #f85149; background: rgba(248, 81, 73, 0.1); border: 1px solid rgba(248, 81, 73, 0.2); padding: 1rem; border-radius: 6px; font-family: monospace; font-size: 0.9em; margin: 1.5rem 0; white-space: pre-wrap; text-align: left;';
-                            errorDiv.innerHTML = `<strong>Mermaid 描画エラー:</strong>\n${DOMPurify.sanitize(err.message || String(err))}`;
-                            block.parentNode.replaceWith(errorDiv);
-                        }
-                    }
-                }
-
-                // Mermaid レンダリング完了後にカスタムテーマスタイルをDOMの末尾に移動（詳細度競合で最優先にするため）
-                if (typeof customThemeStyleTag !== 'undefined' && customThemeStyleTag) {
-                    document.head.appendChild(customThemeStyleTag);
-                }
-
-                // すべてのパース・描画完了後にスクロール位置を再度確実に復元
-                if (previewContainer) {
-                    previewContainer.scrollTop = savedScrollTop;
-                    // DOM更新完了後に確実にスクロール位置を復元する
-                    requestAnimationFrame(() => {
-                        previewContainer.scrollTop = savedScrollTop;
-                        // 画像やMermaid SVGなどの非同期レンダリング完了後の最終復元
-                        requestAnimationFrame(() => {
-                            previewContainer.scrollTop = savedScrollTop;
-                        });
-                    });
-                }
-            } catch (e) {
-                console.error("Preview rendering error:", e);
-            }
-        }
-
-        // ============================================================
-        // Custom Search Bar Functionality
-        // ============================================================
-        let searchState = {
-            query: "",
-            matches: [],
-            currentIndex: -1
-        };
-        let searchMarkers = [];
-
-        function clearSearchMarkers() {
-            searchMarkers.forEach(m => m.clear());
-            searchMarkers = [];
-        }
-
-        function openCustomSearch(showReplace = false) {
-            let searchBar = document.getElementById('custom-search-bar');
-            const container = document.getElementById('editor-container');
-            
-            if (!searchBar) {
-                searchBar = document.createElement('div');
-                searchBar.id = 'custom-search-bar';
-                searchBar.className = 'custom-search-bar';
-                searchBar.innerHTML = `
-                    <div class="search-row">
-                        <button id="search-toggle-replace" title="置換を展開"><i data-lucide="chevron-right"></i></button>
-                        <div class="search-inputs">
-                            <input type="text" id="search-input" placeholder="検索...">
-                            <span id="search-counter">0/0</span>
-                        </div>
-                        <div class="search-actions">
-                            <button id="search-prev" title="前を検索"><i data-lucide="chevron-up"></i></button>
-                            <button id="search-next" title="次を検索"><i data-lucide="chevron-down"></i></button>
-                            <button id="search-close" title="閉じる"><i data-lucide="x"></i></button>
-                        </div>
-                    </div>
-                    <div class="replace-row" id="replace-row" style="display: none;">
-                        <div style="width: 24px;"></div> <!-- インデント調整用スペース -->
-                        <div class="replace-inputs">
-                            <input type="text" id="replace-input" placeholder="置換後の文字列...">
-                        </div>
-                        <div class="replace-actions">
-                            <button id="btn-replace-one" title="置換">置換</button>
-                            <button id="btn-replace-all" title="すべて置換">すべて置換</button>
-                        </div>
-                    </div>
-                `;
-                container.appendChild(searchBar);
-                lucide.createIcons({ root: searchBar });
-                
-                // 検索インプットイベント
-                const input = document.getElementById('search-input');
-                input.addEventListener('input', () => updateSearch(input.value));
-                input.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        if (e.shiftKey) {
-                            findNextMatch(true);
-                        } else {
-                            findNextMatch(false);
-                        }
-                    } else if (e.key === 'Escape') {
-                        closeCustomSearch();
-                    }
-                });
-
-                // 置換インプットイベント
-                const replaceInput = document.getElementById('replace-input');
-                replaceInput.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        replaceCurrentMatch();
-                    } else if (e.key === 'Escape') {
-                        closeCustomSearch();
-                    }
-                });
-                
-                document.getElementById('search-prev').addEventListener('click', () => findNextMatch(true));
-                document.getElementById('search-next').addEventListener('click', () => findNextMatch(false));
-                document.getElementById('search-close').addEventListener('click', closeCustomSearch);
-                document.getElementById('search-toggle-replace').addEventListener('click', () => toggleReplaceRow());
-                document.getElementById('btn-replace-one').addEventListener('click', replaceCurrentMatch);
-                document.getElementById('btn-replace-all').addEventListener('click', replaceAllMatches);
-            }
-            
-            searchBar.classList.add('active');
-            toggleReplaceRow(showReplace);
-
-            const input = document.getElementById('search-input');
-            const selected = editor.getSelection();
-            if (selected && selected.indexOf('\n') === -1) {
-                input.value = selected;
+                           
