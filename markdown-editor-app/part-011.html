@@ -1,4 +1,7 @@
-                         let depth = 1;
+sult += css.substring(atStart, j);
+                            i = j;
+                        } else {
+                            let depth = 1;
                             let j = i + 1;
                             while (j < css.length && depth > 0) {
                                 if (css[j] === '{') depth++;
@@ -542,5 +545,4 @@
                 const targets = parts.map(part => ({
                     dirHandle: activeLocalDirectoryHandle,
                     fileName: part.filename,
-                    content: part.contentLines.join('\n'),
-                    expected
+  
