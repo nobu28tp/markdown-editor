@@ -1,4 +1,5 @@
-     el.style.setProperty('background-color', 'transparent', 'important');
+'foreignObject, foreignObject div, foreignObject span, .nodeLabel, .edgeLabel, .label').forEach(el => {
+                                el.style.setProperty('background-color', 'transparent', 'important');
                                 el.style.setProperty('visibility', 'visible', 'important');
                                 el.style.setProperty('opacity', '1', 'important');
                             });
@@ -599,7 +600,4 @@
                                 if (css[j] === '}') depth--;
                                 j++;
                             }
-                            result += css.substring(atStart, j);
-                            i = j;
-                        } else {
-   
+                            re
