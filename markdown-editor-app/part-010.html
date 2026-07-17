@@ -1,123 +1,4 @@
-'foreignObject, foreignObject div, foreignObject span, .nodeLabel, .edgeLabel, .label').forEach(el => {
-                                el.style.setProperty('background-color', 'transparent', 'important');
-                                el.style.setProperty('visibility', 'visible', 'important');
-                                el.style.setProperty('opacity', '1', 'important');
-                            });
-                        } catch (err) {
-                            if (renderRevision !== previewRenderRevision) return;
-                            console.error('Mermaid render error:', err);
-                            // プレビュー側でもエラー内容とエラーメッセージを表示する
-                            const errorDiv = document.createElement('div');
-                            errorDiv.className = 'mermaid-error-preview';
-                            errorDiv.style.cssText = 'color: #f85149; background: rgba(248, 81, 73, 0.1); border: 1px solid rgba(248, 81, 73, 0.2); padding: 1rem; border-radius: 6px; font-family: monospace; font-size: 0.9em; margin: 1.5rem 0; white-space: pre-wrap; text-align: left;';
-                            errorDiv.innerHTML = `<strong>Mermaid 描画エラー:</strong>\n${DOMPurify.sanitize(err.message || String(err))}`;
-                            block.parentNode.replaceWith(errorDiv);
-                        }
-                    }
-                }
 
-                // Mermaid レンダリング完了後にカスタムテーマスタイルをDOMの末尾に移動（詳細度競合で最優先にするため）
-                if (typeof customThemeStyleTag !== 'undefined' && customThemeStyleTag) {
-                    document.head.appendChild(customThemeStyleTag);
-                }
-
-                previewAppliedRevision = renderRevision;
-
-                // すべてのパース・描画完了後にスクロール位置を再度確実に復元
-                if (previewContainer) {
-                    previewContainer.scrollTop = savedScrollTop;
-                    // DOM更新完了後に確実にスクロール位置を復元する
-                    requestAnimationFrame(() => {
-                        previewContainer.scrollTop = savedScrollTop;
-                        // 画像やMermaid SVGなどの非同期レンダリング完了後の最終復元
-                        requestAnimationFrame(() => {
-                            previewContainer.scrollTop = savedScrollTop;
-                        });
-                    });
-                }
-            } catch (e) {
-                console.error("Preview rendering error:", e);
-            }
-        }
-
-        // ============================================================
-        // Custom Search Bar Functionality
-        // ============================================================
-        let searchState = {
-            query: "",
-            matches: [],
-            currentIndex: -1
-        };
-        let searchMarkers = [];
-
-        function clearSearchMarkers() {
-            searchMarkers.forEach(m => m.clear());
-            searchMarkers = [];
-        }
-
-        function openCustomSearch(showReplace = false) {
-            let searchBar = document.getElementById('custom-search-bar');
-            const container = document.getElementById('editor-container');
-            
-            if (!searchBar) {
-                searchBar = document.createElement('div');
-                searchBar.id = 'custom-search-bar';
-                searchBar.className = 'custom-search-bar';
-                searchBar.innerHTML = `
-                    <div class="search-row">
-                        <button id="search-toggle-replace" title="置換を展開"><i data-lucide="chevron-right"></i></button>
-                        <div class="search-inputs">
-                            <input type="text" id="search-input" placeholder="検索...">
-                            <span id="search-counter">0/0</span>
-                        </div>
-                        <div class="search-actions">
-                            <button id="search-prev" title="前を検索"><i data-lucide="chevron-up"></i></button>
-                            <button id="search-next" title="次を検索"><i data-lucide="chevron-down"></i></button>
-                            <button id="search-close" title="閉じる"><i data-lucide="x"></i></button>
-                        </div>
-                    </div>
-                    <div class="replace-row" id="replace-row" style="display: none;">
-                        <div style="width: 24px;"></div> <!-- インデント調整用スペース -->
-                        <div class="replace-inputs">
-                            <input type="text" id="replace-input" placeholder="置換後の文字列...">
-                        </div>
-                        <div class="replace-actions">
-                            <button id="btn-replace-one" title="置換">置換</button>
-                            <button id="btn-replace-all" title="すべて置換">すべて置換</button>
-                        </div>
-                    </div>
-                `;
-                container.appendChild(searchBar);
-                lucide.createIcons({ root: searchBar });
-                
-                // 検索インプットイベント
-                const input = document.getElementById('search-input');
-                input.addEventListener('input', () => updateSearch(input.value));
-                input.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        if (e.shiftKey) {
-                            findNextMatch(true);
-                        } else {
-                            findNextMatch(false);
-                        }
-                    } else if (e.key === 'Escape') {
-                        closeCustomSearch();
-                    }
-                });
-
-                // 置換インプットイベント
-                const replaceInput = document.getElementById('replace-input');
-                replaceInput.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        replaceCurrentMatch();
-                    } else if (e.key === 'Escape') {
-                        closeCustomSearch();
-                    }
-                });
-                
-                document.getElementById('search-prev').addEventListener('click', () => findNextMatch(true));
                 document.getElementById('search-next').addEventListener('click', () => findNextMatch(false));
                 document.getElementById('search-close').addEventListener('click', closeCustomSearch);
                 document.getElementById('search-toggle-replace').addEventListener('click', () => toggleReplaceRow());
@@ -401,7 +282,7 @@
         }
 
         // ── App Version ──
-        const APP_VERSION = '5.5.12';
+        const APP_VERSION = '5.6.1';
 
         // ══════════════════════════════════════
         // 🎨 Document Theme Engine
@@ -600,4 +481,168 @@
                                 if (css[j] === '}') depth--;
                                 j++;
                             }
-                            re
+                            result += css.substring(atStart, j);
+                            i = j;
+                        } else {
+                            let depth = 1;
+                            let j = i + 1;
+                            while (j < css.length && depth > 0) {
+                                if (css[j] === '{') depth++;
+                                if (css[j] === '}') depth--;
+                                j++;
+                            }
+                            const innerCss = css.substring(i + 1, j - 1);
+                            result += atRule + '{' + prefixCssSelectors(innerCss, prefix) + '}';
+                            i = j;
+                        }
+                    }
+                    continue;
+                }
+
+                const selStart = i;
+                while (i < css.length && css[i] !== '{') i++;
+                if (i >= css.length) break;
+
+                const selectorBlock = css.substring(selStart, i).trim();
+                let depth = 1;
+                let j = i + 1;
+                while (j < css.length && depth > 0) {
+                    if (css[j] === '{') depth++;
+                    if (css[j] === '}') depth--;
+                    j++;
+                }
+                const body = css.substring(i, j);
+
+                const scopedSelectors = selectorBlock.split(',').map(s => {
+                    s = s.trim();
+                    if (!s) return s;
+                    return prefix + ' ' + s;
+                }).join(', ');
+
+                result += scopedSelectors + ' ' + body;
+                i = j;
+            }
+
+            return result;
+        }
+
+        function scopeCustomCss(rawCss) {
+            if (!rawCss || !rawCss.trim()) return '';
+            const docCss = prefixCssSelectors(rawCss, '#preview-content.markdown-body');
+            const slideCss = prefixCssSelectors(rawCss, '#preview-content .marp-slide-wrapper section');
+            return '/* === Document Mode === */\n' + docCss + '\n\n/* === Slide Mode === */\n' + slideCss;
+        }
+
+        // ===== Mermaidテーマ初期化（テーマ連動対応） =====
+        let mermaidInitialized = false;
+
+        const MERMAID_THEME_VARS = {
+            github: {
+                primaryColor: '#f8f9fa',
+                primaryBorderColor: '#d0d7de',
+                primaryTextColor: '#24292f',
+                lineColor: '#57606a'
+            },
+            academic: {
+                primaryColor: '#ffffff',
+                primaryBorderColor: '#333333',
+                primaryTextColor: '#333333',
+                lineColor: '#333333'
+            },
+            corporate: {
+                primaryColor: '#f4f7fa',
+                primaryBorderColor: '#1b3a5c',
+                primaryTextColor: '#1b3a5c',
+                lineColor: '#2c5f8a'
+            },
+            minimal: {
+                primaryColor: '#fafafa',
+                primaryBorderColor: '#e0e0e0',
+                primaryTextColor: '#333333',
+                lineColor: '#cccccc'
+            },
+            custom: {
+                primaryColor: '#f8f9fa',
+                primaryBorderColor: '#d0d7de',
+                primaryTextColor: '#24292f',
+                lineColor: '#57606a'
+            }
+        };
+
+        function getMermaidConfig(themeName) {
+            const activeVars = MERMAID_THEME_VARS[themeName] || MERMAID_THEME_VARS.github;
+            return {
+                startOnLoad: false,
+                theme: 'default',
+                securityLevel: 'loose',
+                flowchart: {
+                    htmlLabels: false,
+                    useMaxWidth: true
+                },
+                themeVariables: {
+                    primaryColor: activeVars.primaryColor,
+                    primaryBorderColor: activeVars.primaryBorderColor,
+                    primaryTextColor: activeVars.primaryTextColor,
+                    lineColor: activeVars.lineColor,
+                    fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif',
+                    fontSize: '14px'
+                }
+            };
+        }
+
+        function initMermaid(themeName) {
+            if (!window.mermaid) return;
+
+            const config = getMermaidConfig(themeName);
+
+            if (!mermaidInitialized) {
+                // 初回のみ mermaid.initialize() を呼び出す
+                mermaid.initialize(config);
+                mermaidInitialized = true;
+            } else {
+                // 2回目以降はテーマ変数のみ更新し、プレビュー再描画で反映させる
+                mermaid.initialize(config);
+                // Note: Mermaid v11 では initialize を再呼び出ししても安全だが、
+                // 将来バージョンでの非推奨に備え、mermaidInitialized フラグで制御を分離しておく
+            }
+        }
+
+        function applyDocTheme(themeName, customCss) {
+            currentDocTheme = themeName;
+
+            let cssToApply = '';
+            if (themeName === 'custom' && customCss) {
+                cssToApply = scopeCustomCss(customCss);
+            } else if (PRESET_THEMES[themeName]) {
+                cssToApply = scopeCustomCss(PRESET_THEMES[themeName]);
+            }
+            
+            if (customThemeStyleTag) {
+                customThemeStyleTag.textContent = cssToApply;
+                document.head.appendChild(customThemeStyleTag);
+            }
+
+            // Mermaid用グローバルスタイルDOMクリア（初期化時のスタイル重複衝突を避けるため）
+            document.querySelectorAll('style[id^="mermaid"]').forEach(el => el.remove());
+            document.querySelectorAll('style[id^="dmermaid"]').forEach(el => el.remove());
+
+            // Mermaidのテーマを更新
+            initMermaid(themeName);
+            
+            // プレビューの再描画
+            if (window.editor) {
+                updatePreview(editor.getValue());
+            }
+
+            // メニューのactive表示切り替え
+            document.querySelectorAll('#doc-theme-menu .doc-theme-menu-item[data-theme]').forEach(item => {
+                const isActive = item.getAttribute('data-theme') === themeName;
+                item.classList.toggle('active', isActive);
+                const check = item.querySelector('.check-mark');
+                if (check) {
+                    check.textContent = isActive ? '✓' : '';
+                }
+            });
+
+            localStorage.setItem('lumina_doc_theme', themeName);
+            if (themeName === 'custo

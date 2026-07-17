@@ -1,4 +1,14 @@
-                      owner: username,
+ow.location.hostname;
+            const pn = window.location.pathname;
+
+            // GitHub Pages のドメイン構造 <username>.github.io
+            if (hn.endsWith('.github.io')) {
+                const username = hn.split('.')[0];
+                const pathParts = pn.split('/').filter(Boolean);
+                if (pathParts.length >= 1) {
+                    const repo = pathParts[0];
+                    return {
+                        owner: username,
                         repo: `${username}/${repo}`,
                         branch: 'main'
                     };
@@ -650,9 +660,4 @@
         }
 
         // フォルダ・ファイルのアクセス権限確認と要求
-        async function verifyLocalPermission(fileHandle, readWrite) {
-            const options = {};
-            if (readWrite) {
-                options.mode = 'readwrite';
-            }
-            if ((a
+        async function verifyLocal

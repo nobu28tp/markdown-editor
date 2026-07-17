@@ -1,38 +1,4 @@
-es[i-1].trim() : '';
-                const prevIsList = /^(?:[*+-]|\d+\.)\s/.test(prevLine);
-                const prevIsTable = prevLine.startsWith('|');
-                const prevIsQuote = prevLine.startsWith('>');
-                const prevIsHeader = prevLine.startsWith('#');
-                const prevIsCodeBlockEnd = prevLine.startsWith('```');
-
-                const isNewList = isList && !prevIsList;
-                const isNewTable = isTable && !prevIsTable;
-                const isNewQuote = isQuote && !prevIsQuote;
-
-                const isNormalText = !isEmpty && !isHeader && !isList && !isQuote && !isTable;
-                const isNewParagraph = isNormalText && (
-                    i === 0 || 
-                    prevLine === '' || 
-                    prevIsList || 
-                    prevIsTable || 
-                    prevIsQuote || 
-                    prevIsHeader ||
-                    prevIsCodeBlockEnd
-                );
-
-                const isBlockStart = isHeader || isNewList || isNewQuote || isNewTable || isNewParagraph;
-
-                if (isBlockStart) {
-                    newLines.push(`\n<div class="line-marker" data-line="${i}"></div>\n`);
-                }
-                newLines.push(line);
-            }
-            return newLines.join('\n');
-        }
-
-        function applyLineMarkers(container) {
-            if (!container) return;
-            const markers = container.querySelectorAll('.line-marker');
+er.querySelectorAll('.line-marker');
             markers.forEach(marker => {
                 const line = marker.getAttribute('data-line');
                 let nextEl = marker.nextElementSibling;
@@ -334,8 +300,14 @@ es[i-1].trim() : '';
 
                 hasUnsavedChanges = true;
                 updateStatus('normal', '編集中...');
-                // 入力停止後に最新の本文だけを描画する。
-                requestPreviewUpdate();
+                // Debounce preview rendering to keep editor typing smooth
+                if (previewTimeout) clearTimeout(previewTimeout);
+                if (isPreviewPaneVisible()) {
+                    previewTimeout = setTimeout(() => {
+                        const content = editor.getValue();
+                        updatePreview(content);
+                    }, getPreviewDebounceMs());
+                }
             });
 
             // ワードカウント更新
@@ -489,6 +461,10 @@ es[i-1].trim() : '';
                 button.addEventListener('click', () => setProofreadFilter(button.dataset.filter));
             });
 
+            document.getElementById('btn-publish-proofreader').addEventListener('click', openProofreaderImport);
+            document.getElementById('btn-publish-proofreader-header').addEventListener('click', openProofreaderImport);
+            window.addEventListener('message', handleProofreaderMessage);
+
             // Mermaid Exporter を別タブで開く
             document.getElementById('btn-open-exporter').addEventListener('click', () => {
                 window.open('https://nobu28tp.github.io/mermaid_exporter/', '_blank');
@@ -568,4 +544,23 @@ es[i-1].trim() : '';
             });
 
             // メニュー内のボタンクリック時にメニューを閉じる（テーマメニュー以外）
-            hamburgerMenu.querySelectorAll('.btn:not(#b
+            hamburgerMenu.querySelectorAll('.btn:not(#btn-doc-theme)').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    // テーマメニューを開くボタンの場合は閉じない
+                    if (btn.id === 'btn-doc-theme') return;
+                    closeHamburger();
+                });
+            });
+
+            // Pane toggles
+            document.getElementById('btn-toggle-preview').addEventListener('click', () => {
+                const previewPane = document.getElementById('preview-pane');
+                const btnIcon = document.querySelector('#btn-toggle-preview i');
+
+                if (previewPane.style.display === 'none') {
+                    previewPane.style.display = 'flex';
+                    btnIcon.setAttribute('data-lucide', 'layout-panel-left');
+                    updatePreview(editor.getValue());
+                } else {
+                    previewPane.style.display = 'none';
+                    btnIcon.setAttribute('dat

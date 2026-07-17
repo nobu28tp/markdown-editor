@@ -1,27 +1,4 @@
-            md += '| ' + Array(cols).fill(' ').join(' | ') + ' |\n';
-                // 区切り行
-                md += '|' + Array(cols).fill('---').join('|') + '|\n';
-                // データ行
-                for (let r = 1; r < rows; r++) {
-                    md += '| ' + Array(cols).fill(' ').join(' | ') + ' |\n';
-                }
-                return md;
-            }
-
-            function toggleTablePopover(e) {
-                if (!tablePopover || !tableBtn) return;
-                
-                if (tablePopover.style.display === 'none') {
-                    const rect = tableBtn.getBoundingClientRect();
-                    const parentRect = document.getElementById('editor-container').getBoundingClientRect();
-                    
-                    tablePopover.style.left = `${rect.left - parentRect.left}px`;
-                    tablePopover.style.top = `${rect.bottom - parentRect.top + 5}px`;
-                    
-                    tablePopover.style.display = 'flex';
-                    highlightGrid(0, 0);
-                } else {
-                    tablePopover.style.display = 'none';
+          tablePopover.style.display = 'none';
                 }
             }
 
@@ -205,17 +182,11 @@
             'gradientUnits', 'gradientTransform', 'patternUnits'
         ];
 
-        const PREVIEW_SVG_ALLOWED_TAGS = [
-            'svg', 'defs', 'style', 'g', 'path', 'rect', 'circle', 'ellipse', 'line',
-            'polyline', 'polygon', 'text', 'tspan', 'title', 'desc', 'linearGradient',
-            'radialGradient', 'stop', 'clipPath', 'mask', 'pattern'
-        ];
-
         function getPreviewSvgSanitizeOptions(options = {}) {
             const allowForeignObject = options.allowForeignObject === true;
             return {
                 USE_PROFILES: { html: true, svg: true },
-                ADD_TAGS: [...PREVIEW_SVG_ALLOWED_TAGS, ...(options.addTags || [])],
+                ADD_TAGS: options.addTags || [],
                 ADD_ATTR: [...PREVIEW_SVG_ALLOWED_ATTRS, ...(options.addAttrs || [])],
                 FORBID_TAGS: allowForeignObject
                     ? ['script', 'image', 'use', 'animate', 'animateMotion', 'animateTransform', 'set', 'audio', 'video', 'iframe', 'object', 'embed']
@@ -224,79 +195,10 @@
             };
         }
 
-        // Marp Core の生成結果は foreignObject を含むため、そのまま全体をサニタイズすると
-        // レイアウトが壊れる。本文に直接書かれた SVG だけをレンダリング前に安全化する。
-        const previewSvgMarkupCache = new Map();
-        const mermaidValidationCache = new Map();
-
-        function setBoundedPreviewCache(cache, key, value, maxEntries = 100) {
-            if (!cache.has(key) && cache.size >= maxEntries) {
-                cache.delete(cache.keys().next().value);
-            }
-            cache.set(key, value);
-        }
-
-        function sanitizeSvgMarkupForPreview(markup) {
-            const cached = previewSvgMarkupCache.get(markup);
-            if (cached !== undefined) return cached;
-
-            const markupWithoutComments = markup.replace(/<!--[\s\S]*?-->/g, '');
-            const parsed = new DOMParser().parseFromString(markupWithoutComments, 'image/svg+xml');
-            if (parsed.querySelector('parsererror') || parsed.documentElement?.localName !== 'svg') {
-                setBoundedPreviewCache(previewSvgMarkupCache, markup, null);
-                return null;
-            }
-
-            const cleanMarkup = DOMPurify.sanitize(markupWithoutComments, getPreviewSvgSanitizeOptions())
-                .replace(/viewbox=/g, 'viewBox=');
-            const cleanDocument = new DOMParser().parseFromString(cleanMarkup, 'image/svg+xml');
-            if (cleanDocument.querySelector('parsererror') || cleanDocument.documentElement?.localName !== 'svg') {
-                setBoundedPreviewCache(previewSvgMarkupCache, markup, null);
-                return null;
-            }
-
-            const svg = cleanDocument.documentElement;
-            if (!svg.getAttribute('xmlns')) {
-                svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-            }
-            const safeMarkup = new XMLSerializer().serializeToString(svg);
-            setBoundedPreviewCache(previewSvgMarkupCache, markup, safeMarkup);
-            return safeMarkup;
-        }
-
-        function prepareInlineSvgMarkupForPreview(markdownText) {
-            const svgRecords = [];
-            const preparedMarkdown = (markdownText || '').replace(/<svg\b[\s\S]*?<\/svg\s*>/gi, (markup) => {
-                const safeMarkup = sanitizeSvgMarkupForPreview(markup);
-                const newlinePadding = '\n'.repeat((markup.match(/\n/g) || []).length);
-                if (!safeMarkup) return newlinePadding;
-
-                const id = `inline-svg-${svgRecords.length}`;
-                svgRecords.push({ id, markup: safeMarkup });
-                // SVGをプレースホルダーに置き換えても、元のMarkdownと同じ行数を維持する。
-                return `<span class="inline-svg-placeholder" data-inline-svg-id="${id}"></span>${newlinePadding}`;
-            });
-            return { markdownText: preparedMarkdown, svgRecords };
-        }
-
-        function restoreInlineSvgMarkup(container, svgRecords) {
-            if (!container || !svgRecords.length) return;
-            const records = new Map(svgRecords.map(record => [record.id, record.markup]));
-            container.querySelectorAll('[data-inline-svg-id]').forEach((placeholder) => {
-                const markup = records.get(placeholder.getAttribute('data-inline-svg-id'));
-                if (!markup) return;
-                const parsed = new DOMParser().parseFromString(markup, 'image/svg+xml');
-                const svg = parsed.documentElement;
-                if (svg?.localName === 'svg') placeholder.replaceWith(document.importNode(svg, true));
-            });
-        }
-
-        async function updatePreview(markdownText, renderRevision = ++previewRenderRevision) {
+        async function updatePreview(markdownText) {
             if (!isPreviewPaneVisible()) return;
             const savedScrollTop = previewContainer ? previewContainer.scrollTop : 0;
             try {
-                const previewSource = prepareInlineSvgMarkupForPreview(markdownText);
-                const previewMarkdownText = previewSource.markdownText;
                 // エディタ内のすべての Mermaid ブロックの位置をスキャンして記録し、パースエラーを検出する
                 if (window.mermaid && markdownText.includes('```mermaid')) {
                     // 既存のエラー行ハイライトをクリア
@@ -327,34 +229,26 @@
 
                     for (const block of mermaidBlocksInDoc) {
                         const code = block.codeLines.join('\n');
-                        let validationResult = mermaidValidationCache.get(code);
-                        if (validationResult === undefined) {
-                            validationResult = { errorOffset: null };
-                            try {
-                                await mermaid.parse(code);
-                            } catch (err) {
-                                console.warn('Mermaid parse validation error:', err);
-                                let errorOffset = 0;
-
-                                // エラーオブジェクトから行番号を探す
-                                if (err.hash && typeof err.hash.line === 'number') {
-                                    errorOffset = err.hash.line - 1;
-                                } else if (err.loc && typeof err.loc.first_line === 'number') {
-                                    errorOffset = err.loc.first_line - 1;
-                                } else {
-                                    const msg = err.message || '';
-                                    const lineMatch = msg.match(/(?:line|行)\s*(\d+)/i) || msg.match(/(\d+):/);
-                                    if (lineMatch) errorOffset = parseInt(lineMatch[1], 10) - 1;
+                        try {
+                            await mermaid.parse(code);
+                        } catch (err) {
+                            console.warn('Mermaid parse validation error:', err);
+                            let errorOffset = 0;
+                            
+                            // エラーオブジェクトから行番号を探す
+                            if (err.hash && typeof err.hash.line === 'number') {
+                                errorOffset = err.hash.line - 1;
+                            } else if (err.loc && typeof err.loc.first_line === 'number') {
+                                errorOffset = err.loc.first_line - 1;
+                            } else {
+                                const msg = err.message || '';
+                                const lineMatch = msg.match(/(?:line|行)\s*(\d+)/i) || msg.match(/(\d+):/);
+                                if (lineMatch) {
+                                    errorOffset = parseInt(lineMatch[1], 10) - 1;
                                 }
-                                validationResult.errorOffset = errorOffset;
                             }
-                            setBoundedPreviewCache(mermaidValidationCache, code, validationResult);
-                        }
 
-                        // await中に新しい入力があれば、古いプレビューは適用しない。
-                        if (renderRevision !== previewRenderRevision) return;
-                        if (validationResult.errorOffset !== null) {
-                            const actualLine = block.start + 1 + validationResult.errorOffset;
+                            const actualLine = block.start + 1 + errorOffset;
                             if (actualLine < lineCount) {
                                 editor.addLineClass(actualLine, "background", "cm-error-line");
                                 window.activeErrorLines.push(actualLine);
@@ -367,8 +261,6 @@
                     });
                     window.activeErrorLines = [];
                 }
-
-                if (renderRevision !== previewRenderRevision) return;
 
                 const isMarpDetected = /^---\s*\n[\s\S]*?marp:\s*true[\s\S]*?\n---/.test(markdownText);
 
@@ -390,7 +282,7 @@
                 const engineIndicator = document.getElementById('engine-indicator');
 
                 if (shouldRenderSlide) {
-                    const markedTextWithMarkers = injectLineMarkers(previewMarkdownText);
+                    const markedTextWithMarkers = injectLineMarkers(markdownText);
                     const marpResult = renderWithMarp(markedTextWithMarkers);
                     const { css, slides, source } = marpResult;
 
@@ -436,13 +328,12 @@
                         cleanHtml = DOMPurify.sanitize(slidesHtml, getPreviewSvgSanitizeOptions({
                             allowForeignObject: true,
                             addTags: ['section', 'style', 'svg', 'foreignObject', 'path', 'g', 'figure', 'figcaption', 'div'],
-                            addAttrs: ['data-theme', 'style', 'data-marpit-svg', 'data-marpit-pagination', 'data-marpit-pagination-total', 'data-marpit-advanced-background', 'data-marpit-advanced-background-container', 'data-marpit-advanced-background-direction', 'data-bg-image', 'data-color', 'data-line', 'data-inline-svg-id']
+                            addAttrs: ['data-theme', 'style', 'data-marpit-svg', 'data-marpit-pagination', 'data-marpit-pagination-total', 'data-marpit-advanced-background', 'data-marpit-advanced-background-container', 'data-marpit-advanced-background-direction', 'data-bg-image', 'data-color', 'data-line']
                         }));
                         cleanHtml = cleanHtml.replace(/viewbox=/g, 'viewBox=');
                     }
 
                     previewContainer.innerHTML = cleanHtml;
-                    restoreInlineSvgMarkup(previewContainer, previewSource.svgRecords);
                     applyLineMarkers(previewContainer);
                     previewContainer.scrollTop = savedScrollTop;
 
@@ -453,14 +344,13 @@
                     if (engineIndicator) {
                         engineIndicator.style.display = 'none';
                     }
-                    const markedTextWithMarkers = injectLineMarkers(previewMarkdownText);
+                    const markedTextWithMarkers = injectLineMarkers(markdownText);
                     const rawHtml = marked.parse(markedTextWithMarkers);
                     const cleanHtml = DOMPurify.sanitize(rawHtml, getPreviewSvgSanitizeOptions({
                         addTags: ['iframe', 'input', 'div'],
-                        addAttrs: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'target', 'type', 'checked', 'disabled', 'start', 'data-line', 'data-inline-svg-id']
+                        addAttrs: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'target', 'type', 'checked', 'disabled', 'start', 'data-line']
                     }));
                     previewContainer.innerHTML = cleanHtml;
-                    restoreInlineSvgMarkup(previewContainer, previewSource.svgRecords);
                     applyLineMarkers(previewContainer);
                     previewContainer.scrollTop = savedScrollTop;
                     marpStyleTag.textContent = '';
@@ -480,7 +370,6 @@
                             // 独自スタイルのインライン直接注入（DOMハック）は行わず、
                             // MermaidのネイティブのSVGレンダリング機能と設定のみを使用する
                             const { svg } = await mermaid.render(diagramId, code);
-                            if (renderRevision !== previewRenderRevision) return;
                             
                             // SVG文字列からtextLengthとlengthAdjustを正規表現で完全に除去（DOM操作では効かないケースがあるため文字列レベルで処理）
                             const cleanSvg = svg.replace(/\s+textLength="[^"]*"/g, '').replace(/\s+lengthAdjust="[^"]*"/g, '');
@@ -500,4 +389,120 @@
                                 el.style.setProperty('baseline-shift', 'normal', 'important');
                             });
                             // HTMLベースのMermaidラベル（foreignObject内の要素）に対するインラインスタイルの強制注入
-                            container.querySelectorAll(
+                            container.querySelectorAll('foreignObject, foreignObject div, foreignObject span, .nodeLabel, .edgeLabel, .label').forEach(el => {
+                                el.style.setProperty('background-color', 'transparent', 'important');
+                                el.style.setProperty('visibility', 'visible', 'important');
+                                el.style.setProperty('opacity', '1', 'important');
+                            });
+                        } catch (err) {
+                            console.error('Mermaid render error:', err);
+                            // プレビュー側でもエラー内容とエラーメッセージを表示する
+                            const errorDiv = document.createElement('div');
+                            errorDiv.className = 'mermaid-error-preview';
+                            errorDiv.style.cssText = 'color: #f85149; background: rgba(248, 81, 73, 0.1); border: 1px solid rgba(248, 81, 73, 0.2); padding: 1rem; border-radius: 6px; font-family: monospace; font-size: 0.9em; margin: 1.5rem 0; white-space: pre-wrap; text-align: left;';
+                            errorDiv.innerHTML = `<strong>Mermaid 描画エラー:</strong>\n${DOMPurify.sanitize(err.message || String(err))}`;
+                            block.parentNode.replaceWith(errorDiv);
+                        }
+                    }
+                }
+
+                // Mermaid レンダリング完了後にカスタムテーマスタイルをDOMの末尾に移動（詳細度競合で最優先にするため）
+                if (typeof customThemeStyleTag !== 'undefined' && customThemeStyleTag) {
+                    document.head.appendChild(customThemeStyleTag);
+                }
+
+                // すべてのパース・描画完了後にスクロール位置を再度確実に復元
+                if (previewContainer) {
+                    previewContainer.scrollTop = savedScrollTop;
+                    // DOM更新完了後に確実にスクロール位置を復元する
+                    requestAnimationFrame(() => {
+                        previewContainer.scrollTop = savedScrollTop;
+                        // 画像やMermaid SVGなどの非同期レンダリング完了後の最終復元
+                        requestAnimationFrame(() => {
+                            previewContainer.scrollTop = savedScrollTop;
+                        });
+                    });
+                }
+            } catch (e) {
+                console.error("Preview rendering error:", e);
+            }
+        }
+
+        // ============================================================
+        // Custom Search Bar Functionality
+        // ============================================================
+        let searchState = {
+            query: "",
+            matches: [],
+            currentIndex: -1
+        };
+        let searchMarkers = [];
+
+        function clearSearchMarkers() {
+            searchMarkers.forEach(m => m.clear());
+            searchMarkers = [];
+        }
+
+        function openCustomSearch(showReplace = false) {
+            let searchBar = document.getElementById('custom-search-bar');
+            const container = document.getElementById('editor-container');
+            
+            if (!searchBar) {
+                searchBar = document.createElement('div');
+                searchBar.id = 'custom-search-bar';
+                searchBar.className = 'custom-search-bar';
+                searchBar.innerHTML = `
+                    <div class="search-row">
+                        <button id="search-toggle-replace" title="置換を展開"><i data-lucide="chevron-right"></i></button>
+                        <div class="search-inputs">
+                            <input type="text" id="search-input" placeholder="検索...">
+                            <span id="search-counter">0/0</span>
+                        </div>
+                        <div class="search-actions">
+                            <button id="search-prev" title="前を検索"><i data-lucide="chevron-up"></i></button>
+                            <button id="search-next" title="次を検索"><i data-lucide="chevron-down"></i></button>
+                            <button id="search-close" title="閉じる"><i data-lucide="x"></i></button>
+                        </div>
+                    </div>
+                    <div class="replace-row" id="replace-row" style="display: none;">
+                        <div style="width: 24px;"></div> <!-- インデント調整用スペース -->
+                        <div class="replace-inputs">
+                            <input type="text" id="replace-input" placeholder="置換後の文字列...">
+                        </div>
+                        <div class="replace-actions">
+                            <button id="btn-replace-one" title="置換">置換</button>
+                            <button id="btn-replace-all" title="すべて置換">すべて置換</button>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(searchBar);
+                lucide.createIcons({ root: searchBar });
+                
+                // 検索インプットイベント
+                const input = document.getElementById('search-input');
+                input.addEventListener('input', () => updateSearch(input.value));
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (e.shiftKey) {
+                            findNextMatch(true);
+                        } else {
+                            findNextMatch(false);
+                        }
+                    } else if (e.key === 'Escape') {
+                        closeCustomSearch();
+                    }
+                });
+
+                // 置換インプットイベント
+                const replaceInput = document.getElementById('replace-input');
+                replaceInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        replaceCurrentMatch();
+                    } else if (e.key === 'Escape') {
+                        closeCustomSearch();
+                    }
+                });
+                
+                document.getElementById('search-prev').addEventListener('click', () => findNextMatch(true));

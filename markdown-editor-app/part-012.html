@@ -1,4 +1,54 @@
-                  content: part.contentLines.join('\n'),
+               const trimmed = line.trim();
+
+                if (trimmed.startsWith('<!-- split:') && trimmed.endsWith('-->')) {
+                    if (currentPart.filename) {
+                        parts.push(currentPart);
+                    }
+                    const match = trimmed.match(/<!--\s*split:\s*([^\s]+)\s*-->/);
+                    const filename = match ? match[1].trim() : `part_${parts.length + 1}.md`;
+                    currentPart = { filename: filename, contentLines: [] };
+                    
+                    mainContentLines.push(`<!-- include: ${filename} -->`);
+                } else {
+                    if (currentPart.filename) {
+                        currentPart.contentLines.push(line);
+                    } else {
+                        mainContentLines.push(line);
+                    }
+                }
+            }
+            if (currentPart.filename) {
+                parts.push(currentPart);
+            }
+
+            if (parts.length === 0) {
+                alert("ドキュメント内に分割指定 <!-- split: ファイル名.md --> が見つかりません。ヘルプを参照して記述してください。");
+                return;
+            }
+
+            try {
+                updateStatus('saving', 'ファイルを自動分割して保存中...');
+                setGeneratedFullReadOnly(false);
+
+                let mainHandle = activeLocalFileHandle;
+                let mainExpectedHash = activeLocalFileOriginalHash || '';
+                if (mainHandle && isGeneratedFullDocument(editor.getValue())) {
+                    const sourceName = getGeneratedFullSourceName(editor.getValue()) || 'index.md';
+                    mainHandle = await activeLocalDirectoryHandle.getFileHandle(sourceName, { create: true });
+                    activeLocalFileHandle = mainHandle;
+                    mainExpectedHash = '';
+                    document.getElementById('local-file-name').value = mainHandle.name;
+                }
+                if (!mainHandle) {
+                    mainHandle = await activeLocalDirectoryHandle.getFileHandle('index.md', { create: true });
+                    activeLocalFileHandle = mainHandle;
+                    document.getElementById('local-file-name').value = mainHandle.name;
+                }
+
+                const targets = parts.map(part => ({
+                    dirHandle: activeLocalDirectoryHandle,
+                    fileName: part.filename,
+                    content: part.contentLines.join('\n'),
                     expectedHash: splitSourceFileHashes[part.filename] || ''
                 }));
                 targets.push({
@@ -378,7 +428,6 @@
                 });
 
                 const svgs = Array.from(exportContainer.querySelectorAll('svg:not([data-marpit-svg])'));
-                let failedSvgCount = 0;
                 for (const svg of svgs) {
                     try {
                         const pngData = await convertSvgToPng(svg);
@@ -389,13 +438,10 @@
                             img.style.height = pngData.height + 'px';
                             svg.parentNode.replaceChild(img, svg);
                         } else {
-                            failedSvgCount++;
-                            replaceSvgWithExportNotice(svg, 'Word');
+                            console.warn('SVG conversion failed or timed out, keeping original SVG in Word');
                         }
                     } catch (err) {
                         console.error('SVG conversion failed', err);
-                        failedSvgCount++;
-                        replaceSvgWithExportNotice(svg, 'Word');
                     }
                 }
 
@@ -459,12 +505,7 @@
 
                 // Download Word Document
                 triggerDownload(converted, getDocTitle() + '.docx');
-                if (failedSvgCount > 0) {
-                    updateStatus('saved', `Word出力完了（SVG ${failedSvgCount}件は変換できません）`);
-                    alert(`SVG ${failedSvgCount}件をPNGへ変換できませんでした。Wordには変換失敗の案内を出力しました。外部画像・外部フォント・外部CSSを使わないSVGで再度お試しください。`);
-                } else {
-                    updateStatus('saved', 'Word出力完了');
-                }
+                updateStatus('saved', 'Word出力完了');
 
             } catch (err) {
                 console.error("Word export failed:", err);
@@ -483,17 +524,8 @@
             document.querySelectorAll('[data-pdf-capture-root="true"]').forEach(node => node.remove());
         }
 
-        function replaceSvgWithExportNotice(svg, outputName) {
-            const notice = document.createElement('div');
-            notice.className = 'svg-export-notice';
-            notice.textContent = `[SVGをPNGへ変換できなかったため、${outputName}出力では図を省略しました]`;
-            notice.style.cssText = 'box-sizing:border-box;min-height:3em;padding:.75em;border:1px solid #b42318;color:#b42318;background:#fff5f5;font:14px/1.5 sans-serif;';
-            svg.parentNode.replaceChild(notice, svg);
-        }
-
         async function replaceSvgsWithPngs(root) {
             const svgs = Array.from(root.querySelectorAll('svg'));
-            let failedSvgCount = 0;
             for (const svg of svgs) {
                 try {
                     const pngResult = await convertSvgToPng(svg);
@@ -505,17 +537,11 @@
                         img.style.maxWidth = '100%';
                         img.style.display = 'block';
                         svg.parentNode.replaceChild(img, svg);
-                    } else {
-                        failedSvgCount++;
-                        replaceSvgWithExportNotice(svg, 'PDF');
                     }
                 } catch (err) {
                     console.warn('SVG to PNG conversion failed for PDF export:', err);
-                    failedSvgCount++;
-                    replaceSvgWithExportNotice(svg, 'PDF');
                 }
             }
-            return failedSvgCount;
         }
 
         function getMarpPdfMetrics() {
@@ -546,26 +572,4 @@
                     overflow: hidden !important;
                     box-shadow: none !important;
                     border-radius: 0 !important;
-                    background: #ffffff !important;
-                }
-                .pdf-capture .marp-slide-wrapper > section {
-                    position: absolute !important;
-                    top: 0 !important;
-                    left: 0 !important;
-                    width: ${slideW}px !important;
-                    height: ${slideH}px !important;
-                    transform: none !important;
-                    transform-origin: top left !important;
-                    overflow: hidden !important;
-                    display: flex !important;
-                    flex-direction: column !important;
-                    box-sizing: border-box !important;
-                }
-            `;
-        }
-
-        async function renderMarpSlideToCanvas(origWrapper, slideW, slideH, captureCss) {
-            const captureRoot = document.createElement('div');
-            captureRoot.className = 'marpit pdf-capture';
-            captureRoot.dataset.pdfCaptureRoot = 'true';
-            captureRoot.style.cssText = `position:absolute;left:0;to
+                    background: #ffffff !impor
