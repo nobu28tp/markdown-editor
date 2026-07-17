@@ -1,14 +1,4 @@
-pe="text" id="doc-title-input" placeholder="例: 会議資料" maxlength="100">
-                </div>
-                <div class="mode-switcher" id="mode-switcher">
-                    <button class="mode-btn active" data-mode="doc">Doc</button>
-                    <button class="mode-btn" data-mode="slide">Slide</button>
-                </div>
-            </div>
-            <div class="header-right">
-                <!-- 常に表示するボタン群 -->
-                <button class="btn btn-outline" id="btn-toggle-outline" title="目次の表示/非表示">
-                    <i data-lucide="list"></i>
+                 <i data-lucide="list"></i>
                     <span>目次切替</span>
                 </button>
                 <button class="btn btn-outline" id="btn-toggle-preview" title="プレビューの表示/非表示">
@@ -467,4 +457,25 @@ pe="text" id="doc-title-input" placeholder="例: 会議資料" maxlength="100">
 
                 <h3 style="margin: 1.5rem 0.75rem 0.5rem; font-size: 1.1em; color: var(--text-primary);">Mermaid
                     記号一覧（フローチャート）</h3>
-                <table 
+                <table class="cheat-sheet-table">
+                    <thead>
+                        <tr>
+                            <th>コード</th>
+                            <th>種類</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>A--&gt;B</code></td>
+                            <td>実線 矢印</td>
+                        </tr>
+                        <tr>
+                            <td><code>A==&gt;B</code></td>
+                            <td>太線 矢印</td>
+                        </tr>
+                        <tr>
+                            <td><code>A-.-&gt;B</code></td>
+                            <td>点線 矢印</td>
+                        </tr>
+                        <tr>
+                        
