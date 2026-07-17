@@ -1,45 +1,5 @@
-5rem;
-            color: var(--text-secondary);
-            font-weight: 600;
-        }
-
-        .grid-container {
-            display: grid;
-            grid-template-columns: repeat(8, 1fr);
-            gap: 3px;
-        }
-
-        .grid-cell {
-            width: 18px;
-            height: 18px;
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            border-radius: 2px;
-            cursor: pointer;
-            transition: background-color 0.1s, border-color 0.1s;
-        }
-
-        .grid-cell.highlighted {
-            background-color: rgba(88, 166, 255, 0.4);
-            border-color: #58a6ff;
-        }
-
-        .table-popover-status {
-            font-size: 0.75rem;
-            color: var(--text-primary);
-            text-align: center;
-            font-weight: bold;
-        }
-    </style>
-</head>
-
-<body>
-    <div class="app-container">
-        <!-- Header -->
-        <header class="glass-header">
-            <div class="header-left">
-                <div class="logo">
-                    <i data-lucide="pen-tool"></i>
-                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.5.12)</span>
+ool"></i>
+                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.6.1)</span>
                     </h1>
                 </div>
                 <div class="status-indicator" id="save-status">
@@ -68,6 +28,10 @@
                 <button class="btn btn-outline" id="btn-toggle-proofread" title="校正コメントの表示/非表示">
                     <i data-lucide="message-square-text"></i>
                     <span>AI校正</span>
+                </button>
+                <button class="btn btn-primary" id="btn-publish-proofreader-header" title="本文と現在のテーマをMarkdown校正へ送り、共有URLを発行">
+                    <i data-lucide="messages-square"></i>
+                    <span>校正URL発行</span>
                 </button>
                 <button class="btn btn-outline" id="btn-help" title="Markdownの書き方">
                     <i data-lucide="help-circle"></i>
@@ -194,6 +158,12 @@
                     <div class="hamburger-menu-divider"></div>
                     <div class="hamburger-menu-section">
                         <div class="hamburger-menu-label">連携</div>
+                        <div class="hamburger-menu-row">
+                            <button class="btn btn-outline hamburger-menu-item" id="btn-publish-proofreader" style="border-color: rgba(88, 166, 255, 0.5);" title="本文と現在のテーマをMarkdown校正へ送る">
+                                <i data-lucide="messages-square"></i>
+                                <span>校正URLを発行</span>
+                            </button>
+                        </div>
                         <div class="hamburger-menu-row">
                             <button class="btn btn-outline hamburger-menu-item" id="btn-open-exporter" title="Mermaid Exporter を別タブで開く">
                                 <i data-lucide="external-link"></i>
@@ -478,3 +448,14 @@
 
                 <h3 style="margin: 1.5rem 0.75rem 0.5rem; font-size: 1.1em; color: var(--text-primary);">Mermaid
                     グラフの方向（flowchart / graph）</h3>
+                <table class="cheat-sheet-table">
+                    <thead>
+                        <tr>
+                            <th>コード (xx部分)</th>
+                            <th>方向</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>TB</code> または <code>TD</code></td>
+                            <td
