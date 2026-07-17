@@ -1,20 +1,4 @@
- theme = item.getAttribute('data-theme');
-                applyDocTheme(theme);
-            });
-        });
-
-        // CSSファイルのロード
-        const btnLoadCssFile = document.getElementById('btn-load-css-file');
-        if (btnLoadCssFile) {
-            btnLoadCssFile.addEventListener('click', () => {
-                const fileInput = document.createElement('input');
-                fileInput.type = 'file';
-                fileInput.accept = '.css';
-                fileInput.onchange = e => {
-                    const file = e.target.files[0];
-                    if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = event => {
+                   reader.onload = event => {
                         const css = event.target.result;
                         applyDocTheme('custom', css);
                         updateStatus('saved', `CSSファイルを読み込みました (${file.name})`);
@@ -275,6 +259,16 @@
             });
         }
 
+        function createProofreaderHeadingId(text, usedIds) {
+            const normalized = String(text || '').normalize('NFKC').trim().toLowerCase();
+            const base = normalized.replace(/[^\p{L}\p{N}._:-]+/gu, '-').replace(/^-+|-+$/g, '') || 'section';
+            let id = base;
+            let duplicate = 1;
+            while (usedIds.has(id)) id = base + '-' + duplicate++;
+            usedIds.add(id);
+            return id;
+        }
+
         async function createProofreaderSnapshot(source) {
             await updatePreview(source);
             await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -300,6 +294,15 @@
             registerBlocks('img', 'image');
             registerBlocks('svg', 'svg');
 
+            const headings = [];
+            const usedHeadingIds = new Set();
+            clone.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(element => {
+                const id = createProofreaderHeadingId(element.textContent, usedHeadingIds);
+                element.id = id;
+                element.setAttribute('data-proof-heading-id', id);
+                headings.push({ id, depth: Number(element.tagName.slice(1)), text: (element.textContent || '').trim() });
+            });
+
             const textWalker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT, {
                 acceptNode(node) {
                     if (!node.data || /^\s*$/u.test(node.data) || node.parentElement?.closest('style, script, button, [data-proof-block-id]')) {
@@ -318,9 +321,9 @@
             }
 
             const bodyHtml = clone.innerHTML;
-            const snapshotBytes = new TextEncoder().encode(JSON.stringify({ formatVersion: 1, bodyHtml, css, text, blocks })).byteLength;
+            const snapshotBytes = new TextEncoder().encode(JSON.stringify({ formatVersion: 1, bodyHtml, css, text, blocks, headings })).byteLength;
             if (snapshotBytes > 10_000_000) throw new Error('校正用HTMLは10MB以下にしてください。');
-            return { formatVersion: 1, bodyHtml, css, text, blocks };
+            return { formatVersion: 1, bodyHtml, css, text, blocks, headings };
         }
 
         async function buildProofreaderPayload(requestId) {
@@ -471,10 +474,4 @@
         }
 
         // Save as .md file
-        async function handleSaveMd() {
-            const content = editor.getValue();
-
-            // File System Access API (showSaveFilePicker) が利用可能なら、保存場所を選択させる
-            if (window.showSaveFilePicker) {
-                try {
-                    const fileHandle = aw
+        async functio
