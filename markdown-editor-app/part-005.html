@@ -1,8 +1,4 @@
-  const merged = new Map();
-            (Array.isArray(remoteComments) ? remoteComments : []).forEach(comment => {
-                if (comment && comment.id) merged.set(comment.id, normalizeCommentForStorage(comment));
-            });
-            (Array.isArray(localComments) ? localComments : []).forEach(comment => {
+Array(localComments) ? localComments : []).forEach(comment => {
                 if (!comment || !comment.id) return;
                 const normalized = normalizeCommentForStorage(comment);
                 const existing = merged.get(comment.id);
@@ -605,4 +601,9 @@
                             type: 'OBJECT',
                             properties: {
                                 start: { type: 'INTEGER' },
-                          
+                                end: { type: 'INTEGER' },
+                                selectedText: { type: 'STRING' },
+                                category: {
+                                    type: 'STRING',
+                                    enum: ['typo', 'grammar', 'style', 'consistency', 'markdown']
+                            
