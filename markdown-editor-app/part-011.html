@@ -1,4 +1,36 @@
-m' && customCss) {
+} else if (PRESET_THEMES[themeName]) {
+                cssToApply = scopeCustomCss(PRESET_THEMES[themeName]);
+            }
+            
+            if (customThemeStyleTag) {
+                customThemeStyleTag.textContent = cssToApply;
+                document.head.appendChild(customThemeStyleTag);
+            }
+
+            // Mermaid用グローバルスタイルDOMクリア（初期化時のスタイル重複衝突を避けるため）
+            document.querySelectorAll('style[id^="mermaid"]').forEach(el => el.remove());
+            document.querySelectorAll('style[id^="dmermaid"]').forEach(el => el.remove());
+
+            // Mermaidのテーマを更新
+            initMermaid(themeName);
+            
+            // プレビューの再描画
+            if (window.editor) {
+                updatePreview(editor.getValue());
+            }
+
+            // メニューのactive表示切り替え
+            document.querySelectorAll('#doc-theme-menu .doc-theme-menu-item[data-theme]').forEach(item => {
+                const isActive = item.getAttribute('data-theme') === themeName;
+                item.classList.toggle('active', isActive);
+                const check = item.querySelector('.check-mark');
+                if (check) {
+                    check.textContent = isActive ? '✓' : '';
+                }
+            });
+
+            localStorage.setItem('lumina_doc_theme', themeName);
+            if (themeName === 'custom' && customCss) {
                 localStorage.setItem('lumina_custom_css', customCss);
             }
         }
@@ -466,34 +498,4 @@ m' && customCss) {
                 }
             }
 
-            // フォールバック: 従来のダウンロード方式
-            const blob = new Blob([content], { type: 'text/markdown' });
-            try {
-                triggerDownload(blob, getDocTitle() + '.md');
-                
-                localStorage.setItem('lumina_autosave', content);
-                hasUnsavedChanges = false;
-                
-                updateStatus('saved', 'mdとして保存完了');
-            } catch (e) {
-                console.error(e);
-                alert("保存中にエラーが発生しました。");
-            }
-        }
-
-        // 自動分割保存
-        async function handleSplitSave() {
-            if (!activeLocalDirectoryHandle) {
-                alert("分割保存を使用するには、まず「フォルダ連携」を行ってフォルダを選択してください。");
-                return;
-            }
-
-            const content = stripGeneratedFullMarker(editor.getValue());
-            const lines = content.split('\n');
-            const parts = [];
-            let currentPart = { filename: '', contentLines: [] };
-            const mainContentLines = [];
-
-            for (let i = 0; i < lines.length; i++) {
-                const line = lines[i];
- 
+            

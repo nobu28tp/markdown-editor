@@ -1,23 +1,4 @@
->上から下 (Top to Bottom / Down)</td>
-                        </tr>
-                        <tr>
-                            <td><code>BT</code></td>
-                            <td>下から上 (Bottom to Top)</td>
-                        </tr>
-                        <tr>
-                            <td><code>LR</code></td>
-                            <td>左から右 (Left to Right)</td>
-                        </tr>
-                        <tr>
-                            <td><code>RL</code></td>
-                            <td>右から左 (Right to Left)</td>
-                        </tr>
-                    </tbody>
-                </table>
-
-                <h3 style="margin: 1.5rem 0.75rem 0.5rem; font-size: 1.1em; color: var(--text-primary);">Mermaid
-                    記号一覧（フローチャート）</h3>
-                <table class="cheat-sheet-table">
+class="cheat-sheet-table">
                     <thead>
                         <tr>
                             <th>コード</th>
@@ -516,4 +497,36 @@ paginate: true
             return true;
         }
 
-        function getProofreadTextHash
+        function getProofreadTextHash(text) {
+            let hash = 0;
+            for (let i = 0; i < text.length; i++) {
+                hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+            }
+            return `${text.length}:${hash}`;
+        }
+
+        function getDocumentHash(text) {
+            return getProofreadTextHash(text || '');
+        }
+
+        function createRevision() {
+            return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        }
+
+        function getTimestampForFilename() {
+            const d = new Date();
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+        }
+
+        function getProofreadCommentPayload(text, comments) {
+            return {
+                version: 1,
+                textHash: getProofreadTextHash(text),
+                updatedAt: new Date().toISOString(),
+                revision: createRevision(),
+                comments
+            };
+        }
+
+   

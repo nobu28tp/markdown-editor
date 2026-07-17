@@ -1,4 +1,34 @@
-               const trimmed = line.trim();
+// フォールバック: 従来のダウンロード方式
+            const blob = new Blob([content], { type: 'text/markdown' });
+            try {
+                triggerDownload(blob, getDocTitle() + '.md');
+                
+                localStorage.setItem('lumina_autosave', content);
+                hasUnsavedChanges = false;
+                
+                updateStatus('saved', 'mdとして保存完了');
+            } catch (e) {
+                console.error(e);
+                alert("保存中にエラーが発生しました。");
+            }
+        }
+
+        // 自動分割保存
+        async function handleSplitSave() {
+            if (!activeLocalDirectoryHandle) {
+                alert("分割保存を使用するには、まず「フォルダ連携」を行ってフォルダを選択してください。");
+                return;
+            }
+
+            const content = stripGeneratedFullMarker(editor.getValue());
+            const lines = content.split('\n');
+            const parts = [];
+            let currentPart = { filename: '', contentLines: [] };
+            const mainContentLines = [];
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                const trimmed = line.trim();
 
                 if (trimmed.startsWith('<!-- split:') && trimmed.endsWith('-->')) {
                     if (currentPart.filename) {
@@ -556,20 +586,4 @@
             return { slideW, slideH };
         }
 
-        function buildMarpCaptureCss(slideW, slideH) {
-            const marpStyleTag = document.getElementById('marp-style');
-            let captureCss = marpStyleTag ? marpStyleTag.textContent : '';
-            captureCss = captureCss
-                .replace(/>\s*svg[^{]*?>\s*foreignObject\s*>\s*/g, '> ')
-                .replace(/svg\[data-marpit-svg\]\s*/g, '')
-                .replace(/>\s*svg\b/g, '');
-
-            return captureCss + `
-                .pdf-capture .marp-slide-wrapper {
-                    width: ${slideW}px !important;
-                    height: ${slideH}px !important;
-                    position: relative !important;
-                    overflow: hidden !important;
-                    box-shadow: none !important;
-                    border-radius: 0 !important;
-                    background: #ffffff !impor
+        function buildMarpCaptureCss(slideW, slideH

@@ -1,4 +1,11 @@
-Permission(fileHandle, readWrite) {
+   el.textContent = msg;
+            el.style.color = color || '#58a6ff';
+            el.style.display = 'block';
+            setTimeout(() => { el.style.display = 'none'; }, 5000);
+        }
+
+        // フォルダ・ファイルのアクセス権限確認と要求
+        async function verifyLocalPermission(fileHandle, readWrite) {
             const options = {};
             if (readWrite) {
                 options.mode = 'readwrite';

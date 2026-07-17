@@ -1,53 +1,4 @@
-          tablePopover.style.display = 'none';
-                }
-            }
-
-            // ポップオーバーの外側をクリックしたときに閉じる
-            document.addEventListener('click', (e) => {
-                if (tablePopover && tablePopover.style.display !== 'none') {
-                    if (!tablePopover.contains(e.target) && e.target !== tableBtn && !tableBtn.contains(e.target)) {
-                        tablePopover.style.display = 'none';
-                    }
-                }
-            });
-
-            // 文字列中のn番目の出現位置を見つける補助関数
-            function findNthOccurrence(str, pat, n) {
-                let i = -1;
-                while (n-- > 0) {
-                    i = str.indexOf(pat, i + 1);
-                    if (i < 0) break;
-                }
-                return i;
-            }
-
-            // テーブル操作アシスタントのボタンイベント
-            const btnAddRow = document.getElementById('btn-table-add-row');
-            const btnDeleteRow = document.getElementById('btn-table-delete-row');
-            const btnAddCol = document.getElementById('btn-table-add-col');
-            const btnDeleteCol = document.getElementById('btn-table-delete-col');
-
-            if (btnAddRow) {
-                btnAddRow.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    if (!editor) return;
-                    const doc = editor.getDoc();
-                    const cursor = doc.getCursor();
-                    const lineText = doc.getLine(cursor.line);
-                    if (lineText && lineText.trim().startsWith('|')) {
-                        const columnsCount = lineText.split('|').length - 2;
-                        if (columnsCount > 0) {
-                            const newRow = '\n| ' + Array(columnsCount).fill(' ').join(' | ') + ' |';
-                            const lineLength = lineText.length;
-                            doc.replaceRange(newRow, { line: cursor.line, ch: lineLength });
-                            editor.setCursor({ line: cursor.line + 1, ch: 2 });
-                            editor.focus();
-                        }
-                    }
-                });
-            }
-
-            if (btnDeleteRow) {
+     if (btnDeleteRow) {
                 btnDeleteRow.addEventListener('click', (e) => {
                     e.preventDefault();
                     if (!editor) return;
@@ -182,11 +133,17 @@
             'gradientUnits', 'gradientTransform', 'patternUnits'
         ];
 
+        const PREVIEW_SVG_ALLOWED_TAGS = [
+            'svg', 'defs', 'style', 'g', 'path', 'rect', 'circle', 'ellipse', 'line',
+            'polyline', 'polygon', 'text', 'tspan', 'title', 'desc', 'linearGradient',
+            'radialGradient', 'stop', 'clipPath', 'mask', 'pattern'
+        ];
+
         function getPreviewSvgSanitizeOptions(options = {}) {
             const allowForeignObject = options.allowForeignObject === true;
             return {
                 USE_PROFILES: { html: true, svg: true },
-                ADD_TAGS: options.addTags || [],
+                ADD_TAGS: [...PREVIEW_SVG_ALLOWED_TAGS, ...(options.addTags || [])],
                 ADD_ATTR: [...PREVIEW_SVG_ALLOWED_ATTRS, ...(options.addAttrs || [])],
                 FORBID_TAGS: allowForeignObject
                     ? ['script', 'image', 'use', 'animate', 'animateMotion', 'animateTransform', 'set', 'audio', 'video', 'iframe', 'object', 'embed']
@@ -195,10 +152,74 @@
             };
         }
 
+        // 本文SVGはMarkdown全体のHTMLサニタイズから一度退避し、SVG専用ルールで安全化して復元する。
+        // これによりdefs、style、グラデーションなどの参照関係を壊さない。
+        const previewSvgMarkupCache = new Map();
+
+        function setBoundedPreviewCache(cache, key, value, maxEntries = 100) {
+            if (!cache.has(key) && cache.size >= maxEntries) {
+                cache.delete(cache.keys().next().value);
+            }
+            cache.set(key, value);
+        }
+
+        function sanitizeSvgMarkupForPreview(markup) {
+            const cached = previewSvgMarkupCache.get(markup);
+            if (cached !== undefined) return cached;
+
+            const markupWithoutComments = markup.replace(/<!--[\s\S]*?-->/g, '');
+            const parsed = new DOMParser().parseFromString(markupWithoutComments, 'image/svg+xml');
+            if (parsed.querySelector('parsererror') || parsed.documentElement?.localName !== 'svg') {
+                setBoundedPreviewCache(previewSvgMarkupCache, markup, null);
+                return null;
+            }
+
+            const cleanMarkup = DOMPurify.sanitize(markupWithoutComments, getPreviewSvgSanitizeOptions())
+                .replace(/viewbox=/g, 'viewBox=');
+            const cleanDocument = new DOMParser().parseFromString(cleanMarkup, 'image/svg+xml');
+            if (cleanDocument.querySelector('parsererror') || cleanDocument.documentElement?.localName !== 'svg') {
+                setBoundedPreviewCache(previewSvgMarkupCache, markup, null);
+                return null;
+            }
+
+            const svg = cleanDocument.documentElement;
+            if (!svg.getAttribute('xmlns')) svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+            const safeMarkup = new XMLSerializer().serializeToString(svg);
+            setBoundedPreviewCache(previewSvgMarkupCache, markup, safeMarkup);
+            return safeMarkup;
+        }
+
+        function prepareInlineSvgMarkupForPreview(markdownText) {
+            const svgRecords = [];
+            const preparedMarkdown = String(markdownText || '').replace(/<svg\b[\s\S]*?<\/svg\s*>/gi, (markup) => {
+                const safeMarkup = sanitizeSvgMarkupForPreview(markup);
+                const newlinePadding = '\n'.repeat((markup.match(/\n/g) || []).length);
+                if (!safeMarkup) return newlinePadding;
+                const id = `inline-svg-${svgRecords.length}`;
+                svgRecords.push({ id, markup: safeMarkup });
+                return `<span class="inline-svg-placeholder" data-inline-svg-id="${id}"></span>${newlinePadding}`;
+            });
+            return { markdownText: preparedMarkdown, svgRecords };
+        }
+
+        function restoreInlineSvgMarkup(container, svgRecords) {
+            if (!container || !svgRecords.length) return;
+            const records = new Map(svgRecords.map(record => [record.id, record.markup]));
+            container.querySelectorAll('[data-inline-svg-id]').forEach((placeholder) => {
+                const markup = records.get(placeholder.getAttribute('data-inline-svg-id'));
+                if (!markup) return;
+                const parsed = new DOMParser().parseFromString(markup, 'image/svg+xml');
+                const svg = parsed.documentElement;
+                if (svg?.localName === 'svg') placeholder.replaceWith(document.importNode(svg, true));
+            });
+        }
+
         async function updatePreview(markdownText) {
             if (!isPreviewPaneVisible()) return;
             const savedScrollTop = previewContainer ? previewContainer.scrollTop : 0;
             try {
+                const previewSource = prepareInlineSvgMarkupForPreview(markdownText);
+                const previewMarkdownText = previewSource.markdownText;
                 // エディタ内のすべての Mermaid ブロックの位置をスキャンして記録し、パースエラーを検出する
                 if (window.mermaid && markdownText.includes('```mermaid')) {
                     // 既存のエラー行ハイライトをクリア
@@ -282,7 +303,7 @@
                 const engineIndicator = document.getElementById('engine-indicator');
 
                 if (shouldRenderSlide) {
-                    const markedTextWithMarkers = injectLineMarkers(markdownText);
+                    const markedTextWithMarkers = injectLineMarkers(previewMarkdownText);
                     const marpResult = renderWithMarp(markedTextWithMarkers);
                     const { css, slides, source } = marpResult;
 
@@ -334,6 +355,7 @@
                     }
 
                     previewContainer.innerHTML = cleanHtml;
+                    restoreInlineSvgMarkup(previewContainer, previewSource.svgRecords);
                     applyLineMarkers(previewContainer);
                     previewContainer.scrollTop = savedScrollTop;
 
@@ -344,13 +366,14 @@
                     if (engineIndicator) {
                         engineIndicator.style.display = 'none';
                     }
-                    const markedTextWithMarkers = injectLineMarkers(markdownText);
+                    const markedTextWithMarkers = injectLineMarkers(previewMarkdownText);
                     const rawHtml = marked.parse(markedTextWithMarkers);
                     const cleanHtml = DOMPurify.sanitize(rawHtml, getPreviewSvgSanitizeOptions({
                         addTags: ['iframe', 'input', 'div'],
-                        addAttrs: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'target', 'type', 'checked', 'disabled', 'start', 'data-line']
+                        addAttrs: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'target', 'type', 'checked', 'disabled', 'start', 'data-line', 'data-inline-svg-id']
                     }));
                     previewContainer.innerHTML = cleanHtml;
+                    restoreInlineSvgMarkup(previewContainer, previewSource.svgRecords);
                     applyLineMarkers(previewContainer);
                     previewContainer.scrollTop = savedScrollTop;
                     marpStyleTag.textContent = '';
@@ -470,39 +493,4 @@
                             <input type="text" id="replace-input" placeholder="置換後の文字列...">
                         </div>
                         <div class="replace-actions">
-                            <button id="btn-replace-one" title="置換">置換</button>
-                            <button id="btn-replace-all" title="すべて置換">すべて置換</button>
-                        </div>
-                    </div>
-                `;
-                container.appendChild(searchBar);
-                lucide.createIcons({ root: searchBar });
-                
-                // 検索インプットイベント
-                const input = document.getElementById('search-input');
-                input.addEventListener('input', () => updateSearch(input.value));
-                input.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        if (e.shiftKey) {
-                            findNextMatch(true);
-                        } else {
-                            findNextMatch(false);
-                        }
-                    } else if (e.key === 'Escape') {
-                        closeCustomSearch();
-                    }
-                });
-
-                // 置換インプットイベント
-                const replaceInput = document.getElementById('replace-input');
-                replaceInput.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        replaceCurrentMatch();
-                    } else if (e.key === 'Escape') {
-                        closeCustomSearch();
-                    }
-                });
-                
-                document.getElementById('search-prev').addEventListener('click', () => findNextMatch(true));
+                 

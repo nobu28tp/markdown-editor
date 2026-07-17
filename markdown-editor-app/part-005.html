@@ -1,36 +1,4 @@
-(text) {
-            let hash = 0;
-            for (let i = 0; i < text.length; i++) {
-                hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
-            }
-            return `${text.length}:${hash}`;
-        }
-
-        function getDocumentHash(text) {
-            return getProofreadTextHash(text || '');
-        }
-
-        function createRevision() {
-            return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-        }
-
-        function getTimestampForFilename() {
-            const d = new Date();
-            const pad = (n) => String(n).padStart(2, '0');
-            return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-        }
-
-        function getProofreadCommentPayload(text, comments) {
-            return {
-                version: 1,
-                textHash: getProofreadTextHash(text),
-                updatedAt: new Date().toISOString(),
-                revision: createRevision(),
-                comments
-            };
-        }
-
-        function normalizeCommentForStorage(comment) {
+     function normalizeCommentForStorage(comment) {
             return {
                 ...comment,
                 id: comment.id || `comment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -597,4 +565,38 @@
         }
 
         function extractOpenAiText(data) {
-    
+            if (data.output_text) return data.output_text;
+            const chunks = [];
+            (data.output || []).forEach(item => {
+                (item.content || []).forEach(content => {
+                    if (content.type === 'output_text' && content.text) chunks.push(content.text);
+                });
+            });
+            return chunks.join('\n').trim();
+        }
+
+        function extractGeminiText(data) {
+            const chunks = [];
+            (data.candidates || []).forEach(candidate => {
+                ((candidate.content && candidate.content.parts) || []).forEach(part => {
+                    if (part.text) chunks.push(part.text);
+                });
+            });
+            return chunks.join('\n').trim();
+        }
+
+        function getProofreadJsonSchemaFormat() {
+            return {
+                type: 'json_schema',
+                name: 'proofread_comments',
+                strict: true,
+                schema: {
+                    type: 'object',
+                    additionalProperties: false,
+                    required: ['comments'],
+                    properties: {
+                        comments: {
+                            type: 'array',
+                            items: {
+                                type: 'object',
+                                additionalPrope

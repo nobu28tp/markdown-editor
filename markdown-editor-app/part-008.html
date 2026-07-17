@@ -1,42 +1,4 @@
-a-lucide', 'layout-panel-split');
-                    if (previewTimeout) clearTimeout(previewTimeout);
-                }
-                lucide.createIcons({ root: document.getElementById('btn-toggle-preview') });
-                // エディタのサイズが変化したため再描画
-                setTimeout(() => editor.refresh(), 10);
-            });
-
-            document.getElementById('btn-toggle-outline').addEventListener('click', () => {
-                const outlinePane = document.getElementById('outline-pane');
-                const btn = document.getElementById('btn-toggle-outline');
-                if (outlinePane.style.display === 'none') {
-                    outlinePane.style.display = 'flex';
-                    btn.classList.add('active');
-                    updateOutline();
-                } else {
-                    outlinePane.style.display = 'none';
-                    btn.classList.remove('active');
-                }
-                // エディタのサイズが変化したため再描画
-                setTimeout(() => editor.refresh(), 10);
-            });
-
-            document.getElementById('btn-popout-preview').addEventListener('click', () => {
-                const title = (document.getElementById('doc-title-input').value || '').trim() || 'Markdown Preview';
-                const isSlideMode = previewContainer.classList.contains('marp-mode');
-
-                const newWin = window.open('', '_blank');
-                if (!newWin) {
-                    alert('ポップアップがブロックされました。ブラウザの設定を確認してください。');
-                    return;
-                }
-
-                let extraStyles = '';
-                if (isSlideMode) {
-                    const marpStyle = document.getElementById('marp-style').textContent;
-                    extraStyles = `
-                        ${marpStyle}
-                        body { background-color: #1a1a2e; margin: 0; padding: 2rem; display: flex; flex-direction: column; align-items: center; gap: 1.5rem; }
+ion: column; align-items: center; gap: 1.5rem; }
                         div.marpit {
                             width: auto !important;
                             height: auto !important;
@@ -574,4 +536,53 @@ a-lucide', 'layout-panel-split');
                     tablePopover.style.display = 'flex';
                     highlightGrid(0, 0);
                 } else {
-          
+                    tablePopover.style.display = 'none';
+                }
+            }
+
+            // ポップオーバーの外側をクリックしたときに閉じる
+            document.addEventListener('click', (e) => {
+                if (tablePopover && tablePopover.style.display !== 'none') {
+                    if (!tablePopover.contains(e.target) && e.target !== tableBtn && !tableBtn.contains(e.target)) {
+                        tablePopover.style.display = 'none';
+                    }
+                }
+            });
+
+            // 文字列中のn番目の出現位置を見つける補助関数
+            function findNthOccurrence(str, pat, n) {
+                let i = -1;
+                while (n-- > 0) {
+                    i = str.indexOf(pat, i + 1);
+                    if (i < 0) break;
+                }
+                return i;
+            }
+
+            // テーブル操作アシスタントのボタンイベント
+            const btnAddRow = document.getElementById('btn-table-add-row');
+            const btnDeleteRow = document.getElementById('btn-table-delete-row');
+            const btnAddCol = document.getElementById('btn-table-add-col');
+            const btnDeleteCol = document.getElementById('btn-table-delete-col');
+
+            if (btnAddRow) {
+                btnAddRow.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (!editor) return;
+                    const doc = editor.getDoc();
+                    const cursor = doc.getCursor();
+                    const lineText = doc.getLine(cursor.line);
+                    if (lineText && lineText.trim().startsWith('|')) {
+                        const columnsCount = lineText.split('|').length - 2;
+                        if (columnsCount > 0) {
+                            const newRow = '\n| ' + Array(columnsCount).fill(' ').join(' | ') + ' |';
+                            const lineLength = lineText.length;
+                            doc.replaceRange(newRow, { line: cursor.line, ch: lineLength });
+                            editor.setCursor({ line: cursor.line + 1, ch: 2 });
+                            editor.focus();
+                        }
+                    }
+                });
+            }
+
+       

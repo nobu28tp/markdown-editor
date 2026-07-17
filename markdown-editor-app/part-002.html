@@ -1,16 +1,4 @@
-acity: 0.58;
-        }
-
-        .proofread-card-head {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 0.5rem;
-            margin-bottom: 0.45rem;
-        }
-
-        .proofread-badge {
-            border-radius: 999px;
+  border-radius: 999px;
             padding: 0.12rem 0.45rem;
             background: rgba(88, 166, 255, 0.16);
             color: var(--accent-color);
@@ -958,4 +946,14 @@ acity: 0.58;
         <header class="glass-header">
             <div class="header-left">
                 <div class="logo">
-                    <i data-lucide="pen-t
+                    <i data-lucide="pen-tool"></i>
+                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.6.2)</span>
+                    </h1>
+                </div>
+                <div class="status-indicator" id="save-status">
+                    <span class="status-dot"></span>
+                    <span class="status-text" id="status-text">準備完了</span>
+                </div>
+                <div class="doc-title-wrap">
+                    <label for="doc-title-input">📄 ドキュメント名</label>
+                    <input ty
