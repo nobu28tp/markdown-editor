@@ -1,73 +1,4 @@
-} else if (PRESET_THEMES[themeName]) {
-                cssToApply = scopeCustomCss(PRESET_THEMES[themeName]);
-            }
-            
-            if (customThemeStyleTag) {
-                customThemeStyleTag.textContent = cssToApply;
-                document.head.appendChild(customThemeStyleTag);
-            }
-
-            // Mermaid用グローバルスタイルDOMクリア（初期化時のスタイル重複衝突を避けるため）
-            document.querySelectorAll('style[id^="mermaid"]').forEach(el => el.remove());
-            document.querySelectorAll('style[id^="dmermaid"]').forEach(el => el.remove());
-
-            // Mermaidのテーマを更新
-            initMermaid(themeName);
-            
-            // プレビューの再描画
-            if (window.editor) {
-                updatePreview(editor.getValue());
-            }
-
-            // メニューのactive表示切り替え
-            document.querySelectorAll('#doc-theme-menu .doc-theme-menu-item[data-theme]').forEach(item => {
-                const isActive = item.getAttribute('data-theme') === themeName;
-                item.classList.toggle('active', isActive);
-                const check = item.querySelector('.check-mark');
-                if (check) {
-                    check.textContent = isActive ? '✓' : '';
-                }
-            });
-
-            localStorage.setItem('lumina_doc_theme', themeName);
-            if (themeName === 'custom' && customCss) {
-                localStorage.setItem('lumina_custom_css', customCss);
-            }
-        }
-
-        function restoreDocTheme() {
-            const saved = localStorage.getItem('lumina_doc_theme') || 'github';
-            if (saved === 'custom') {
-                const css = localStorage.getItem('lumina_custom_css') || '';
-                applyDocTheme('custom', css);
-            } else {
-                applyDocTheme(saved);
-            }
-        }
-
-        // ── テーマ選択メニュー関連のイベントリスナー ──
-        
-        // テーマメニューのトグル表示
-        const btnDocTheme = document.getElementById('btn-doc-theme');
-        const docThemeMenu = document.getElementById('doc-theme-menu');
-        if (btnDocTheme && docThemeMenu) {
-            btnDocTheme.addEventListener('click', (e) => {
-                e.stopPropagation();
-                docThemeMenu.classList.toggle('show');
-            });
-        }
-
-        // メニュー外クリックで閉じる
-        document.addEventListener('click', () => {
-            if (docThemeMenu) {
-                docThemeMenu.classList.remove('show');
-            }
-        });
-
-        // 各テーマの切り替え
-        document.querySelectorAll('#doc-theme-menu .doc-theme-menu-item[data-theme]').forEach(item => {
-            item.addEventListener('click', () => {
-                const theme = item.getAttribute('data-theme');
+ theme = item.getAttribute('data-theme');
                 applyDocTheme(theme);
             });
         });
@@ -325,7 +256,74 @@
             return { markdown, assets };
         }
 
-        function buildProofreaderPayload(requestId) {
+
+        function sanitizeProofreaderSnapshotClone(root) {
+            root.querySelectorAll('script, iframe, object, embed, form, base, meta, link').forEach(element => element.remove());
+            root.querySelectorAll('*').forEach(element => {
+                for (const attribute of Array.from(element.attributes)) {
+                    const name = attribute.name.toLowerCase();
+                    const value = attribute.value.trim();
+                    if (
+                        name.startsWith('on') ||
+                        name === 'srcdoc' ||
+                        ((name === 'src' || name === 'srcset' || name === 'href' || name === 'xlink:href') && /^(?:https?:|\/\/|data:text\/html)/i.test(value)) ||
+                        (name === 'style' && /@import|expression\s*\(|url\s*\(\s*["']?\s*(?:https?:|\/\/|data:text\/html)|-moz-binding/i.test(value))
+                    ) {
+                        element.removeAttribute(attribute.name);
+                    }
+                }
+            });
+        }
+
+        async function createProofreaderSnapshot(source) {
+            await updatePreview(source);
+            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            if (!previewContainer || previewContainer.classList.contains('marp-mode')) {
+                throw new Error('文書プレビューを生成できないため、校正URLを発行できません。');
+            }
+
+            const clone = previewContainer.cloneNode(true);
+            clone.removeAttribute('id');
+            sanitizeProofreaderSnapshotClone(clone);
+            const blocks = [];
+            let blockSequence = 1;
+            const registerBlocks = (selector, kind) => {
+                clone.querySelectorAll(selector).forEach(element => {
+                    if (element.closest('[data-proof-block-id]')) return;
+                    const id = 'proof-' + kind + '-' + blockSequence++;
+                    element.setAttribute('data-proof-block-id', id);
+                    blocks.push({ id, kind });
+                });
+            };
+            registerBlocks('.mermaid-container', 'mermaid');
+            registerBlocks('pre', 'code');
+            registerBlocks('img', 'image');
+            registerBlocks('svg', 'svg');
+
+            const textWalker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT, {
+                acceptNode(node) {
+                    if (!node.data || /^\s*$/u.test(node.data) || node.parentElement?.closest('style, script, button, [data-proof-block-id]')) {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+                    return NodeFilter.FILTER_ACCEPT;
+                }
+            });
+            let text = '';
+            while (textWalker.nextNode()) text += textWalker.currentNode.data;
+
+            const exportDocument = new DOMParser().parseFromString(generateHtmlExportContent(), 'text/html');
+            const css = Array.from(exportDocument.querySelectorAll('style')).map(style => style.textContent || '').join('\n');
+            if (/@import|expression\s*\(|url\s*\(\s*["']?\s*(?:https?:|\/\/|data:text\/html)|-moz-binding/i.test(css)) {
+                throw new Error('外部通信を含むCSSは校正用HTMLへ送信できません。');
+            }
+
+            const bodyHtml = clone.innerHTML;
+            const snapshotBytes = new TextEncoder().encode(JSON.stringify({ formatVersion: 1, bodyHtml, css, text, blocks })).byteLength;
+            if (snapshotBytes > 10_000_000) throw new Error('校正用HTMLは10MB以下にしてください。');
+            return { formatVersion: 1, bodyHtml, css, text, blocks };
+        }
+
+        async function buildProofreaderPayload(requestId) {
             const source = editor.getValue();
             if (/^\s*marp\s*:\s*true\s*$/mi.test(source) || previewMode === 'slide') {
                 throw new Error('MarpスライドはMarkdown校正の対象外です。文書モードのMarkdownを発行してください。');
@@ -343,6 +341,7 @@
                 throw new Error('画像の確認がキャンセルされました。');
             }
             const extracted = extractProofreaderAssets(source);
+            const reviewSnapshot = await createProofreaderSnapshot(source);
             const titleInput = document.getElementById('doc-title-input');
             const title = ((titleInput && titleInput.value) || '').trim().slice(0, 160) || '無題の文書';
             return {
@@ -351,7 +350,8 @@
                 title,
                 markdown: extracted.markdown,
                 themeId: PROOFREADER_STANDARD_THEMES.has(currentDocTheme) ? currentDocTheme : 'custom',
-                assets: extracted.assets
+                assets: extracted.assets,
+                reviewSnapshot
             };
         }
 
@@ -364,17 +364,19 @@
             proofreaderImportPayload = null;
         }
 
-        function openProofreaderImport() {
+        async function openProofreaderImport() {
             try {
                 const appUrl = getProofreaderAppUrl();
                 clearProofreaderImport();
                 proofreaderImportOrigin = appUrl.origin;
                 proofreaderImportRequestId = crypto.randomUUID();
-                proofreaderImportPayload = buildProofreaderPayload(proofreaderImportRequestId);
                 const importUrl = new URL('/?mode=import', appUrl.origin);
                 importUrl.searchParams.set('requestId', proofreaderImportRequestId);
-                proofreaderImportWindow = window.open(importUrl.toString(), 'markdown-proofreader-import', 'popup,width=1320,height=900');
+                proofreaderImportWindow = window.open('about:blank', 'markdown-proofreader-import', 'popup,width=1320,height=900');
                 if (!proofreaderImportWindow) throw new Error('ポップアップがブロックされました。ブラウザの設定で許可してください。');
+                updateStatus('saving', '完成プレビューから校正用HTMLを生成しています...');
+                proofreaderImportPayload = await buildProofreaderPayload(proofreaderImportRequestId);
+                proofreaderImportWindow.location.href = importUrl.toString();
                 proofreaderImportTimeout = window.setTimeout(() => {
                     if (proofreaderImportWindow && !proofreaderImportWindow.closed) {
                         updateStatus('error', 'Markdown校正との接続がタイムアウトしました');
@@ -383,6 +385,7 @@
                 }, 10 * 60 * 1000);
                 updateStatus('saving', 'Markdown校正の取り込み画面を開いています...');
             } catch (error) {
+                if (proofreaderImportWindow && !proofreaderImportWindow.closed) proofreaderImportWindow.close();
                 clearProofreaderImport();
                 updateStatus('error', '校正URLを発行できません');
                 window.alert(error && error.message ? error.message : '校正URLを発行できませんでした。');
@@ -474,28 +477,4 @@
             // File System Access API (showSaveFilePicker) が利用可能なら、保存場所を選択させる
             if (window.showSaveFilePicker) {
                 try {
-                    const fileHandle = await window.showSaveFilePicker({
-                        suggestedName: getDocTitle() + '.md',
-                        types: [{
-                            description: 'Markdownファイル',
-                            accept: { 'text/markdown': ['.md'] }
-                        }]
-                    });
-                    updateStatus('saving', '保存中...');
-                    const writable = await fileHandle.createWritable();
-                    await writable.write(content);
-                    await writable.close();
-                    
-                    localStorage.setItem('lumina_autosave', content);
-                    hasUnsavedChanges = false;
-                    
-                    updateStatus('saved', `保存しました (${fileHandle.name})`);
-                    return;
-                } catch (err) {
-                    // ユーザーがキャンセルした場合は何もしない
-                    if (err.name === 'AbortError') return;
-                    console.error("showSaveFilePicker failed, falling back to download:", err);
-                }
-            }
-
-            
+                    const fileHandle = aw
