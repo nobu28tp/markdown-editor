@@ -1,12 +1,4 @@
-               
-                    for (let i = startLine; i <= endLine; i++) {
-                        const lineText = doc.getLine(i);
-                        const nthPipePos = findNthOccurrence(lineText, '|', colIndex);
-                        const isSeparator = /^[|:\-\s]+$/.test(lineText);
-                        const insertStr = isSeparator ? ' --- |' : '   |';
-                        
-                        if (nthPipePos !== -1) {
-                            const newLineText = lineText.substring(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
+ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
                             doc.replaceRange(newLineText, { line: i, ch: 0 }, { line: i, ch: lineText.length });
                         } else {
                             const newLineText = lineText.trim().endsWith('|') ? lineText + insertStr : lineText + '|' + insertStr;
@@ -497,4 +489,22 @@
             toggleReplaceRow(showReplace);
 
             const input = document.getElementById('search-input');
-            const selected = editor.get
+            const selected = editor.getSelection();
+            if (selected && selected.indexOf('\n') === -1) {
+                input.value = selected;
+            }
+            
+            updateSearch(input.value);
+
+            if (showReplace) {
+                const replaceInput = document.getElementById('replace-input');
+                if (input.value) {
+                    replaceInput.focus();
+                    replaceInput.select();
+                } else {
+                    input.focus();
+                }
+            } else {
+                input.focus();
+                input.select();
+   
