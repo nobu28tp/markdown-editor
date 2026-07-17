@@ -1,34 +1,4 @@
-rties: false,
-                                required: ['start', 'end', 'selectedText', 'category', 'message', 'suggestion'],
-                                properties: {
-                                    start: { type: 'integer' },
-                                    end: { type: 'integer' },
-                                    selectedText: { type: 'string' },
-                                    category: {
-                                        type: 'string',
-                                        enum: ['typo', 'grammar', 'style', 'consistency', 'markdown']
-                                    },
-                                    message: { type: 'string' },
-                                    suggestion: { type: 'string' }
-                                }
-                            }
-                        }
-                    }
-                }
-            };
-        }
-
-        function getGeminiProofreadResponseSchema() {
-            return {
-                type: 'OBJECT',
-                properties: {
-                    comments: {
-                        type: 'ARRAY',
-                        items: {
-                            type: 'OBJECT',
-                            properties: {
-                                start: { type: 'INTEGER' },
-                                end: { type: 'INTEGER' },
+      end: { type: 'INTEGER' },
                                 selectedText: { type: 'STRING' },
                                 category: {
                                     type: 'STRING',
@@ -532,4 +502,35 @@ rties: false,
 
             // Lucideアイコンをウィジェット内に描画
             setTimeout(() => {
-                if (window.lucide) window.lucid
+                if (window.lucide) window.lucide.createIcons({ root: widget });
+            }, 0);
+            return widget;
+        }
+
+        // 行内のBase64文字列を検知してCodeMirror上で折りたたむ（非表示にする）
+        function hideBase64Widget(doc, lineNum, lineText) {
+            // 1. 参照リンク型: [img-xxx]: data:image/...
+            const refMatch = lineText.match(/^\[[^\]]+\]:\s*data:image\/[^\s]+/);
+            if (refMatch) {
+                const marks = doc.findMarks({ line: lineNum, ch: 0 }, { line: lineNum, ch: refMatch[0].length });
+                if (!marks.some(m => m.collapsed)) {
+                    doc.markText({ line: lineNum, ch: 0 }, { line: lineNum, ch: refMatch[0].length }, {
+                        collapsed: true,
+                        replacedWith: createHiddenWidget(false),
+                        atomic: true // カーソル移動時に一つの文字として扱う（BackSpaceで一括削除できる）
+                    });
+                }
+            }
+
+            // 2. インライン型: ![alt](data:image/...)
+            const inlineRegex = /!\[[^\]]*\]\((data:image\/[^\)]+)\)/g;
+            let match;
+            while ((match = inlineRegex.exec(lineText)) !== null) {
+                const startCh = match.index + match[0].indexOf('(') + 1; // data:image... の開始位置
+                const endCh = startCh + match[1].length; // base64部分の終了位置
+
+                const marks = doc.findMarks({ line: lineNum, ch: startCh }, { line: lineNum, ch: endCh });
+                if (!marks.some(m => m.collapsed)) {
+                    doc.markText({ line: lineNum, ch: startCh }, { line: lineNum, ch: endCh }, {
+                        collapsed: true,
+                   
