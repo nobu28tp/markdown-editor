@@ -1,4 +1,28 @@
-// フォールバック: 従来のダウンロード方式
+ait window.showSaveFilePicker({
+                        suggestedName: getDocTitle() + '.md',
+                        types: [{
+                            description: 'Markdownファイル',
+                            accept: { 'text/markdown': ['.md'] }
+                        }]
+                    });
+                    updateStatus('saving', '保存中...');
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(content);
+                    await writable.close();
+                    
+                    localStorage.setItem('lumina_autosave', content);
+                    hasUnsavedChanges = false;
+                    
+                    updateStatus('saved', `保存しました (${fileHandle.name})`);
+                    return;
+                } catch (err) {
+                    // ユーザーがキャンセルした場合は何もしない
+                    if (err.name === 'AbortError') return;
+                    console.error("showSaveFilePicker failed, falling back to download:", err);
+                }
+            }
+
+            // フォールバック: 従来のダウンロード方式
             const blob = new Blob([content], { type: 'text/markdown' });
             try {
                 triggerDownload(blob, getDocTitle() + '.md');
@@ -565,25 +589,4 @@
                         img.style.width = pngResult.width + 'px';
                         img.style.height = pngResult.height + 'px';
                         img.style.maxWidth = '100%';
-                        img.style.display = 'block';
-                        svg.parentNode.replaceChild(img, svg);
-                    }
-                } catch (err) {
-                    console.warn('SVG to PNG conversion failed for PDF export:', err);
-                }
-            }
-        }
-
-        function getMarpPdfMetrics() {
-            let slideW = 1280;
-            let slideH = 720;
-            const firstSection = previewContainer.querySelector('.marp-slide-wrapper section');
-            if (firstSection) {
-                const cs = getComputedStyle(firstSection);
-                slideW = parseFloat(cs.width) || slideW;
-                slideH = parseFloat(cs.height) || slideH;
-            }
-            return { slideW, slideH };
-        }
-
-        function buildMarpCaptureCss(slideW, slideH
+                     
