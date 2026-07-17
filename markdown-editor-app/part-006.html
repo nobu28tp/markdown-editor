@@ -1,9 +1,4 @@
-      end: { type: 'INTEGER' },
-                                selectedText: { type: 'STRING' },
-                                category: {
-                                    type: 'STRING',
-                                    enum: ['typo', 'grammar', 'style', 'consistency', 'markdown']
-                                },
+    },
                                 message: { type: 'STRING' },
                                 suggestion: { type: 'STRING' }
                             },
@@ -533,4 +528,18 @@
                 if (!marks.some(m => m.collapsed)) {
                     doc.markText({ line: lineNum, ch: startCh }, { line: lineNum, ch: endCh }, {
                         collapsed: true,
-                   
+                        replacedWith: createHiddenWidget(true),
+                        atomic: true
+                    });
+                }
+            }
+        }
+
+        // Initial setup
+        function init() {
+            // テーマの初期化と復元
+            const savedTheme = localStorage.getItem('lumina_theme') || 'dark';
+            setTheme(savedTheme);
+
+            // テーマ切り替えボタンのイベント登録
+           
