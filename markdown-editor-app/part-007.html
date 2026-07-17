@@ -1,35 +1,4 @@
-e.createIcons({ root: widget });
-            }, 0);
-            return widget;
-        }
-
-        // 行内のBase64文字列を検知してCodeMirror上で折りたたむ（非表示にする）
-        function hideBase64Widget(doc, lineNum, lineText) {
-            // 1. 参照リンク型: [img-xxx]: data:image/...
-            const refMatch = lineText.match(/^\[[^\]]+\]:\s*data:image\/[^\s]+/);
-            if (refMatch) {
-                const marks = doc.findMarks({ line: lineNum, ch: 0 }, { line: lineNum, ch: refMatch[0].length });
-                if (!marks.some(m => m.collapsed)) {
-                    doc.markText({ line: lineNum, ch: 0 }, { line: lineNum, ch: refMatch[0].length }, {
-                        collapsed: true,
-                        replacedWith: createHiddenWidget(false),
-                        atomic: true // カーソル移動時に一つの文字として扱う（BackSpaceで一括削除できる）
-                    });
-                }
-            }
-
-            // 2. インライン型: ![alt](data:image/...)
-            const inlineRegex = /!\[[^\]]*\]\((data:image\/[^\)]+)\)/g;
-            let match;
-            while ((match = inlineRegex.exec(lineText)) !== null) {
-                const startCh = match.index + match[0].indexOf('(') + 1; // data:image... の開始位置
-                const endCh = startCh + match[1].length; // base64部分の終了位置
-
-                const marks = doc.findMarks({ line: lineNum, ch: startCh }, { line: lineNum, ch: endCh });
-                if (!marks.some(m => m.collapsed)) {
-                    doc.markText({ line: lineNum, ch: startCh }, { line: lineNum, ch: endCh }, {
-                        collapsed: true,
-                        replacedWith: createHiddenWidget(true),
+     replacedWith: createHiddenWidget(true),
                         atomic: true
                     });
                 }
@@ -567,4 +536,26 @@ e.createIcons({ root: widget });
                     const marpStyle = document.getElementById('marp-style').textContent;
                     extraStyles = `
                         ${marpStyle}
-                        body { background-color: #1a1a2e; margin: 0; padding: 2rem; display: flex; flex-direct
+                        body { background-color: #1a1a2e; margin: 0; padding: 2rem; display: flex; flex-direction: column; align-items: center; gap: 1.5rem; }
+                        div.marpit {
+                            width: auto !important;
+                            height: auto !important;
+                            position: static !important;
+                            overflow: visible !important;
+                            display: flex !important;
+                            flex-direction: column !important;
+                            align-items: center !important;
+                            gap: 1.5rem !important;
+                            background: transparent !important;
+                        }
+                        .marp-slide-wrapper { position: relative; box-shadow: 0 20px 60px rgba(0,0,0,0.6); border-radius: 4px; overflow: hidden; width: 1280px; height: 720px; flex-shrink: 0; }
+                        .marp-slide-wrapper section { transform-origin: top left !important; transform: scale(1) !important; position: absolute; top:0; left:0; width:100%; height:100%; display:block; }
+                        .marp-page-number { text-align: center; font-size: 0.8rem; color: rgba(255,255,255,0.5); font-family: sans-serif; letter-spacing: 0.1em; }
+                    `;
+                } else {
+                    extraStyles = `
+                        body { font-family: "Inter", "Meiryo", sans-serif; color: #24292f; background: #fff; line-height: 1.6; max-width: 1000px; margin: 0 auto; padding: 2rem; }
+                        h1, h2, h3, h4 { border-bottom: 1px solid #d0d7de; padding-bottom: 0.3em; }
+                        pre { background: #f6f8fa; padding: 16px; border-radius: 6px; overflow: auto; }
+                        code { font-family: "Fira Code", monospace; background: rgba(175,184,193,0.2); padding: 0.2em 0.4em; border-radius: 6px; }
+                        table { border-colla
