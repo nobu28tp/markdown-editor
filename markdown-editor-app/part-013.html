@@ -1,4 +1,25 @@
-) {
+   img.style.display = 'block';
+                        svg.parentNode.replaceChild(img, svg);
+                    }
+                } catch (err) {
+                    console.warn('SVG to PNG conversion failed for PDF export:', err);
+                }
+            }
+        }
+
+        function getMarpPdfMetrics() {
+            let slideW = 1280;
+            let slideH = 720;
+            const firstSection = previewContainer.querySelector('.marp-slide-wrapper section');
+            if (firstSection) {
+                const cs = getComputedStyle(firstSection);
+                slideW = parseFloat(cs.width) || slideW;
+                slideH = parseFloat(cs.height) || slideH;
+            }
+            return { slideW, slideH };
+        }
+
+        function buildMarpCaptureCss(slideW, slideH) {
             const marpStyleTag = document.getElementById('marp-style');
             let captureCss = marpStyleTag ? marpStyleTag.textContent : '';
             captureCss = captureCss
@@ -664,19 +685,4 @@ ${slidesHtml}
 
         // UTF-8対応のBase64エンコーダ（日本語文字化け防止）
         function utf8ToBase64(str) {
-            return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => {
-                return String.fromCharCode(parseInt(p1, 16));
-            }));
-        }
-
-        // UTF-8対応のBase64デコーダ
-        function base64ToUtf8(str) {
-            return decodeURIComponent(Array.prototype.map.call(atob(str), (c) => {
-                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-            }).join(''));
-        }
-
-        // GitHub設定をLocalStorageに保存
-        function saveGitHubSettings() {
-            const settings = {
-                tok
+            return btoa(encodeURICompone
