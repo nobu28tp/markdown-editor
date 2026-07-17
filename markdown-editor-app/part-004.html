@@ -1,25 +1,4 @@
-class="cheat-sheet-table">
-                    <thead>
-                        <tr>
-                            <th>コード</th>
-                            <th>種類</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><code>A--&gt;B</code></td>
-                            <td>実線 矢印</td>
-                        </tr>
-                        <tr>
-                            <td><code>A==&gt;B</code></td>
-                            <td>太線 矢印</td>
-                        </tr>
-                        <tr>
-                            <td><code>A-.-&gt;B</code></td>
-                            <td>点線 矢印</td>
-                        </tr>
-                        <tr>
-                            <td><code>A---B</code></td>
+    <td><code>A---B</code></td>
                             <td>実線</td>
                         </tr>
                         <tr>
@@ -529,4 +508,28 @@ paginate: true
             };
         }
 
-   
+        function normalizeCommentForStorage(comment) {
+            return {
+                ...comment,
+                id: comment.id || `comment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                status: comment.status || 'open',
+                updatedAt: new Date().toISOString()
+            };
+        }
+
+        function collectCurrentProofreadComments() {
+            const text = editor ? editor.getValue() : '';
+            proofreadComments.forEach(comment => {
+                const mark = getProofreadMark(comment.id);
+                const found = mark ? mark.find() : null;
+                if (found) {
+                    comment.start = editor.indexFromPos(found.from);
+                    comment.end = editor.indexFromPos(found.to);
+                    comment.selectedText = text.slice(comment.start, comment.end);
+                }
+            });
+            return proofreadComments.map(normalizeCommentForStorage);
+        }
+
+        function mergeProofreadComments(localComments, remoteComments) {
+          
