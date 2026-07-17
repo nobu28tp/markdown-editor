@@ -1,4 +1,10 @@
-ait window.showSaveFilePicker({
+n handleSaveMd() {
+            const content = editor.getValue();
+
+            // File System Access API (showSaveFilePicker) が利用可能なら、保存場所を選択させる
+            if (window.showSaveFilePicker) {
+                try {
+                    const fileHandle = await window.showSaveFilePicker({
                         suggestedName: getDocTitle() + '.md',
                         types: [{
                             description: 'Markdownファイル',
@@ -586,7 +592,4 @@ ait window.showSaveFilePicker({
                     if (pngResult && pngResult.src) {
                         const img = document.createElement('img');
                         img.src = pngResult.src;
-                        img.style.width = pngResult.width + 'px';
-                        img.style.height = pngResult.height + 'px';
-                        img.style.maxWidth = '100%';
-                     
+                   
