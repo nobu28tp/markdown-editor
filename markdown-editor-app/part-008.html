@@ -1,23 +1,4 @@
-tn-doc-theme)').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    // テーマメニューを開くボタンの場合は閉じない
-                    if (btn.id === 'btn-doc-theme') return;
-                    closeHamburger();
-                });
-            });
-
-            // Pane toggles
-            document.getElementById('btn-toggle-preview').addEventListener('click', () => {
-                const previewPane = document.getElementById('preview-pane');
-                const btnIcon = document.querySelector('#btn-toggle-preview i');
-
-                if (previewPane.style.display === 'none') {
-                    previewPane.style.display = 'flex';
-                    btnIcon.setAttribute('data-lucide', 'layout-panel-left');
-                    updatePreview(editor.getValue());
-                } else {
-                    previewPane.style.display = 'none';
-                    btnIcon.setAttribute('data-lucide', 'layout-panel-split');
+a-lucide', 'layout-panel-split');
                     if (previewTimeout) clearTimeout(previewTimeout);
                 }
                 lucide.createIcons({ root: document.getElementById('btn-toggle-preview') });
@@ -570,4 +551,27 @@ tn-doc-theme)').forEach(btn => {
             function generateMarkdownTable(rows, cols) {
                 let md = '';
                 // ヘッダー行
-    
+                md += '| ' + Array(cols).fill(' ').join(' | ') + ' |\n';
+                // 区切り行
+                md += '|' + Array(cols).fill('---').join('|') + '|\n';
+                // データ行
+                for (let r = 1; r < rows; r++) {
+                    md += '| ' + Array(cols).fill(' ').join(' | ') + ' |\n';
+                }
+                return md;
+            }
+
+            function toggleTablePopover(e) {
+                if (!tablePopover || !tableBtn) return;
+                
+                if (tablePopover.style.display === 'none') {
+                    const rect = tableBtn.getBoundingClientRect();
+                    const parentRect = document.getElementById('editor-container').getBoundingClientRect();
+                    
+                    tablePopover.style.left = `${rect.left - parentRect.left}px`;
+                    tablePopover.style.top = `${rect.bottom - parentRect.top + 5}px`;
+                    
+                    tablePopover.style.display = 'flex';
+                    highlightGrid(0, 0);
+                } else {
+          
