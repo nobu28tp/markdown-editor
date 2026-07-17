@@ -1,51 +1,4 @@
-           <button id="btn-replace-one" title="置換">置換</button>
-                            <button id="btn-replace-all" title="すべて置換">すべて置換</button>
-                        </div>
-                    </div>
-                `;
-                container.appendChild(searchBar);
-                lucide.createIcons({ root: searchBar });
-                
-                // 検索インプットイベント
-                const input = document.getElementById('search-input');
-                input.addEventListener('input', () => updateSearch(input.value));
-                input.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        if (e.shiftKey) {
-                            findNextMatch(true);
-                        } else {
-                            findNextMatch(false);
-                        }
-                    } else if (e.key === 'Escape') {
-                        closeCustomSearch();
-                    }
-                });
-
-                // 置換インプットイベント
-                const replaceInput = document.getElementById('replace-input');
-                replaceInput.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        replaceCurrentMatch();
-                    } else if (e.key === 'Escape') {
-                        closeCustomSearch();
-                    }
-                });
-                
-                document.getElementById('search-prev').addEventListener('click', () => findNextMatch(true));
-                document.getElementById('search-next').addEventListener('click', () => findNextMatch(false));
-                document.getElementById('search-close').addEventListener('click', closeCustomSearch);
-                document.getElementById('search-toggle-replace').addEventListener('click', () => toggleReplaceRow());
-                document.getElementById('btn-replace-one').addEventListener('click', replaceCurrentMatch);
-                document.getElementById('btn-replace-all').addEventListener('click', replaceAllMatches);
-            }
-            
-            searchBar.classList.add('active');
-            toggleReplaceRow(showReplace);
-
-            const input = document.getElementById('search-input');
-            const selected = editor.getSelection();
+Selection();
             if (selected && selected.indexOf('\n') === -1) {
                 input.value = selected;
             }
@@ -317,7 +270,7 @@
         }
 
         // ── App Version ──
-        const APP_VERSION = '5.6.2';
+        const APP_VERSION = '5.6.3';
 
         // ══════════════════════════════════════
         // 🎨 Document Theme Engine
@@ -648,4 +601,73 @@
             let cssToApply = '';
             if (themeName === 'custom' && customCss) {
                 cssToApply = scopeCustomCss(customCss);
+            } else if (PRESET_THEMES[themeName]) {
+                cssToApply = scopeCustomCss(PRESET_THEMES[themeName]);
+            }
             
+            if (customThemeStyleTag) {
+                customThemeStyleTag.textContent = cssToApply;
+                document.head.appendChild(customThemeStyleTag);
+            }
+
+            // Mermaid用グローバルスタイルDOMクリア（初期化時のスタイル重複衝突を避けるため）
+            document.querySelectorAll('style[id^="mermaid"]').forEach(el => el.remove());
+            document.querySelectorAll('style[id^="dmermaid"]').forEach(el => el.remove());
+
+            // Mermaidのテーマを更新
+            initMermaid(themeName);
+            
+            // プレビューの再描画
+            if (window.editor) {
+                updatePreview(editor.getValue());
+            }
+
+            // メニューのactive表示切り替え
+            document.querySelectorAll('#doc-theme-menu .doc-theme-menu-item[data-theme]').forEach(item => {
+                const isActive = item.getAttribute('data-theme') === themeName;
+                item.classList.toggle('active', isActive);
+                const check = item.querySelector('.check-mark');
+                if (check) {
+                    check.textContent = isActive ? '✓' : '';
+                }
+            });
+
+            localStorage.setItem('lumina_doc_theme', themeName);
+            if (themeName === 'custom' && customCss) {
+                localStorage.setItem('lumina_custom_css', customCss);
+            }
+        }
+
+        function restoreDocTheme() {
+            const saved = localStorage.getItem('lumina_doc_theme') || 'github';
+            if (saved === 'custom') {
+                const css = localStorage.getItem('lumina_custom_css') || '';
+                applyDocTheme('custom', css);
+            } else {
+                applyDocTheme(saved);
+            }
+        }
+
+        // ── テーマ選択メニュー関連のイベントリスナー ──
+        
+        // テーマメニューのトグル表示
+        const btnDocTheme = document.getElementById('btn-doc-theme');
+        const docThemeMenu = document.getElementById('doc-theme-menu');
+        if (btnDocTheme && docThemeMenu) {
+            btnDocTheme.addEventListener('click', (e) => {
+                e.stopPropagation();
+                docThemeMenu.classList.toggle('show');
+            });
+        }
+
+        // メニュー外クリックで閉じる
+        document.addEventListener('click', () => {
+            if (docThemeMenu) {
+                docThemeMenu.classList.remove('show');
+            }
+        });
+
+        // 各テーマの切り替え
+        document.querySelectorAll('#doc-theme-menu .doc-theme-menu-item[data-theme]').forEach(item => {
+            item.addEventListener('click', () => {
+                const
