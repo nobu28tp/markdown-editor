@@ -1,4 +1,9 @@
-wait fileHandle.queryPermission(options)) === 'granted') {
+Permission(fileHandle, readWrite) {
+            const options = {};
+            if (readWrite) {
+                options.mode = 'readwrite';
+            }
+            if ((await fileHandle.queryPermission(options)) === 'granted') {
                 return true;
             }
             if ((await fileHandle.requestPermission(options)) === 'granted') {
