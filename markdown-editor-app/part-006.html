@@ -1,38 +1,4 @@
-        if (data.output_text) return data.output_text;
-            const chunks = [];
-            (data.output || []).forEach(item => {
-                (item.content || []).forEach(content => {
-                    if (content.type === 'output_text' && content.text) chunks.push(content.text);
-                });
-            });
-            return chunks.join('\n').trim();
-        }
-
-        function extractGeminiText(data) {
-            const chunks = [];
-            (data.candidates || []).forEach(candidate => {
-                ((candidate.content && candidate.content.parts) || []).forEach(part => {
-                    if (part.text) chunks.push(part.text);
-                });
-            });
-            return chunks.join('\n').trim();
-        }
-
-        function getProofreadJsonSchemaFormat() {
-            return {
-                type: 'json_schema',
-                name: 'proofread_comments',
-                strict: true,
-                schema: {
-                    type: 'object',
-                    additionalProperties: false,
-                    required: ['comments'],
-                    properties: {
-                        comments: {
-                            type: 'array',
-                            items: {
-                                type: 'object',
-                                additionalProperties: false,
+rties: false,
                                 required: ['start', 'end', 'selectedText', 'category', 'message', 'suggestion'],
                                 properties: {
                                     start: { type: 'integer' },
@@ -532,4 +498,38 @@
 
         function applyLineMarkers(container) {
             if (!container) return;
-            const markers = contain
+            const markers = container.querySelectorAll('.line-marker');
+            markers.forEach(marker => {
+                const line = marker.getAttribute('data-line');
+                let nextEl = marker.nextElementSibling;
+                
+                while (nextEl && nextEl.classList.contains('line-marker')) {
+                    nextEl = nextEl.nextElementSibling;
+                }
+                
+                if (nextEl) {
+                    nextEl.setAttribute('data-line', line);
+                }
+                marker.remove();
+            });
+        }
+
+        // ウィジェット作成関数（非表示になったBase64データの代わりに見せるUI）
+        function createHiddenWidget(isInline = false) {
+            const widget = document.createElement('span');
+            widget.innerHTML = `<i data-lucide="image" style="width:14px;height:14px;margin-right:4px;vertical-align:middle;"></i><span style="vertical-align:middle;">画像データ</span>`;
+            widget.style.backgroundColor = 'rgba(48, 54, 61, 0.4)';
+            widget.style.color = 'var(--text-secondary)';
+            widget.style.padding = isInline ? '0 4px' : '2px 8px';
+            widget.style.borderRadius = '4px';
+            widget.style.fontSize = '0.85em';
+            widget.style.fontFamily = 'var(--font-ui)';
+            widget.style.cursor = 'default';
+            widget.style.display = 'inline-flex';
+            widget.style.alignItems = 'center';
+            widget.style.userSelect = 'none';
+            if (isInline) widget.style.verticalAlign = 'middle';
+
+            // Lucideアイコンをウィジェット内に描画
+            setTimeout(() => {
+                if (window.lucide) window.lucid
