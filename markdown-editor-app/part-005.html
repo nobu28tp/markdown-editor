@@ -1,28 +1,4 @@
-     function normalizeCommentForStorage(comment) {
-            return {
-                ...comment,
-                id: comment.id || `comment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                status: comment.status || 'open',
-                updatedAt: new Date().toISOString()
-            };
-        }
-
-        function collectCurrentProofreadComments() {
-            const text = editor ? editor.getValue() : '';
-            proofreadComments.forEach(comment => {
-                const mark = getProofreadMark(comment.id);
-                const found = mark ? mark.find() : null;
-                if (found) {
-                    comment.start = editor.indexFromPos(found.from);
-                    comment.end = editor.indexFromPos(found.to);
-                    comment.selectedText = text.slice(comment.start, comment.end);
-                }
-            });
-            return proofreadComments.map(normalizeCommentForStorage);
-        }
-
-        function mergeProofreadComments(localComments, remoteComments) {
-            const merged = new Map();
+  const merged = new Map();
             (Array.isArray(remoteComments) ? remoteComments : []).forEach(comment => {
                 if (comment && comment.id) merged.set(comment.id, normalizeCommentForStorage(comment));
             });
@@ -599,4 +575,34 @@
                             type: 'array',
                             items: {
                                 type: 'object',
-                                additionalPrope
+                                additionalProperties: false,
+                                required: ['start', 'end', 'selectedText', 'category', 'message', 'suggestion'],
+                                properties: {
+                                    start: { type: 'integer' },
+                                    end: { type: 'integer' },
+                                    selectedText: { type: 'string' },
+                                    category: {
+                                        type: 'string',
+                                        enum: ['typo', 'grammar', 'style', 'consistency', 'markdown']
+                                    },
+                                    message: { type: 'string' },
+                                    suggestion: { type: 'string' }
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+        }
+
+        function getGeminiProofreadResponseSchema() {
+            return {
+                type: 'OBJECT',
+                properties: {
+                    comments: {
+                        type: 'ARRAY',
+                        items: {
+                            type: 'OBJECT',
+                            properties: {
+                                start: { type: 'INTEGER' },
+                          
