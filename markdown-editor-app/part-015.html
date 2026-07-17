@@ -1,4 +1,13 @@
-   el.textContent = msg;
+rror("IndexedDB load failed:", err);
+                return null;
+            }
+        }
+
+        // モーダルステータス表示
+        function showLocalStatus(msg, color) {
+            const el = document.getElementById('local-folder-status');
+            if (!el) return;
+            el.textContent = msg;
             el.style.color = color || '#58a6ff';
             el.style.display = 'block';
             setTimeout(() => { el.style.display = 'none'; }, 5000);
