@@ -1,168 +1,4 @@
-sult += css.substring(atStart, j);
-                            i = j;
-                        } else {
-                            let depth = 1;
-                            let j = i + 1;
-                            while (j < css.length && depth > 0) {
-                                if (css[j] === '{') depth++;
-                                if (css[j] === '}') depth--;
-                                j++;
-                            }
-                            const innerCss = css.substring(i + 1, j - 1);
-                            result += atRule + '{' + prefixCssSelectors(innerCss, prefix) + '}';
-                            i = j;
-                        }
-                    }
-                    continue;
-                }
-
-                const selStart = i;
-                while (i < css.length && css[i] !== '{') i++;
-                if (i >= css.length) break;
-
-                const selectorBlock = css.substring(selStart, i).trim();
-                let depth = 1;
-                let j = i + 1;
-                while (j < css.length && depth > 0) {
-                    if (css[j] === '{') depth++;
-                    if (css[j] === '}') depth--;
-                    j++;
-                }
-                const body = css.substring(i, j);
-
-                const scopedSelectors = selectorBlock.split(',').map(s => {
-                    s = s.trim();
-                    if (!s) return s;
-                    return prefix + ' ' + s;
-                }).join(', ');
-
-                result += scopedSelectors + ' ' + body;
-                i = j;
-            }
-
-            return result;
-        }
-
-        function scopeCustomCss(rawCss) {
-            if (!rawCss || !rawCss.trim()) return '';
-            const docCss = prefixCssSelectors(rawCss, '#preview-content.markdown-body');
-            const slideCss = prefixCssSelectors(rawCss, '#preview-content .marp-slide-wrapper section');
-            return '/* === Document Mode === */\n' + docCss + '\n\n/* === Slide Mode === */\n' + slideCss;
-        }
-
-        // ===== Mermaidテーマ初期化（テーマ連動対応） =====
-        let mermaidInitialized = false;
-
-        const MERMAID_THEME_VARS = {
-            github: {
-                primaryColor: '#f8f9fa',
-                primaryBorderColor: '#d0d7de',
-                primaryTextColor: '#24292f',
-                lineColor: '#57606a'
-            },
-            academic: {
-                primaryColor: '#ffffff',
-                primaryBorderColor: '#333333',
-                primaryTextColor: '#333333',
-                lineColor: '#333333'
-            },
-            corporate: {
-                primaryColor: '#f4f7fa',
-                primaryBorderColor: '#1b3a5c',
-                primaryTextColor: '#1b3a5c',
-                lineColor: '#2c5f8a'
-            },
-            minimal: {
-                primaryColor: '#fafafa',
-                primaryBorderColor: '#e0e0e0',
-                primaryTextColor: '#333333',
-                lineColor: '#cccccc'
-            },
-            custom: {
-                primaryColor: '#f8f9fa',
-                primaryBorderColor: '#d0d7de',
-                primaryTextColor: '#24292f',
-                lineColor: '#57606a'
-            }
-        };
-
-        function getMermaidConfig(themeName) {
-            const activeVars = MERMAID_THEME_VARS[themeName] || MERMAID_THEME_VARS.github;
-            return {
-                startOnLoad: false,
-                theme: 'default',
-                securityLevel: 'loose',
-                flowchart: {
-                    htmlLabels: false,
-                    useMaxWidth: true
-                },
-                themeVariables: {
-                    primaryColor: activeVars.primaryColor,
-                    primaryBorderColor: activeVars.primaryBorderColor,
-                    primaryTextColor: activeVars.primaryTextColor,
-                    lineColor: activeVars.lineColor,
-                    fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif',
-                    fontSize: '14px'
-                }
-            };
-        }
-
-        function initMermaid(themeName) {
-            if (!window.mermaid) return;
-
-            const config = getMermaidConfig(themeName);
-
-            if (!mermaidInitialized) {
-                // 初回のみ mermaid.initialize() を呼び出す
-                mermaid.initialize(config);
-                mermaidInitialized = true;
-            } else {
-                // 2回目以降はテーマ変数のみ更新し、プレビュー再描画で反映させる
-                mermaid.initialize(config);
-                // Note: Mermaid v11 では initialize を再呼び出ししても安全だが、
-                // 将来バージョンでの非推奨に備え、mermaidInitialized フラグで制御を分離しておく
-            }
-        }
-
-        function applyDocTheme(themeName, customCss) {
-            currentDocTheme = themeName;
-
-            let cssToApply = '';
-            if (themeName === 'custom' && customCss) {
-                cssToApply = scopeCustomCss(customCss);
-            } else if (PRESET_THEMES[themeName]) {
-                cssToApply = scopeCustomCss(PRESET_THEMES[themeName]);
-            }
-            
-            if (customThemeStyleTag) {
-                customThemeStyleTag.textContent = cssToApply;
-                document.head.appendChild(customThemeStyleTag);
-            }
-
-            // Mermaid用グローバルスタイルDOMクリア（初期化時のスタイル重複衝突を避けるため）
-            document.querySelectorAll('style[id^="mermaid"]').forEach(el => el.remove());
-            document.querySelectorAll('style[id^="dmermaid"]').forEach(el => el.remove());
-
-            // Mermaidのテーマを更新
-            initMermaid(themeName);
-            
-            // プレビューの再描画
-            if (window.editor) {
-                updatePreview(editor.getValue());
-            }
-
-            // メニューのactive表示切り替え
-            document.querySelectorAll('#doc-theme-menu .doc-theme-menu-item[data-theme]').forEach(item => {
-                const isActive = item.getAttribute('data-theme') === themeName;
-                item.classList.toggle('active', isActive);
-                const check = item.querySelector('.check-mark');
-                if (check) {
-                    check.textContent = isActive ? '✓' : '';
-                }
-            });
-
-            localStorage.setItem('lumina_doc_theme', themeName);
-            if (themeName === 'custom' && customCss) {
+m' && customCss) {
                 localStorage.setItem('lumina_custom_css', customCss);
             }
         }
@@ -386,6 +222,171 @@ sult += css.substring(atStart, j);
         // ── Restore theme on startup ──
         restoreDocTheme();
 
+        // ── Markdown校正への安全な直接発行 ──
+        // 本番公開後に実際の workers.dev Originへ置き換える。任意入力にはしない。
+        const PROOFREADER_APP_ORIGIN = 'https://markdown-proofreader.hara-corp.workers.dev';
+        const PROOFREADER_LOCAL_ORIGIN = 'http://localhost:8787';
+        const PROOFREADER_STANDARD_THEMES = new Set(['github', 'academic', 'corporate', 'minimal']);
+        let proofreaderImportWindow = null;
+        let proofreaderImportOrigin = '';
+        let proofreaderImportRequestId = '';
+        let proofreaderImportPayload = null;
+        let proofreaderImportTimeout = null;
+
+        function getProofreaderAppUrl() {
+            if (window.location.protocol === 'file:') {
+                throw new Error('安全な送信元確認ができないため、file:// で開いたEditorからは直接発行できません。EditorをHTTPSまたはlocalhostで開いてください。');
+            }
+            const editorIsLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            const configuredOrigin = editorIsLocal ? PROOFREADER_LOCAL_ORIGIN : PROOFREADER_APP_ORIGIN;
+            if (!configuredOrigin) {
+                throw new Error('Markdown校正の公開先が未設定です。Editor内のPROOFREADER_APP_ORIGINへ公開後のOriginを設定してください。');
+            }
+            const url = new URL(configuredOrigin);
+            const allowedLocal = editorIsLocal && url.origin === PROOFREADER_LOCAL_ORIGIN;
+            if ((url.protocol !== 'https:' && !allowedLocal) || url.origin !== configuredOrigin) {
+                throw new Error('Markdown校正の公開先設定が不正です。');
+            }
+            return url;
+        }
+
+        function dataUrlByteLength(dataUrl) {
+            const commaIndex = dataUrl.indexOf(',');
+            if (commaIndex < 0) return 0;
+            const encoded = dataUrl.slice(commaIndex + 1);
+            const padding = encoded.endsWith('==') ? 2 : encoded.endsWith('=') ? 1 : 0;
+            return Math.floor(encoded.length * 3 / 4) - padding;
+        }
+
+        function countNonEmbeddedImages(source) {
+            const text = String(source || '');
+            let count = [...text.matchAll(/!\[[^\]]*\]\((?!data:image\/)[^)]+\)/gi)].length;
+            const definitions = new Map();
+            for (const match of text.matchAll(/^\s*\[([^\]]+)\]:\s*<?([^\s>]+)>?/gmi)) {
+                definitions.set(match[1].trim().toLowerCase(), match[2]);
+            }
+            for (const match of text.matchAll(/!\[([^\]]*)\]\[([^\]]*)\]/g)) {
+                const referenceId = (match[2] || match[1]).trim().toLowerCase();
+                const target = definitions.get(referenceId);
+                if (!target || !/^data:image\/(png|jpeg|webp|gif);base64,/i.test(target)) count += 1;
+            }
+            return count;
+        }
+
+        function extractProofreaderAssets(source) {
+            const assets = [];
+            const seen = new Map();
+            const dataUrlPattern = /data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+/gi;
+            const markdown = String(source || '').replace(dataUrlPattern, (dataUrl, extension) => {
+                if (seen.has(dataUrl)) return seen.get(dataUrl);
+                if (dataUrlByteLength(dataUrl) > 8_000_000) throw new Error('1点あたり8MBを超える画像は直接発行できません。');
+                if (assets.length >= 40) throw new Error('直接発行できる画像は40点までです。');
+                const normalizedExtension = extension.toLowerCase() === 'jpeg' ? 'jpg' : extension.toLowerCase();
+                const name = `editor-image-${assets.length + 1}.${normalizedExtension}`;
+                const mediaType = extension.toLowerCase() === 'jpg' ? 'image/jpeg' : `image/${extension.toLowerCase()}`;
+                assets.push({ name, type: mediaType, dataUrl });
+                seen.set(dataUrl, name);
+                return name;
+            });
+            const totalBytes = assets.reduce((sum, asset) => sum + dataUrlByteLength(asset.dataUrl), 0);
+            if (totalBytes > 30_000_000) throw new Error('画像の合計が30MBを超えるため直接発行できません。');
+            return { markdown, assets };
+        }
+
+        function buildProofreaderPayload(requestId) {
+            const source = editor.getValue();
+            if (/^\s*marp\s*:\s*true\s*$/mi.test(source) || previewMode === 'slide') {
+                throw new Error('MarpスライドはMarkdown校正の対象外です。文書モードのMarkdownを発行してください。');
+            }
+            if (/data:image\/svg\+xml/i.test(source)) {
+                throw new Error('Data URL形式のSVGは直接発行できません。SVGコードを前後が改行された単独ブロックとして本文へ挿入してください。');
+            }
+            if (new TextEncoder().encode(source).byteLength > 2_000_000) {
+                throw new Error('直接発行できるMarkdown本文は2MBまでです。');
+            }
+            const unresolvedImageCount = countNonEmbeddedImages(source);
+            if (unresolvedImageCount > 0 && !window.confirm(
+                `埋め込みではない画像が${unresolvedImageCount}点あります。外部画像と相対パス画像は校正画面で読み込まれません。取り込み画面で画像を追加して続けますか？`
+            )) {
+                throw new Error('画像の確認がキャンセルされました。');
+            }
+            const extracted = extractProofreaderAssets(source);
+            const titleInput = document.getElementById('doc-title-input');
+            const title = ((titleInput && titleInput.value) || '').trim().slice(0, 160) || '無題の文書';
+            return {
+                type: 'MARKDOWN_PROOFREADER_IMPORT',
+                requestId,
+                title,
+                markdown: extracted.markdown,
+                themeId: PROOFREADER_STANDARD_THEMES.has(currentDocTheme) ? currentDocTheme : 'custom',
+                assets: extracted.assets
+            };
+        }
+
+        function clearProofreaderImport() {
+            if (proofreaderImportTimeout) window.clearTimeout(proofreaderImportTimeout);
+            proofreaderImportTimeout = null;
+            proofreaderImportWindow = null;
+            proofreaderImportOrigin = '';
+            proofreaderImportRequestId = '';
+            proofreaderImportPayload = null;
+        }
+
+        function openProofreaderImport() {
+            try {
+                const appUrl = getProofreaderAppUrl();
+                clearProofreaderImport();
+                proofreaderImportOrigin = appUrl.origin;
+                proofreaderImportRequestId = crypto.randomUUID();
+                proofreaderImportPayload = buildProofreaderPayload(proofreaderImportRequestId);
+                const importUrl = new URL('/?mode=import', appUrl.origin);
+                importUrl.searchParams.set('requestId', proofreaderImportRequestId);
+                proofreaderImportWindow = window.open(importUrl.toString(), 'markdown-proofreader-import', 'popup,width=1320,height=900');
+                if (!proofreaderImportWindow) throw new Error('ポップアップがブロックされました。ブラウザの設定で許可してください。');
+                proofreaderImportTimeout = window.setTimeout(() => {
+                    if (proofreaderImportWindow && !proofreaderImportWindow.closed) {
+                        updateStatus('error', 'Markdown校正との接続がタイムアウトしました');
+                    }
+                    clearProofreaderImport();
+                }, 10 * 60 * 1000);
+                updateStatus('saving', 'Markdown校正の取り込み画面を開いています...');
+            } catch (error) {
+                clearProofreaderImport();
+                updateStatus('error', '校正URLを発行できません');
+                window.alert(error && error.message ? error.message : '校正URLを発行できませんでした。');
+            }
+        }
+
+        function handleProofreaderMessage(event) {
+            if (!proofreaderImportWindow || event.origin !== proofreaderImportOrigin || event.source !== proofreaderImportWindow) return;
+            const data = event.data;
+            if (!data || typeof data !== 'object' || data.requestId !== proofreaderImportRequestId) return;
+            if (data.type === 'MARKDOWN_PROOFREADER_IMPORT_READY') {
+                proofreaderImportWindow.postMessage(proofreaderImportPayload, proofreaderImportOrigin);
+                updateStatus('normal', 'Markdown校正で発行設定を確認してください');
+                return;
+            }
+            if (data.type === 'MARKDOWN_PROOFREADER_PUBLISHED') {
+                try {
+                    const shareUrl = new URL(data.shareUrl);
+                    if (
+                        shareUrl.origin !== proofreaderImportOrigin ||
+                        !/^\/share\/[A-Za-z0-9_-]+$/.test(shareUrl.pathname) ||
+                        shareUrl.username ||
+                        shareUrl.password ||
+                        shareUrl.search ||
+                        shareUrl.hash
+                    ) return;
+                    const safeShareUrl = shareUrl.origin + shareUrl.pathname;
+                    updateStatus('saved', '校正URLを発行しました');
+                    window.prompt('校正URLを発行しました。コピーして確認者へ共有してください。', safeShareUrl);
+                    clearProofreaderImport();
+                } catch (_) {
+                    // 発行元と一致しないURLは無視する
+                }
+            }
+        }
+
         // ── Helper: Get sanitized document title for use in filenames ──
         function getDocTitle() {
             const raw = (document.getElementById('doc-title-input').value || '').trim();
@@ -495,54 +496,4 @@ sult += css.substring(atStart, j);
 
             for (let i = 0; i < lines.length; i++) {
                 const line = lines[i];
-                const trimmed = line.trim();
-
-                if (trimmed.startsWith('<!-- split:') && trimmed.endsWith('-->')) {
-                    if (currentPart.filename) {
-                        parts.push(currentPart);
-                    }
-                    const match = trimmed.match(/<!--\s*split:\s*([^\s]+)\s*-->/);
-                    const filename = match ? match[1].trim() : `part_${parts.length + 1}.md`;
-                    currentPart = { filename: filename, contentLines: [] };
-                    
-                    mainContentLines.push(`<!-- include: ${filename} -->`);
-                } else {
-                    if (currentPart.filename) {
-                        currentPart.contentLines.push(line);
-                    } else {
-                        mainContentLines.push(line);
-                    }
-                }
-            }
-            if (currentPart.filename) {
-                parts.push(currentPart);
-            }
-
-            if (parts.length === 0) {
-                alert("ドキュメント内に分割指定 <!-- split: ファイル名.md --> が見つかりません。ヘルプを参照して記述してください。");
-                return;
-            }
-
-            try {
-                updateStatus('saving', 'ファイルを自動分割して保存中...');
-                setGeneratedFullReadOnly(false);
-
-                let mainHandle = activeLocalFileHandle;
-                let mainExpectedHash = activeLocalFileOriginalHash || '';
-                if (mainHandle && isGeneratedFullDocument(editor.getValue())) {
-                    const sourceName = getGeneratedFullSourceName(editor.getValue()) || 'index.md';
-                    mainHandle = await activeLocalDirectoryHandle.getFileHandle(sourceName, { create: true });
-                    activeLocalFileHandle = mainHandle;
-                    mainExpectedHash = '';
-                    document.getElementById('local-file-name').value = mainHandle.name;
-                }
-                if (!mainHandle) {
-                    mainHandle = await activeLocalDirectoryHandle.getFileHandle('index.md', { create: true });
-                    activeLocalFileHandle = mainHandle;
-                    document.getElementById('local-file-name').value = mainHandle.name;
-                }
-
-                const targets = parts.map(part => ({
-                    dirHandle: activeLocalDirectoryHandle,
-                    fileName: part.filename,
-  
+ 
