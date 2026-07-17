@@ -1,4 +1,19 @@
-en: document.getElementById('gh-token').value,
+nt(str).replace(/%([0-9A-F]{2})/g, (match, p1) => {
+                return String.fromCharCode(parseInt(p1, 16));
+            }));
+        }
+
+        // UTF-8対応のBase64デコーダ
+        function base64ToUtf8(str) {
+            return decodeURIComponent(Array.prototype.map.call(atob(str), (c) => {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+        }
+
+        // GitHub設定をLocalStorageに保存
+        function saveGitHubSettings() {
+            const settings = {
+                token: document.getElementById('gh-token').value,
                 repo: document.getElementById('gh-repo').value,
                 branch: document.getElementById('gh-branch').value || 'main',
                 path: document.getElementById('gh-path').value
@@ -655,13 +670,4 @@ en: document.getElementById('gh-token').value,
                 });
                 return handle;
             } catch (err) {
-                console.error("IndexedDB load failed:", err);
-                return null;
-            }
-        }
-
-        // モーダルステータス表示
-        function showLocalStatus(msg, color) {
-            const el = document.getElementById('local-folder-status');
-            if (!el) return;
-         
+                console.e
