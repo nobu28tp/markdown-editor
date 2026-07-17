@@ -1,4 +1,26 @@
-p:0;width:${slideW}px;height:${slideH}px;overflow:hidden;z-index:-1;pointer-events:none;color-scheme:light;background:#ffffff;`;
+tant;
+                }
+                .pdf-capture .marp-slide-wrapper > section {
+                    position: absolute !important;
+                    top: 0 !important;
+                    left: 0 !important;
+                    width: ${slideW}px !important;
+                    height: ${slideH}px !important;
+                    transform: none !important;
+                    transform-origin: top left !important;
+                    overflow: hidden !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    box-sizing: border-box !important;
+                }
+            `;
+        }
+
+        async function renderMarpSlideToCanvas(origWrapper, slideW, slideH, captureCss) {
+            const captureRoot = document.createElement('div');
+            captureRoot.className = 'marpit pdf-capture';
+            captureRoot.dataset.pdfCaptureRoot = 'true';
+            captureRoot.style.cssText = `position:absolute;left:0;top:0;width:${slideW}px;height:${slideH}px;overflow:hidden;z-index:-1;pointer-events:none;color-scheme:light;background:#ffffff;`;
 
             const styleTag = document.createElement('style');
             styleTag.textContent = captureCss;
@@ -24,8 +46,8 @@ p:0;width:${slideW}px;height:${slideH}px;overflow:hidden;z-index:-1;pointer-even
             document.body.appendChild(captureRoot);
 
             try {
-                const failedSvgCount = await replaceSvgsWithPngs(wrapperDiv);
-                const canvas = await html2canvas(captureRoot, {
+                await replaceSvgsWithPngs(wrapperDiv);
+                return await html2canvas(captureRoot, {
                     width: slideW,
                     height: slideH,
                     scale: 2,
@@ -38,7 +60,6 @@ p:0;width:${slideW}px;height:${slideH}px;overflow:hidden;z-index:-1;pointer-even
                     scrollX: 0,
                     scrollY: 0
                 });
-                return { canvas, failedSvgCount };
             } finally {
                 document.body.removeChild(captureRoot);
             }
@@ -55,20 +76,15 @@ p:0;width:${slideW}px;height:${slideH}px;overflow:hidden;z-index:-1;pointer-even
             const jsPDF = window.jspdf.jsPDF;
             const orientation = slideW >= slideH ? 'landscape' : 'portrait';
             const pdf = new jsPDF({ orientation, unit: 'pt', format: [slideW, slideH], compress: true });
-            let failedSvgCount = 0;
 
             for (let i = 0; i < slideWrappers.length; i++) {
                 updateStatus('saving', `PDF生成中 (${i + 1}/${slideWrappers.length})...`);
-                const renderedSlide = await renderMarpSlideToCanvas(slideWrappers[i], slideW, slideH, captureCss);
-                failedSvgCount += renderedSlide.failedSvgCount;
+                const canvas = await renderMarpSlideToCanvas(slideWrappers[i], slideW, slideH, captureCss);
                 if (i > 0) pdf.addPage([slideW, slideH], orientation);
-                pdf.addImage(renderedSlide.canvas.toDataURL('image/png'), 'PNG', 0, 0, slideW, slideH, undefined, 'FAST');
+                pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, slideW, slideH, undefined, 'FAST');
             }
 
             pdf.save(title + '.pdf');
-            if (failedSvgCount > 0) {
-                alert(`SVG ${failedSvgCount}件をPNGへ変換できませんでした。PDFには変換失敗の案内を出力しました。外部画像・外部フォント・外部CSSを使わないSVGで再度お試しください。`);
-            }
         }
 
         async function exportDocumentModePdf(title) {
@@ -658,14 +674,4 @@ ${slidesHtml}
 
         // URLからGitHub Pagesのリポジトリ情報を自動解析
         function detectGitHubPagesInfo() {
-            const hn = window.location.hostname;
-            const pn = window.location.pathname;
-
-            // GitHub Pages のドメイン構造 <username>.github.io
-            if (hn.endsWith('.github.io')) {
-                const username = hn.split('.')[0];
-                const pathParts = pn.split('/').filter(Boolean);
-                if (pathParts.length >= 1) {
-                    const repo = pathParts[0];
-                    return {
-  
+            const hn = wind
