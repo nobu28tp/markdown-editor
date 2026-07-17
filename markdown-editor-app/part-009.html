@@ -1,47 +1,4 @@
-     if (btnDeleteRow) {
-                btnDeleteRow.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    if (!editor) return;
-                    const doc = editor.getDoc();
-                    const cursor = doc.getCursor();
-                    const lineCount = doc.lineCount();
-                    if (lineCount > 1) {
-                        if (cursor.line === lineCount - 1) {
-                            const prevLineText = doc.getLine(cursor.line - 1);
-                            doc.replaceRange('', { line: cursor.line - 1, ch: prevLineText.length }, { line: cursor.line, ch: doc.getLine(cursor.line).length });
-                        } else {
-                            doc.replaceRange('', { line: cursor.line, ch: 0 }, { line: cursor.line + 1, ch: 0 });
-                        }
-                    } else {
-                        doc.setValue('');
-                    }
-                    editor.focus();
-                });
-            }
-
-            if (btnAddCol) {
-                btnAddCol.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    if (!editor) return;
-                    const doc = editor.getDoc();
-                    const cursor = doc.getCursor();
-                    
-                    let startLine = cursor.line;
-                    while (startLine > 0 && doc.getLine(startLine - 1).trim().startsWith('|')) {
-                        startLine--;
-                    }
-                    let endLine = cursor.line;
-                    const totalLines = doc.lineCount();
-                    while (endLine < totalLines - 1 && doc.getLine(endLine + 1).trim().startsWith('|')) {
-                        endLine++;
-                    }
-                    
-                    const currentLineText = doc.getLine(cursor.line);
-                    const textBeforeCursor = currentLineText.substring(0, cursor.ch);
-                    const colIndex = (textBeforeCursor.match(/\|/g) || []).length;
-                    
-                    if (colIndex === 0) return;
-                    
+               
                     for (let i = startLine; i <= endLine; i++) {
                         const lineText = doc.getLine(i);
                         const nthPipePos = findNthOccurrence(lineText, '|', colIndex);
@@ -493,4 +450,51 @@
                             <input type="text" id="replace-input" placeholder="置換後の文字列...">
                         </div>
                         <div class="replace-actions">
-                 
+                            <button id="btn-replace-one" title="置換">置換</button>
+                            <button id="btn-replace-all" title="すべて置換">すべて置換</button>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(searchBar);
+                lucide.createIcons({ root: searchBar });
+                
+                // 検索インプットイベント
+                const input = document.getElementById('search-input');
+                input.addEventListener('input', () => updateSearch(input.value));
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (e.shiftKey) {
+                            findNextMatch(true);
+                        } else {
+                            findNextMatch(false);
+                        }
+                    } else if (e.key === 'Escape') {
+                        closeCustomSearch();
+                    }
+                });
+
+                // 置換インプットイベント
+                const replaceInput = document.getElementById('replace-input');
+                replaceInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        replaceCurrentMatch();
+                    } else if (e.key === 'Escape') {
+                        closeCustomSearch();
+                    }
+                });
+                
+                document.getElementById('search-prev').addEventListener('click', () => findNextMatch(true));
+                document.getElementById('search-next').addEventListener('click', () => findNextMatch(false));
+                document.getElementById('search-close').addEventListener('click', closeCustomSearch);
+                document.getElementById('search-toggle-replace').addEventListener('click', () => toggleReplaceRow());
+                document.getElementById('btn-replace-one').addEventListener('click', replaceCurrentMatch);
+                document.getElementById('btn-replace-all').addEventListener('click', replaceAllMatches);
+            }
+            
+            searchBar.classList.add('active');
+            toggleReplaceRow(showReplace);
+
+            const input = document.getElementById('search-input');
+            const selected = editor.get
