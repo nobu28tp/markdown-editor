@@ -1,12 +1,4 @@
-pse: collapse; width: 100%; margin-bottom: 16px; }
-                        th, td { border: 1px solid #d0d7de; padding: 6px 13px; }
-                        th { background: #f6f8fa; }
-                        blockquote { border-left: 0.25em solid #d0d7de; padding: 0 1em; color: #57606a; }
-                        img, svg { max-width: 100%; height: auto; }
-                    `;
-                }
-
-                newWin.document.write(`<!DOCTYPE html>
+ html>
 <html lang="ja">
 <head>
     <meta charset="utf-8">
@@ -606,4 +598,12 @@ pse: collapse; width: 100%; margin-bottom: 16px; }
                     const colIndex = (textBeforeCursor.match(/\|/g) || []).length;
                     
                     if (colIndex === 0) return;
-     
+                    
+                    for (let i = startLine; i <= endLine; i++) {
+                        const lineText = doc.getLine(i);
+                        const nthPipePos = findNthOccurrence(lineText, '|', colIndex);
+                        const isSeparator = /^[|:\-\s]+$/.test(lineText);
+                        const insertStr = isSeparator ? ' --- |' : '   |';
+                        
+                        if (nthPipePos !== -1) {
+                            const newLineText = lineText.substri
