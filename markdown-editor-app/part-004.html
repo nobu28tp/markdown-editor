@@ -1,9 +1,4 @@
-    <td><code>A---B</code></td>
-                            <td>実線</td>
-                        </tr>
-                        <tr>
-                            <td><code>A===B</code></td>
-                            <td>太線</td>
+                       <td>太線</td>
                         </tr>
                         <tr>
                             <td><code>A[]</code></td>
@@ -532,4 +527,8 @@ paginate: true
         }
 
         function mergeProofreadComments(localComments, remoteComments) {
-          
+            const merged = new Map();
+            (Array.isArray(remoteComments) ? remoteComments : []).forEach(comment => {
+                if (comment && comment.id) merged.set(comment.id, normalizeCommentForStorage(comment));
+            });
+            (Array.is
