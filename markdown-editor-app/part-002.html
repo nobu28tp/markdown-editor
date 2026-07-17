@@ -1,13 +1,4 @@
-  border-radius: 999px;
-            padding: 0.12rem 0.45rem;
-            background: rgba(88, 166, 255, 0.16);
-            color: var(--accent-color);
-            font-size: 0.7rem;
-            font-weight: 700;
-            white-space: nowrap;
-        }
-
-        .proofread-source {
+  .proofread-source {
             color: var(--text-secondary);
             font-size: 0.68rem;
             white-space: nowrap;
@@ -947,7 +938,7 @@
             <div class="header-left">
                 <div class="logo">
                     <i data-lucide="pen-tool"></i>
-                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.6.2)</span>
+                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.5.6.3)</span>
                     </h1>
                 </div>
                 <div class="status-indicator" id="save-status">
@@ -956,4 +947,14 @@
                 </div>
                 <div class="doc-title-wrap">
                     <label for="doc-title-input">📄 ドキュメント名</label>
-                    <input ty
+                    <input type="text" id="doc-title-input" placeholder="例: 会議資料" maxlength="100">
+                </div>
+                <div class="mode-switcher" id="mode-switcher">
+                    <button class="mode-btn active" data-mode="doc">Doc</button>
+                    <button class="mode-btn" data-mode="slide">Slide</button>
+                </div>
+            </div>
+            <div class="header-right">
+                <!-- 常に表示するボタン群 -->
+                <button class="btn btn-outline" id="btn-toggle-outline" title="目次の表示/非表示">
+   
