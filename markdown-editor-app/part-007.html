@@ -123,6 +123,80 @@
                 return svgElement;
             }
 
+            function protectSvgFeaturesForSanitization(svgElement) {
+                const documentForSvg = svgElement.ownerDocument;
+                const featureRecords = [];
+                let serial = 0;
+
+                const createPlaceholder = (type, record) => {
+                    const id = '__svg_safe_' + type + '_' + serial++;
+                    const placeholder = documentForSvg.createElementNS('http://www.w3.org/2000/svg', 'g');
+                    placeholder.setAttribute('id', id);
+                    featureRecords.push({ id, type, record });
+                    return placeholder;
+                };
+
+                svgElement.querySelectorAll('use').forEach((node) => {
+                    const placeholder = createPlaceholder('use', {
+                        href: node.getAttribute('href') || '',
+                        x: node.getAttribute('x') || '',
+                        y: node.getAttribute('y') || '',
+                        width: node.getAttribute('width') || '',
+                        height: node.getAttribute('height') || ''
+                    });
+                    node.replaceWith(placeholder);
+                });
+
+                svgElement.querySelectorAll('feDropShadow').forEach((node) => {
+                    const placeholder = createPlaceholder('drop-shadow', {
+                        dx: node.getAttribute('dx') || '',
+                        dy: node.getAttribute('dy') || '',
+                        stdDeviation: node.getAttribute('stdDeviation') || '',
+                        floodColor: node.getAttribute('flood-color') || '',
+                        floodOpacity: node.getAttribute('flood-opacity') || ''
+                    });
+                    node.replaceWith(placeholder);
+                });
+
+                const source = new XMLSerializer().serializeToString(svgElement);
+                const safeLength = /^-?(?:\d+|\d*\.\d+)(?:%|px)?$/;
+                const safeNumber = /^-?(?:\d+|\d*\.\d+)$/;
+                const safeColor = /^(?:#[0-9a-fA-F]{3,8}|(?:rgb|rgba|hsl|hsla)\([^)]*\)|[a-zA-Z]+)$/;
+
+                return {
+                    source,
+                    restore(cleanSvgElement) {
+                        const cleanDocumentForSvg = cleanSvgElement.ownerDocument;
+                        featureRecords.forEach(({ id, type, record }) => {
+                            const placeholder = cleanSvgElement.querySelector('[id="' + id + '"]');
+                            if (!placeholder) return;
+
+                            if (type === 'use') {
+                                if (!/^#[A-Za-z_][\w:.-]*$/.test(record.href)) {
+                                    placeholder.remove();
+                                    return;
+                                }
+                                const use = cleanDocumentForSvg.createElementNS('http://www.w3.org/2000/svg', 'use');
+                                use.setAttribute('href', record.href);
+                                ['x', 'y', 'width', 'height'].forEach((name) => {
+                                    if (record[name] && safeLength.test(record[name])) use.setAttribute(name, record[name]);
+                                });
+                                placeholder.replaceWith(use);
+                                return;
+                            }
+
+                            const shadow = cleanDocumentForSvg.createElementNS('http://www.w3.org/2000/svg', 'feDropShadow');
+                            ['dx', 'dy', 'stdDeviation'].forEach((name) => {
+                                if (record[name] && safeNumber.test(record[name])) shadow.setAttribute(name, record[name]);
+                            });
+                            if (record.floodColor && safeColor.test(record.floodColor)) shadow.setAttribute('flood-color', record.floodColor);
+                            if (record.floodOpacity && safeNumber.test(record.floodOpacity)) shadow.setAttribute('flood-opacity', record.floodOpacity);
+                            placeholder.replaceWith(shadow);
+                        });
+                    }
+                };
+            }
+
             function getSvgSanitizeOptions(options = {}) {
                 const allowForeignObject = options.allowForeignObject === true;
                 return {
@@ -151,7 +225,8 @@
                     throw new Error('SVGとして解析できませんでした。');
                 }
 
-                let cleanMarkup = DOMPurify.sanitize(source, getSvgSanitizeOptions());
+                const protectedFeatures = protectSvgFeaturesForSanitization(parsed.documentElement);
+                let cleanMarkup = DOMPurify.sanitize(protectedFeatures.source, getSvgSanitizeOptions());
                 cleanMarkup = cleanMarkup.replace(/viewbox=/g, 'viewBox=');
                 const cleanDocument = new DOMParser().parseFromString(cleanMarkup, 'image/svg+xml');
                 if (cleanDocument.querySelector('parsererror') || !cleanDocument.documentElement || cleanDocument.documentElement.localName !== 'svg') {
@@ -162,6 +237,7 @@
                 if (!svgElement.getAttribute('xmlns')) {
                     svgElement.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
                 }
+                protectedFeatures.restore(svgElement);
                 keepSafeSvgReferences(svgElement);
                 return new XMLSerializer().serializeToString(svgElement);
             }
