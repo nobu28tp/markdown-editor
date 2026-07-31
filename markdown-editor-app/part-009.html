@@ -146,11 +146,7 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
 
             svgElement.querySelectorAll('use').forEach((node) => {
                 const placeholder = createPlaceholder('use', {
-                    href: node.getAttribute('href') || '',
-                    x: node.getAttribute('x') || '',
-                    y: node.getAttribute('y') || '',
-                    width: node.getAttribute('width') || '',
-                    height: node.getAttribute('height') || ''
+                    attrs: Object.fromEntries(Array.from(node.attributes).map((attr) => [attr.name, attr.value]))
                 });
                 node.replaceWith(placeholder);
             });
@@ -170,6 +166,18 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
             const safeLength = /^-?(?:\d+|\d*\.\d+)(?:%|px)?$/;
             const safeNumber = /^-?(?:\d+|\d*\.\d+)$/;
             const safeColor = /^(?:#[0-9a-fA-F]{3,8}|(?:rgb|rgba|hsl|hsla)\([^)]*\)|[a-zA-Z]+)$/;
+            const safeTransform = /^[a-zA-Z0-9(),.\s+-]+$/;
+            const safeClass = /^[A-Za-z_][\w: .-]*$/;
+            const safePaint = /^(?:none|currentColor|context-fill|context-stroke|#[0-9a-fA-F]{3,8}|(?:rgb|rgba|hsl|hsla)\([^)]*\)|[a-zA-Z]+|url\(\s*#[A-Za-z_][\w:.-]*\s*\))$/;
+            const useLengthAttrs = new Set(['x', 'y', 'width', 'height', 'stroke-width', 'stroke-dashoffset']);
+            const useNumberAttrs = new Set(['opacity', 'fill-opacity', 'stroke-opacity']);
+            const usePaintAttrs = new Set(['fill', 'stroke']);
+            const usePassthroughAttrs = new Set([
+                'id', 'class', 'transform', 'stroke-linecap', 'stroke-linejoin',
+                'stroke-dasharray', 'fill-rule', 'clip-rule', 'vector-effect',
+                'filter', 'clip-path', 'mask', 'marker-start', 'marker-mid', 'marker-end',
+                'aria-label', 'aria-labelledby', 'role'
+            ]);
 
             return {
                 source,
@@ -180,14 +188,23 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
                         if (!placeholder) return;
 
                         if (type === 'use') {
-                            if (!/^#[A-Za-z_][\w:.-]*$/.test(record.href)) {
+                            const attrs = record.attrs || {};
+                            const href = (attrs.href || attrs['xlink:href'] || '').trim();
+                            if (!/^#[A-Za-z_][\w:.-]*$/.test(href)) {
                                 placeholder.remove();
                                 return;
                             }
                             const use = cleanDocumentForSvg.createElementNS('http://www.w3.org/2000/svg', 'use');
-                            use.setAttribute('href', record.href);
-                            ['x', 'y', 'width', 'height'].forEach((name) => {
-                                if (record[name] && safeLength.test(record[name])) use.setAttribute(name, record[name]);
+                            use.setAttribute('href', href);
+                            Object.entries(attrs).forEach(([name, value]) => {
+                                if (!value || name === 'href' || name === 'xlink:href') return;
+                                if (useLengthAttrs.has(name) && safeLength.test(value)) use.setAttribute(name, value);
+                                else if (useNumberAttrs.has(name) && safeNumber.test(value)) use.setAttribute(name, value);
+                                else if (usePaintAttrs.has(name) && safePaint.test(value)) use.setAttribute(name, value);
+                                else if (name === 'transform' && safeTransform.test(value)) use.setAttribute(name, value);
+                                else if (name === 'class' && safeClass.test(value)) use.setAttribute(name, value);
+                                else if (name === 'id' && PREVIEW_SVG_SAFE_ID_PATTERN.test(value)) use.setAttribute(name, value);
+                                else if (usePassthroughAttrs.has(name) && !/[<>"'`;]/.test(value)) use.setAttribute(name, value);
                             });
                             placeholder.replaceWith(use);
                             return;
@@ -258,15 +275,183 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
             return safeMarkup;
         }
 
+        let inlineSvgInstanceSerial = 0;
+
+        function replaceInlineSvgBlocks(markdownText, replacer) {
+            const source = String(markdownText || '');
+            const tagPattern = /<\/?svg\b[^>]*>/gi;
+            let output = '';
+            let cursor = 0;
+            let match;
+
+            while ((match = tagPattern.exec(source))) {
+                if (/^<\//.test(match[0])) continue;
+                const start = match.index;
+                let depth = /\/\s*>$/.test(match[0]) ? 0 : 1;
+                let end = tagPattern.lastIndex;
+                let nested;
+
+                while (depth > 0 && (nested = tagPattern.exec(source))) {
+                    if (/^<\//.test(nested[0])) depth--;
+                    else if (!/\/\s*>$/.test(nested[0])) depth++;
+                    end = tagPattern.lastIndex;
+                }
+
+                if (depth !== 0) break;
+                output += source.slice(cursor, start);
+                output += replacer(source.slice(start, end));
+                cursor = end;
+            }
+
+            return output + source.slice(cursor);
+        }
+
+        function splitSvgCssSelectors(selectorText) {
+            const selectors = [];
+            let current = '';
+            let quote = '';
+            let depth = 0;
+
+            for (let i = 0; i < selectorText.length; i++) {
+                const char = selectorText[i];
+                if (quote) {
+                    current += char;
+                    if (char === quote && selectorText[i - 1] !== '\\') quote = '';
+                    continue;
+                }
+                if (char === '"' || char === "'") {
+                    quote = char;
+                    current += char;
+                } else if (char === '(' || char === '[') {
+                    depth++;
+                    current += char;
+                } else if (char === ')' || char === ']') {
+                    depth = Math.max(0, depth - 1);
+                    current += char;
+                } else if (char === ',' && depth === 0) {
+                    if (current.trim()) selectors.push(current.trim());
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            if (current.trim()) selectors.push(current.trim());
+            return selectors;
+        }
+
+        function rewriteSvgLocalReferences(value, idMap) {
+            return String(value || '').replace(/url\(\s*#([A-Za-z_][\w:.-]*)\s*\)/g, (all, id) => {
+                return idMap.has(id) ? `url(#${idMap.get(id)})` : all;
+            });
+        }
+
+        function scopeInlineSvgCss(cssText, scopeId, idMap) {
+            const css = String(cssText || '');
+            if (/@import\b|@font-face\b|@keyframes\b|@property\b|@namespace\b|expression\s*\(|javascript\s*:|behavior\s*:|-moz-binding|url\(\s*(?!["']?\s*#)/i.test(css)) {
+                return '';
+            }
+
+            let result = '';
+            let cursor = 0;
+            while (cursor < css.length) {
+                while (cursor < css.length && /\s/.test(css[cursor])) cursor++;
+                if (cursor >= css.length) break;
+
+                const open = css.indexOf('{', cursor);
+                if (open === -1) break;
+                let depth = 1;
+                let index = open + 1;
+                let quote = '';
+                while (index < css.length && depth > 0) {
+                    const char = css[index];
+                    if (quote) {
+                        if (char === quote && css[index - 1] !== '\\') quote = '';
+                    } else if (char === '"' || char === "'") {
+                        quote = char;
+                    } else if (char === '{') {
+                        depth++;
+                    } else if (char === '}') {
+                        depth--;
+                    }
+                    index++;
+                }
+                if (depth !== 0) break;
+
+                const header = css.slice(cursor, open).trim();
+                const body = css.slice(open + 1, index - 1);
+                if (/^@(media|supports|layer)\b/i.test(header)) {
+                    const nested = scopeInlineSvgCss(body, scopeId, idMap);
+                    if (nested) result += `${header}{${nested}}`;
+                } else if (!header.startsWith('@')) {
+                    const scopedSelectors = splitSvgCssSelectors(header).map((selector) => {
+                        if (/(?:^|[\s>+~])(html|body|:root)(?:$|[\s>+~.#[:])|#preview-content|\.markdown-body|:global\b/i.test(selector)) {
+                            return '';
+                        }
+                        const rewritten = selector.replace(/#([A-Za-z_][\w:.-]*)/g, (all, id) => {
+                            return idMap.has(id) ? `#${idMap.get(id)}` : all;
+                        });
+                        if (/^svg(?=$|[\s>+~.#[:])/i.test(rewritten)) {
+                            return rewritten.replace(/^svg/i, `#${scopeId}`);
+                        }
+                        return `#${scopeId} ${rewritten}`;
+                    }).filter(Boolean);
+                    if (scopedSelectors.length) {
+                        result += `${scopedSelectors.join(',')}{${rewriteSvgLocalReferences(body, idMap)}}`;
+                    }
+                }
+                cursor = index;
+            }
+            return result;
+        }
+
+        function isolateInlineSvg(svg) {
+            const scopeId = `inline-svg-scope-${Date.now().toString(36)}-${inlineSvgInstanceSerial++}`;
+            const idMap = new Map();
+
+            [svg, ...svg.querySelectorAll('[id]')].forEach((node) => {
+                const oldId = node.getAttribute('id');
+                if (!oldId || !PREVIEW_SVG_SAFE_ID_PATTERN.test(oldId)) return;
+                const newId = node === svg ? scopeId : `${scopeId}-${oldId}`;
+                idMap.set(oldId, newId);
+                node.setAttribute('id', newId);
+            });
+            svg.id = scopeId;
+
+            [svg, ...svg.querySelectorAll('*')].forEach((node) => {
+                Array.from(node.attributes).forEach((attr) => {
+                    if ((attr.name === 'href' || attr.name === 'xlink:href') && /^#[A-Za-z_][\w:.-]*$/.test(attr.value)) {
+                        const oldId = attr.value.slice(1);
+                        if (idMap.has(oldId)) node.setAttribute('href', `#${idMap.get(oldId)}`);
+                        if (attr.name === 'xlink:href') node.removeAttribute(attr.name);
+                        return;
+                    }
+                    if (attr.name === 'aria-labelledby') {
+                        node.setAttribute(attr.name, attr.value.split(/\s+/).map((id) => idMap.get(id) || id).join(' '));
+                        return;
+                    }
+                    const rewritten = rewriteSvgLocalReferences(attr.value, idMap);
+                    if (rewritten !== attr.value) node.setAttribute(attr.name, rewritten);
+                });
+            });
+
+            svg.querySelectorAll('style').forEach((style) => {
+                const scopedCss = scopeInlineSvgCss(style.textContent || '', scopeId, idMap);
+                if (scopedCss) style.textContent = scopedCss;
+                else style.remove();
+            });
+
+            return svg;
+        }
+
         function prepareInlineSvgMarkupForPreview(markdownText) {
             const svgRecords = [];
-            const preparedMarkdown = String(markdownText || '').replace(/<svg\b[\s\S]*?<\/svg\s*>/gi, (markup) => {
+            const preparedMarkdown = replaceInlineSvgBlocks(markdownText, (markup) => {
                 const safeMarkup = sanitizeSvgMarkupForPreview(markup);
                 const newlinePadding = '\n'.repeat((markup.match(/\n/g) || []).length);
                 if (!safeMarkup) return newlinePadding;
                 const id = `inline-svg-${svgRecords.length}`;
                 svgRecords.push({ id, markup: safeMarkup });
-                return `<span class="inline-svg-placeholder" data-inline-svg-id="${id}"></span>${newlinePadding}`;
+                return `<span class="inline-svg-host" data-inline-svg-id="${id}"></span>${newlinePadding}`;
             });
             return { markdownText: preparedMarkdown, svgRecords };
         }
@@ -279,7 +464,8 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
                 if (!markup) return;
                 const parsed = new DOMParser().parseFromString(markup, 'image/svg+xml');
                 const svg = parsed.documentElement;
-                if (svg?.localName === 'svg') placeholder.replaceWith(document.importNode(svg, true));
+                if (svg?.localName !== 'svg') return;
+                placeholder.replaceChildren(document.importNode(isolateInlineSvg(svg), true));
             });
         }
 
@@ -627,4 +813,3 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
             } else {
                 input.focus();
                 input.select();
-   

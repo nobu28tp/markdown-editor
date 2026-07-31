@@ -252,7 +252,7 @@
         }
 
         // ── App Version ──
-        const APP_VERSION = '5.6.4';
+        const APP_VERSION = '5.6.5';
 
         // ══════════════════════════════════════
         // 🎨 Document Theme Engine
@@ -424,7 +424,14 @@
         let currentDocTheme = 'github';
         const customThemeStyleTag = document.getElementById('custom-theme-style');
 
-        function prefixCssSelectors(rawCss, prefix) {
+        function excludeInlineSvgTarget(selector) {
+            const pseudoElement = selector.match(/(::[A-Za-z-]+(?:\([^)]*\))?)\s*$/);
+            if (!pseudoElement) return `${selector}:not(.inline-svg-host *)`;
+            const index = pseudoElement.index;
+            return `${selector.slice(0, index)}:not(.inline-svg-host *)${selector.slice(index)}`;
+        }
+
+        function prefixCssSelectors(rawCss, prefix, excludeInlineSvg = false) {
             let result = '';
             let i = 0;
             const css = rawCss.replace(/\/\*[\s\S]*?\*\//g, ''); // コメント除去
@@ -462,7 +469,7 @@
                                 j++;
                             }
                             const innerCss = css.substring(i + 1, j - 1);
-                            result += atRule + '{' + prefixCssSelectors(innerCss, prefix) + '}';
+                            result += atRule + '{' + prefixCssSelectors(innerCss, prefix, excludeInlineSvg) + '}';
                             i = j;
                         }
                     }
@@ -486,6 +493,7 @@
                 const scopedSelectors = selectorBlock.split(',').map(s => {
                     s = s.trim();
                     if (!s) return s;
+                    if (excludeInlineSvg) s = excludeInlineSvgTarget(s);
                     return prefix + ' ' + s;
                 }).join(', ');
 
@@ -498,8 +506,8 @@
 
         function scopeCustomCss(rawCss) {
             if (!rawCss || !rawCss.trim()) return '';
-            const docCss = prefixCssSelectors(rawCss, '#preview-content.markdown-body');
-            const slideCss = prefixCssSelectors(rawCss, '#preview-content .marp-slide-wrapper section');
+            const docCss = prefixCssSelectors(rawCss, '#preview-content.markdown-body', true);
+            const slideCss = prefixCssSelectors(rawCss, '#preview-content .marp-slide-wrapper section', true);
             return '/* === Document Mode === */\n' + docCss + '\n\n/* === Slide Mode === */\n' + slideCss;
         }
 
@@ -668,4 +676,3 @@
                     const file = e.target.files[0];
                     if (!file) return;
                     const reader = new FileReader();
- 

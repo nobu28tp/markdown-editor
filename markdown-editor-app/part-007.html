@@ -138,11 +138,7 @@
 
                 svgElement.querySelectorAll('use').forEach((node) => {
                     const placeholder = createPlaceholder('use', {
-                        href: node.getAttribute('href') || '',
-                        x: node.getAttribute('x') || '',
-                        y: node.getAttribute('y') || '',
-                        width: node.getAttribute('width') || '',
-                        height: node.getAttribute('height') || ''
+                        attrs: Object.fromEntries(Array.from(node.attributes).map((attr) => [attr.name, attr.value]))
                     });
                     node.replaceWith(placeholder);
                 });
@@ -162,6 +158,18 @@
                 const safeLength = /^-?(?:\d+|\d*\.\d+)(?:%|px)?$/;
                 const safeNumber = /^-?(?:\d+|\d*\.\d+)$/;
                 const safeColor = /^(?:#[0-9a-fA-F]{3,8}|(?:rgb|rgba|hsl|hsla)\([^)]*\)|[a-zA-Z]+)$/;
+                const safeTransform = /^[a-zA-Z0-9(),.\s+-]+$/;
+                const safeClass = /^[A-Za-z_][\w: .-]*$/;
+                const safePaint = /^(?:none|currentColor|context-fill|context-stroke|#[0-9a-fA-F]{3,8}|(?:rgb|rgba|hsl|hsla)\([^)]*\)|[a-zA-Z]+|url\(\s*#[A-Za-z_][\w:.-]*\s*\))$/;
+                const useLengthAttrs = new Set(['x', 'y', 'width', 'height', 'stroke-width', 'stroke-dashoffset']);
+                const useNumberAttrs = new Set(['opacity', 'fill-opacity', 'stroke-opacity']);
+                const usePaintAttrs = new Set(['fill', 'stroke']);
+                const usePassthroughAttrs = new Set([
+                    'id', 'class', 'transform', 'stroke-linecap', 'stroke-linejoin',
+                    'stroke-dasharray', 'fill-rule', 'clip-rule', 'vector-effect',
+                    'filter', 'clip-path', 'mask', 'marker-start', 'marker-mid', 'marker-end',
+                    'aria-label', 'aria-labelledby', 'role'
+                ]);
 
                 return {
                     source,
@@ -172,14 +180,23 @@
                             if (!placeholder) return;
 
                             if (type === 'use') {
-                                if (!/^#[A-Za-z_][\w:.-]*$/.test(record.href)) {
+                                const attrs = record.attrs || {};
+                                const href = (attrs.href || attrs['xlink:href'] || '').trim();
+                                if (!/^#[A-Za-z_][\w:.-]*$/.test(href)) {
                                     placeholder.remove();
                                     return;
                                 }
                                 const use = cleanDocumentForSvg.createElementNS('http://www.w3.org/2000/svg', 'use');
-                                use.setAttribute('href', record.href);
-                                ['x', 'y', 'width', 'height'].forEach((name) => {
-                                    if (record[name] && safeLength.test(record[name])) use.setAttribute(name, record[name]);
+                                use.setAttribute('href', href);
+                                Object.entries(attrs).forEach(([name, value]) => {
+                                    if (!value || name === 'href' || name === 'xlink:href') return;
+                                    if (useLengthAttrs.has(name) && safeLength.test(value)) use.setAttribute(name, value);
+                                    else if (useNumberAttrs.has(name) && safeNumber.test(value)) use.setAttribute(name, value);
+                                    else if (usePaintAttrs.has(name) && safePaint.test(value)) use.setAttribute(name, value);
+                                    else if (name === 'transform' && safeTransform.test(value)) use.setAttribute(name, value);
+                                    else if (name === 'class' && safeClass.test(value)) use.setAttribute(name, value);
+                                    else if (name === 'id' && SVG_SAFE_ID_PATTERN.test(value)) use.setAttribute(name, value);
+                                    else if (usePassthroughAttrs.has(name) && !/[<>"'`;]/.test(value)) use.setAttribute(name, value);
                                 });
                                 placeholder.replaceWith(use);
                                 return;
