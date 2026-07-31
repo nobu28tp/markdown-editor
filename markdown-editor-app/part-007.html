@@ -70,19 +70,68 @@
                 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-opacity',
                 'opacity', 'transform', 'preserveAspectRatio', 'text-anchor', 'font-size',
                 'font-family', 'font-weight', 'dominant-baseline', 'offset', 'stop-color',
-                'stop-opacity', 'id', 'class', 'role', 'aria-label', 'clip-path', 'mask',
-                'gradientUnits', 'gradientTransform', 'patternUnits'
+                'stop-opacity', 'id', 'class', 'role', 'aria-label', 'aria-labelledby',
+                'clip-path', 'mask', 'filter', 'marker-start', 'marker-mid', 'marker-end',
+                'markerUnits', 'markerWidth', 'markerHeight', 'refX', 'refY', 'orient',
+                'stroke-dasharray', 'stroke-dashoffset', 'letter-spacing',
+                'dx', 'dy', 'stdDeviation', 'flood-color', 'flood-opacity',
+                'gradientUnits', 'gradientTransform', 'patternUnits', 'href'
             ];
+
+            const SVG_ALLOWED_TAGS = [
+                'svg', 'defs', 'style', 'g', 'path', 'rect', 'circle', 'ellipse', 'line',
+                'polyline', 'polygon', 'text', 'tspan', 'title', 'desc', 'linearGradient',
+                'radialGradient', 'stop', 'clipPath', 'mask', 'pattern',
+                'symbol', 'use', 'filter', 'feDropShadow', 'marker'
+            ];
+
+            const SVG_SAFE_ID_PATTERN = /^[A-Za-z_][\w:.-]*$/;
+            const SVG_LOCAL_URL_PATTERN = /^url\(\s*#([A-Za-z_][\w:.-]*)\s*\)$/;
+            const SVG_URL_REFERENCE_ATTRS = ['filter', 'clip-path', 'mask', 'marker-start', 'marker-mid', 'marker-end'];
+
+            function keepSafeSvgReferences(svgElement) {
+                const ids = new Set();
+
+                svgElement.querySelectorAll('[id]').forEach((node) => {
+                    const id = node.getAttribute('id') || '';
+                    if (!SVG_SAFE_ID_PATTERN.test(id) || ids.has(id)) {
+                        node.removeAttribute('id');
+                        return;
+                    }
+                    ids.add(id);
+                });
+
+                svgElement.querySelectorAll('use').forEach((node) => {
+                    const href = (node.getAttribute('href') || '').trim();
+                    if (!href.startsWith('#') || !ids.has(href.slice(1))) node.remove();
+                });
+
+                SVG_URL_REFERENCE_ATTRS.forEach((attribute) => {
+                    svgElement.querySelectorAll('[' + attribute + ']').forEach((node) => {
+                        const value = (node.getAttribute(attribute) || '').trim();
+                        if (!value.startsWith('url(')) return;
+                        const match = value.match(SVG_LOCAL_URL_PATTERN);
+                        if (!match || !ids.has(match[1])) node.removeAttribute(attribute);
+                    });
+                });
+
+                svgElement.querySelectorAll('style').forEach((node) => {
+                    const css = node.textContent || '';
+                    if (/@import\b|expression\s*\(|url\(\s*(?!["']?\s*#)/i.test(css)) node.remove();
+                });
+
+                return svgElement;
+            }
 
             function getSvgSanitizeOptions(options = {}) {
                 const allowForeignObject = options.allowForeignObject === true;
                 return {
-                    USE_PROFILES: { html: true, svg: true },
-                    ADD_TAGS: options.addTags || [],
+                    USE_PROFILES: { html: true, svg: true, svgFilters: true },
+                    ADD_TAGS: [...SVG_ALLOWED_TAGS, ...(options.addTags || [])],
                     ADD_ATTR: [...SVG_ALLOWED_ATTRS, ...(options.addAttrs || [])],
                     FORBID_TAGS: allowForeignObject
-                        ? ['script', 'image', 'use', 'animate', 'animateMotion', 'animateTransform', 'set', 'audio', 'video', 'iframe', 'object', 'embed']
-                        : ['script', 'foreignObject', 'image', 'use', 'animate', 'animateMotion', 'animateTransform', 'set', 'audio', 'video', 'iframe', 'object', 'embed'],
+                        ? ['script', 'image', 'animate', 'animateMotion', 'animateTransform', 'set', 'audio', 'video', 'iframe', 'object', 'embed']
+                        : ['script', 'foreignObject', 'image', 'animate', 'animateMotion', 'animateTransform', 'set', 'audio', 'video', 'iframe', 'object', 'embed'],
                     FORBID_ATTR: ['onabort', 'onerror', 'onload', 'onclick', 'onfocus', 'onmouseenter', 'onmouseleave', 'onmouseover', 'onmouseup', 'onmousedown']
                 };
             }
@@ -113,6 +162,7 @@
                 if (!svgElement.getAttribute('xmlns')) {
                     svgElement.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
                 }
+                keepSafeSvgReferences(svgElement);
                 return new XMLSerializer().serializeToString(svgElement);
             }
 
