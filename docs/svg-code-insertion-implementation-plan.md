@@ -1,7 +1,7 @@
 # SVGコード挿入対応 実装詳細プラン
 
 作成日: 2026-07-10  
-対象: `tool/html-tools/new-markdown-editor/index.html`
+対象: `tool/html-tools/markdown-editor/index.html`
 
 ## 1. 目的
 
@@ -16,7 +16,7 @@ Markdown Editorで、SVGをBase64データURIに変換せず、`<svg>...</svg>` 
 | ツールバー | 既存の画像挿入ボタンから「画像URL」と「SVGコード」を選べるようにする。 |
 | SVGの入力 | ダイアログでコードを貼り付ける。未入力時は編集可能なSVGテンプレートを挿入する。 |
 | クリップボード | `image/svg+xml` はSVGテキストとして挿入する。PNG/JPEGなどは現在どおりJPEGのBase64埋め込みを維持する。 |
-| プレビュー | 文書モードとスライドモードの双方で、安全なSVGを表示する。 |
+| プレビュー | 文書プレビューで安全なSVGを表示する。 |
 | 保存 | SVGを通常のMarkdown本文として保存する。別ファイルや画像アセットは作らない。 |
 | エクスポート | HTMLではSVGを保持する。PDF/Wordなどの既存SVG-to-PNG変換経路を確認し、失敗時を扱う。 |
 
@@ -26,7 +26,7 @@ Markdown Editorで、SVGをBase64データURIに変換せず、`<svg>...</svg>` 
 
 現在は、画像ボタンがMarkdown画像構文 `![alt](URL)` を挿入する。クリップボードの画像はCanvas経由でJPEG Base64に変換している。SVGもこの経路に入ると、コードではなく画像データになる。
 
-プレビューではスライドモードにSVG向けのDOMPurify設定がある一方、文書モードはSVGを明示した許可設定を持たない。そのため、SVGコードを本文へ直接書いた場合の表示仕様が分散しており、将来のライブラリ更新でも壊れにくい形になっていない。
+プレビューではSVGを明示したDOMPurify設定を使う。そのため、SVGコードを本文へ直接書いた場合の表示仕様を文書プレビューに集約し、将来のライブラリ更新でも壊れにくい形にする。
 
 PDF/WordなどのエクスポートにはSVGをPNGに変換する既存処理がある。外部画像やWebフォントを参照するSVGはCanvasのCORS制約で変換に失敗する可能性がある。
 
@@ -89,7 +89,7 @@ PDF/WordなどのエクスポートにはSVGをPNGに変換する既存処理が
 
 ### 5.3 プレビューのサニタイズを共通化
 
-`renderMarkdown()` で文書モードとスライドモードに分かれているDOMPurify設定を、共通のヘルパーに整理する。
+`renderMarkdown()` のDOMPurify設定を、共通のヘルパーに整理する。
 
 | ヘルパー | 用途 |
 | --- | --- |
@@ -97,7 +97,7 @@ PDF/WordなどのエクスポートにはSVGをPNGに変換する既存処理が
 | `sanitizeMarkdownPreviewHtml(html)` | 文書モードのHTMLを安全にサニタイズする。 |
 | `sanitizeSvgMarkupForInsert(markup)` | 挿入前のSVG検証と正規化を行う。 |
 
-文書モードは `USE_PROFILES: { html: true, svg: true }` を明示する。スライドモードのMarp本体から生成されたHTMLを無条件に変更する既存の例外は維持する。ただし、利用者が入力したSVGに対しては挿入時の検証を必ず通す。
+文書プレビューは `USE_PROFILES: { html: true, svg: true }` を明示する。利用者が入力したSVGに対しては挿入時の検証を必ず通す。
 
 ### 5.4 CSSと表示サイズ
 
