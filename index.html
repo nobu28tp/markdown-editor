@@ -33072,10 +33072,6 @@ module.exports = {
 
             // ローカルフォルダ連携モーダルの開閉
             const localFolderModal = document.getElementById('local-folder-modal');
-            const closeLocalFolderModal = () => {
-                localFolderModal.classList.remove('active');
-                localFolderModal.setAttribute('aria-hidden', 'true');
-            };
             document.getElementById('btn-local-sync').addEventListener('click', () => {
                 localFolderModal.classList.add('active');
                 localFolderModal.setAttribute('aria-hidden', 'false');
@@ -33187,13 +33183,18 @@ module.exports = {
             });
 
             document.getElementById('btn-popout-preview').addEventListener('click', () => {
-                const newWin = window.open('', '_blank', 'noopener,noreferrer');
+                const newWin = openHtmlPreviewWindow();
                 if (!newWin) {
                     alert('ポップアップがブロックされました。ブラウザの設定を確認してください。');
                     return;
                 }
-                newWin.document.write(generateHtmlExportContent());
-                newWin.document.close();
+                try {
+                    writeHtmlPreviewWindow(newWin, generateHtmlExportContent());
+                } catch (error) {
+                    console.error('Pop-out preview failed:', error);
+                    try { newWin.close(); } catch (_) {}
+                    alert(error.message || 'プレビュー生成中にエラーが発生しました。');
+                }
             });
 
             // Help Modal functionalities
@@ -34697,7 +34698,7 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
                 .forEach(key => localStorage.removeItem(key));
         }
 
-        function persistDraft(reason = 'idle') {
+        function persistDraft(reason = 'idle', options = {}) {
             if (!editor || isGeneratedFullReadOnly) return false;
             try {
                 const content = editor.getValue();
@@ -34716,7 +34717,7 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
                 return true;
             } catch (error) {
                 console.error('Draft save failed:', error);
-                updateStatus('error', '下書きを保存できません');
+                if (!options.silent) updateStatus('error', '下書きを保存できません');
                 return false;
             }
         }
@@ -36518,6 +36519,102 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
 </html>`;
         }
 
+        // ポップアップ判定はクリック直後のユーザー操作中に行う必要がある。
+        // 大きな文書の生成後に window.open() すると、Edge/Chromeでブロックされることがある。
+        function openHtmlPreviewWindow() {
+            const previewWindow = window.open('', '_blank');
+            if (!previewWindow) return null;
+            try {
+                previewWindow.document.title = 'HTMLプレビュー生成中';
+                if (previewWindow.document.body) {
+                    previewWindow.document.body.textContent = 'HTMLプレビューを生成しています…';
+                    previewWindow.document.body.style.cssText = 'font-family: system-ui, sans-serif; padding: 2rem; color: #24292f;';
+                }
+            } catch (error) {
+                console.warn('HTML preview window initialization failed:', error);
+            }
+            return previewWindow;
+        }
+
+        function writeHtmlPreviewWindow(previewWindow, content) {
+            const blobUrl = URL.createObjectURL(new Blob([content], { type: 'text/html;charset=utf-8' }));
+            let revoked = false;
+            const revokeBlobUrl = () => {
+                if (revoked) return;
+                revoked = true;
+                URL.revokeObjectURL(blobUrl);
+            };
+
+            try {
+                if (!previewWindow || previewWindow.closed) {
+                    throw new Error('HTMLプレビュー用の別タブを開けませんでした。');
+                }
+                try {
+                    previewWindow.opener = null;
+                } catch (error) {
+                    // 一部ブラウザでは別タブの opener 設定が読み取り専用のため、表示処理は継続する。
+                    console.warn('HTML preview opener isolation failed:', error);
+                }
+                previewWindow.addEventListener('load', () => {
+                    // 読み込み完了後も、印刷や画像確認の時間を確保してから解放する。
+                    setTimeout(revokeBlobUrl, 60 * 1000);
+                }, { once: true });
+                previewWindow.location.replace(blobUrl);
+                previewWindow.focus();
+            } catch (error) {
+                revokeBlobUrl();
+                throw error;
+            }
+
+            // loadイベントが取れないブラウザでもBlob URLを残し続けない。
+            setTimeout(revokeBlobUrl, 10 * 60 * 1000);
+        }
+
+        function closeLocalFolderModal() {
+            const localFolderModal = document.getElementById('local-folder-modal');
+            if (!localFolderModal) return;
+            localFolderModal.classList.remove('active');
+            localFolderModal.setAttribute('aria-hidden', 'true');
+        }
+
+        function showInlineHtmlPreview(content) {
+            let modal = document.getElementById('html-inline-preview-modal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'html-inline-preview-modal';
+                modal.className = 'modal-overlay';
+                modal.setAttribute('aria-hidden', 'true');
+                modal.innerHTML = `
+                    <div class="modal-content" style="width:min(1400px,96vw);height:min(92vh,1000px);max-width:none;max-height:none;min-width:320px;min-height:240px;resize:both;overflow:hidden;display:flex;flex-direction:column;">
+                        <div class="modal-header">
+                            <h2>HTMLプレビュー</h2>
+                            <button type="button" class="btn-close" aria-label="HTMLプレビューを閉じる">×</button>
+                        </div>
+                        <div style="flex:1;min-height:0;padding:0;background:#fff;">
+                            <iframe title="HTMLプレビュー" sandbox="allow-scripts" style="display:block;width:100%;height:100%;border:0;background:#fff;"></iframe>
+                        </div>
+                    </div>`;
+                document.body.appendChild(modal);
+                const close = () => {
+                    modal.classList.remove('active');
+                    modal.setAttribute('aria-hidden', 'true');
+                    const frame = modal.querySelector('iframe');
+                    if (frame) frame.srcdoc = '';
+                };
+                modal.querySelector('.btn-close').addEventListener('click', close);
+                modal.addEventListener('click', event => {
+                    if (event.target === modal) close();
+                });
+            }
+
+            const frame = modal.querySelector('iframe');
+            if (!frame) throw new Error('HTMLプレビュー画面を初期化できません。');
+            frame.srcdoc = content;
+            modal.classList.add('active');
+            modal.setAttribute('aria-hidden', 'false');
+            modal.querySelector('.btn-close').focus();
+        }
+
         async function handleExportHtml() {
             try {
                 if (!confirmExport('HTML')) return;
@@ -36533,26 +36630,38 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
             }
         }
 
-        // Preview HTML in a new tab (same content as handleExportHtml but opens in browser)
+        // Preview HTML in a normal browser tab.  If the browser blocks the popup,
+        // fall back to the resizable in-editor preview instead of showing an error.
         async function handlePreviewHtml() {
+            let newWin = null;
             try {
-                if (!confirmExport('HTMLプレビュー')) return;
+                // window.open() must run directly from the user's click before the
+                // large HTML document is generated, otherwise Edge/Chrome may block it.
+                try {
+                    newWin = openHtmlPreviewWindow();
+                } catch (error) {
+                    console.warn('HTML preview tab could not be opened:', error);
+                }
                 updateStatus('saving', 'HTMLプレビュー生成中...');
                 const content = generateHtmlExportContent();
 
-                // 別タブでHTMLプレビューを開く
-                const newWin = window.open('', '_blank', 'noopener,noreferrer');
-                if (!newWin) {
-                    alert('ポップアップがブロックされました。ブラウザの設定を確認してください。');
-                    updateStatus('normal', '');
-                    return;
+                if (newWin) {
+                    try {
+                        writeHtmlPreviewWindow(newWin, content);
+                        updateStatus('saved', 'HTMLプレビューを別タブで表示しました');
+                        return;
+                    } catch (error) {
+                        console.warn('HTML preview tab failed; using inline preview:', error);
+                        try { newWin.close(); } catch (_) {}
+                    }
                 }
-                newWin.document.write(content);
-                newWin.document.close();
-                updateStatus('saved', 'HTMLプレビュー表示完了');
+
+                showInlineHtmlPreview(content);
+                updateStatus('saved', 'HTMLプレビューを画面内に表示しました');
 
             } catch (err) {
                 console.error('HTML preview failed:', err);
+                try { if (newWin && !newWin.closed) newWin.close(); } catch (_) {}
                 updateStatus('normal', 'プレビュー失敗');
                 alert(err.message || 'HTMLプレビュー生成中にエラーが発生しました。');
             }
@@ -36571,6 +36680,9 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
         let localFolderConnectionGeneration = 0;
         let localFolderConnectPromise = null;
         let localFolderAutoConnectStarted = false;
+        let localFileLoadPromise = null;
+        let localFileLoadRequestId = 0;
+        const LOCAL_FOLDER_RETRY_DELAY_MS = 250;
 
         function withLocalFolderTimeout(operation, label, timeoutMs = LOCAL_FOLDER_OPERATION_TIMEOUT_MS) {
             return new Promise((resolve, reject) => {
@@ -36596,6 +36708,30 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
                         reject(error);
                     });
             });
+        }
+
+        function isRetryableLocalFolderError(error) {
+            const name = String(error?.name || '');
+            if (['NotAllowedError', 'SecurityError', 'NotFoundError'].includes(name)) return false;
+            if (['AbortError', 'TimeoutError'].includes(name)) return false;
+            if (['InvalidStateError', 'NotReadableError', 'NetworkError', 'UnknownError', 'TypeError'].includes(name)) return true;
+            const message = String(error?.message || error || '').toLowerCase();
+            return /temporar|busy|locked|not ready|failed to read|could not read|読み込めません|一時的/.test(message);
+        }
+
+        async function withLocalFolderRetry(operation, label, attempts = 2) {
+            let lastError;
+            for (let attempt = 0; attempt < attempts; attempt += 1) {
+                try {
+                    return await operation();
+                } catch (error) {
+                    lastError = error;
+                    if (attempt >= attempts - 1 || !isRetryableLocalFolderError(error)) throw error;
+                    await new Promise(resolve => setTimeout(resolve, LOCAL_FOLDER_RETRY_DELAY_MS * (attempt + 1)));
+                    console.warn(`${label}を再試行します (${attempt + 2}/${attempts})`, error);
+                }
+            }
+            throw lastError || new Error(`${label}に失敗しました。`);
         }
 
         function renderLocalFolderError(fileListEl, message) {
@@ -36728,38 +36864,40 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
             if (!(await verifyLocalPermission(fileHandle, false, { request: true }))) {
                 throw new Error('ファイルの読み込み権限がありません。');
             }
-            const file = await withLocalFolderTimeout(
-                () => fileHandle.getFile(),
-                'ファイル取得'
-            );
-            if (typeof FileReader === 'undefined') {
-                return await withLocalFolderTimeout(() => file.text(), 'ファイル読込');
-            }
-
-            return await new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                let settled = false;
-                const timer = setTimeout(() => {
-                    if (settled) return;
-                    settled = true;
-                    try { reader.abort(); } catch (_) {}
-                    reject(new Error('ファイル読込がタイムアウトしました。'));
-                }, LOCAL_FOLDER_OPERATION_TIMEOUT_MS);
-                const finish = (callback, value) => {
-                    if (settled) return;
-                    settled = true;
-                    clearTimeout(timer);
-                    callback(value);
-                };
-                reader.onload = (event) => finish(resolve, event.target.result);
-                reader.onerror = () => finish(reject, reader.error || new Error('ファイル読込に失敗しました。'));
-                reader.onabort = () => finish(reject, new Error('ファイル読込が中断されました。'));
-                try {
-                    reader.readAsText(file, encoding);
-                } catch (err) {
-                    finish(reject, err);
+            return withLocalFolderRetry(async () => {
+                const file = await withLocalFolderTimeout(
+                    () => fileHandle.getFile(),
+                    'ファイル取得'
+                );
+                if (typeof FileReader === 'undefined') {
+                    return await withLocalFolderTimeout(() => file.text(), 'ファイル読込');
                 }
-            });
+
+                return await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    let settled = false;
+                    const timer = setTimeout(() => {
+                        if (settled) return;
+                        settled = true;
+                        try { reader.abort(); } catch (_) {}
+                        reject(new Error('ファイル読込がタイムアウトしました。'));
+                    }, LOCAL_FOLDER_OPERATION_TIMEOUT_MS);
+                    const finish = (callback, value) => {
+                        if (settled) return;
+                        settled = true;
+                        clearTimeout(timer);
+                        callback(value);
+                    };
+                    reader.onload = (event) => finish(resolve, event.target.result);
+                    reader.onerror = () => finish(reject, reader.error || new Error('ファイル読込に失敗しました。'));
+                    reader.onabort = () => finish(reject, new Error('ファイル読込が中断されました。'));
+                    try {
+                        reader.readAsText(file, encoding);
+                    } catch (err) {
+                        finish(reject, err);
+                    }
+                });
+            }, 'ファイル読込');
         }
 
         async function writeTextToFileHandle(fileHandle, text) {
@@ -36888,16 +37026,21 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
             return { ok: true, backups };
         }
 
-        async function getActiveLocalFileDirectoryHandle() {
-            if (!activeLocalDirectoryHandle) return null;
-            let dirHandle = activeLocalDirectoryHandle;
-            if (activeLocalFileDirectoryPath) {
-                const parts = activeLocalFileDirectoryPath.split('/');
-                for (const part of parts) {
-                    dirHandle = await dirHandle.getDirectoryHandle(part);
-                }
+        async function getDirectoryHandleAtPath(rootHandle, relativePath = '') {
+            if (!rootHandle) return null;
+            let dirHandle = rootHandle;
+            const parts = String(relativePath || '').split('/').filter(Boolean);
+            for (const part of parts) {
+                dirHandle = await withLocalFolderTimeout(
+                    () => dirHandle.getDirectoryHandle(part),
+                    `サブフォルダ「${part}」の取得`
+                );
             }
             return dirHandle;
+        }
+
+        async function getActiveLocalFileDirectoryHandle() {
+            return getDirectoryHandleAtPath(activeLocalDirectoryHandle, activeLocalFileDirectoryPath);
         }
 
         // アプリ起動時の自動再接続の試み
@@ -36986,7 +37129,8 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
             renderLocalBreadcrumb(path);
 
             try {
-                const result = await withLocalFolderTimeout(async () => {
+                const result = await withLocalFolderRetry(
+                    () => withLocalFolderTimeout(async () => {
                     let dirHandle = directoryHandle;
                     if (path) {
                         const parts = path.split('/');
@@ -37010,7 +37154,9 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
                         }
                     }
                     return { dirHandle, items };
-                }, 'フォルダ走査');
+                    }, 'フォルダ走査'),
+                    'フォルダ走査'
+                );
 
                 if (
                     requestId !== localFolderRequestId ||
@@ -37212,57 +37358,94 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
         }
 
         // 選択されたローカルファイルを読み込む
-        async function loadSelectedLocalFile() {
-            if (!activeLocalFileHandle) {
+        function loadSelectedLocalFile() {
+            if (localFileLoadPromise) return localFileLoadPromise;
+
+            const fileHandle = activeLocalFileHandle;
+            const directoryHandle = activeLocalDirectoryHandle;
+            const directoryPath = activeLocalFileDirectoryPath;
+            if (!fileHandle) {
                 showLocalStatus('⚠️ 読み込むファイルが選択されていません', '#d29922');
-                return;
+                return Promise.resolve(false);
+            }
+            if (!directoryHandle) {
+                showLocalStatus('⚠️ 連携フォルダが選択されていません', '#d29922');
+                return Promise.resolve(false);
             }
 
             if (hasUnsavedChanges && editor.getValue().trim() !== '') {
-                if (!window.confirm('未保存の変更があります。フォルダ内の別文書を読み込みますか？')) return;
+                if (!window.confirm('未保存の変更があります。フォルダ内の別文書を読み込みますか？')) return Promise.resolve(false);
             }
 
-            showLocalStatus('📥 ローカルファイルを読み込み中...', '#58a6ff');
-            try {
-                if (await verifyLocalPermission(activeLocalFileHandle, false)) {
+            const requestId = ++localFileLoadRequestId;
+            const fileName = fileHandle.name;
+            const isCurrentRequest = () => (
+                requestId === localFileLoadRequestId &&
+                activeLocalFileHandle === fileHandle &&
+                activeLocalDirectoryHandle === directoryHandle
+            );
+
+            localFileLoadPromise = (async () => {
+                showLocalStatus('📥 ローカルファイルを読み込み中...', '#58a6ff');
+                try {
+                    if (!(await verifyLocalPermission(fileHandle, false))) {
+                        if (isCurrentRequest()) showLocalStatus('❌ ファイルへのアクセス権限が拒否されました', '#f85149');
+                        return false;
+                    }
+
                     const encoding = document.getElementById('encoding-select').value || 'UTF-8';
                     setDocumentEncoding(encoding);
+                    const text = await readTextFromFileHandle(fileHandle, encoding);
+                    if (!isCurrentRequest()) return false;
 
-                    const text = await readTextFromFileHandle(activeLocalFileHandle, encoding);
-                    activeLocalFileOriginalHash = await getDocumentHash(text);
-                    splitSourceFileHashes = {};
+                    const originalHash = await getDocumentHash(text);
+                    const fileDirectoryHandle = await getDirectoryHandleAtPath(directoryHandle, directoryPath);
+                    const mergedText = await resolveIncludes(text, fileDirectoryHandle);
+                    if (!isCurrentRequest()) return false;
 
-                    const mergedText = await resolveIncludes(text, activeLocalDirectoryHandle);
                     const isFullVersion = isGeneratedFullDocument(text);
-                    setDocumentIdentity(activeLocalFileHandle.name, `${activeLocalFileDirectoryPath}/${activeLocalFileHandle.name}`);
+                    const documentKey = directoryPath ? `${directoryPath}/${fileName}` : fileName;
+                    setDocumentIdentity(fileName, documentKey);
+                    activeLocalFileOriginalHash = originalHash;
+                    splitSourceFileHashes = {};
 
                     setGeneratedFullReadOnly(false);
                     editor.setValue(mergedText);
                     setGeneratedFullReadOnly(isFullVersion);
                     currentDocumentLength = mergedText.length;
                     updatePreview(mergedText);
-                    localStorage.setItem('lumina_autosave', mergedText);
-                    localStorage.setItem(getDraftStorageKey(), JSON.stringify({ version: 1, documentKey: currentDocumentKey, name: activeLocalFileHandle.name, content: mergedText, savedAt: new Date().toISOString(), reason: 'source-open' }));
+
+                    // 本文の読込と復元用下書き保存を分離する。保存容量不足でも読込成功をエラー扱いにしない。
+                    const draftSaved = persistDraft('source-open', { silent: true });
                     hasUnsavedChanges = false;
-                    
+
                     // ドキュメントタイトル入力欄にファイル名（拡張子なし）をセット
                     const docTitleInput = document.getElementById('doc-title-input');
                     if (docTitleInput) {
-                        docTitleInput.value = activeLocalFileHandle.name.replace(/\.md$/, '');
+                        docTitleInput.value = fileName.replace(/\.md$/i, '');
                     }
 
-                    showLocalStatus('✅ ファイルの読み込みに成功しました', '#3fb950');
+                    showLocalStatus(
+                        draftSaved
+                            ? '✅ ファイルの読み込みに成功しました'
+                            : '✅ ファイルを読み込みました（復元用下書きは保存できませんでした）',
+                        draftSaved ? '#3fb950' : '#d29922'
+                    );
                     updateStatus('saved', isFullVersion
                         ? '全体版を閲覧専用で開きました'
-                        : 'フォルダから読込完了');
+                        : draftSaved ? 'フォルダから読込完了' : 'フォルダから読込完了（下書き保存なし）');
                     closeLocalFolderModal();
-                } else {
-                    showLocalStatus('❌ ファイルへのアクセス権限が拒否されました', '#f85149');
+                    return true;
+                } catch (err) {
+                    if (!isCurrentRequest()) return false;
+                    console.error("Local file load failed:", err);
+                    showLocalStatus('❌ 読込エラー: ' + (err.message || '原因不明のエラー'), '#f85149');
+                    return false;
+                } finally {
+                    if (requestId === localFileLoadRequestId) localFileLoadPromise = null;
                 }
-            } catch (err) {
-                console.error("Local file load failed:", err);
-                showLocalStatus('❌ 読込エラー: ' + err.message, '#f85149');
-            }
+            })();
+            return localFileLoadPromise;
         }
 
         // 現在のアクティブなエディタ内容を保存・上書き
