@@ -32276,6 +32276,37 @@ module.exports = {
         const JPEG_QUALITY = 0.85;
         const CHARS_PER_MINUTE_JA = 500; // 日本語の平均読了速度（文字/分）
 
+        // Mermaidグラフ描画崩れ・白飛び防止用の共通CSS保護ルール
+        // HTML出力・HTMLプレビュー・PDF出力の全経路で共有する。
+        const MERMAID_CSS_PROTECTION = `
+        /* Keep Mermaid labels readable in document previews and exports. */
+        .mermaid-container,
+        .markdown-body .mermaid-container,
+        .mermaid-container text,
+        .mermaid-container tspan,
+        .markdown-body .mermaid-container text,
+        .markdown-body .mermaid-container tspan {
+            font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif !important;
+            dominant-baseline: auto !important;
+            alignment-baseline: auto !important;
+            baseline-shift: normal !important;
+        }
+
+        .mermaid-container foreignObject,
+        .mermaid-container foreignObject div,
+        .mermaid-container foreignObject span,
+        .mermaid-container .nodeLabel,
+        .mermaid-container .edgeLabel,
+        .mermaid-container .label,
+        .markdown-body .mermaid-container foreignObject,
+        .markdown-body .mermaid-container foreignObject div,
+        .markdown-body .mermaid-container .nodeLabel {
+            background-color: transparent !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+        }
+        `;
+
         function isPreviewPaneVisible() {
             const previewPane = document.getElementById('preview-pane');
             return previewPane && previewPane.style.display !== 'none';
