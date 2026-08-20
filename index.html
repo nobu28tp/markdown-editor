@@ -6,7 +6,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; object-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https:; connect-src 'self' https://markdown-proofreader.hara-corp.workers.dev http://localhost:8787; frame-src 'self'; form-action 'none';">
-    <title>Markdown Editor (Ver.6.2)</title>
+    <title>Markdown Editor (Ver.6.3)</title>
     <!-- フォントはシステムフォントを優先し、実行時の外部読込を行わない。 -->
 
     <!-- CodeMirror (Editor) -->
@@ -16654,7 +16654,7 @@ return Pe}()
 
     <!-- Icons: 固定のインライン代替。外部ランタイムを読み込まない。 -->
     <script>
-/* Markdown Editor 6.2 source fallback icons. This file is emitted as plain browser JavaScript. */
+/* Markdown Editor 6.3 source fallback icons. This file is emitted as plain browser JavaScript. */
 window.lucide = {
             createIcons({ root = document } = {}) {
                 const glyphs = { bold: 'B', italic: 'I', strikethrough: 'S', 'heading-1': 'H1', 'heading-2': 'H2', 'heading-3': 'H3', link: '↗', image: '▧', 'file-code-2': '</>', table: '▦', code: '{}', list: '•', 'list-ordered': '1.', 'text-quote': '❝', save: '↓', 'file-plus': '+', 'folder-open': '□', folder: '□', 'folder-plus': '+', 'git-branch': '⑂', 'file-text': '▤', 'file-down': '↓', globe: '◎', eye: '◉', palette: '◈', sun: '☼', moon: '☾', menu: '☰', 'help-circle': '?', 'external-link': '↗', 'messages-square': '✎', languages: '文', check: '✓', download: '↓', upload: '↑', settings: '⚙', 'refresh-cw': '↻', 'chevron-right': '›', 'chevron-up': '↑', 'chevron-down': '↓', 'row-insert-bottom': '+', 'row-delete': '−', 'column-insert-right': '+', 'column-delete': '−', 'message-plus': '+', x: '×', 'layout-panel-left': '◫', 'layout-panel-split': '◫', 'pen-tool': '✎' };
@@ -16670,7 +16670,7 @@ window.lucide = {
 
     <!-- app files (inlined) -->
     <style>
-/* Markdown Editor 6.2 source styles. Built into the single-file distribution. */
+/* Markdown Editor 6.3 source styles. Built into the single-file distribution. */
 :root {
             /* 共通フォント */
             --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -17745,6 +17745,61 @@ window.lucide = {
             padding-bottom: .3em;
         }
 
+        /* ── Generated table of contents and footnotes ── */
+        .markdown-toc {
+            margin: 1.25rem 0 2rem;
+            padding: 1rem 1.25rem;
+            border: 1px solid #d0d7de;
+            border-radius: 8px;
+            background: #f6f8fa;
+        }
+
+        .markdown-toc-title {
+            margin-bottom: 0.5rem;
+            color: #24292f;
+            font-weight: 700;
+        }
+
+        .markdown-toc-list,
+        .markdown-body .markdown-toc-list {
+            margin: 0;
+            padding-left: 0;
+            list-style: none;
+        }
+
+        .markdown-toc-item {
+            margin: 0.25rem 0;
+        }
+
+        .markdown-toc-item.toc-level-2 { margin-left: 0.75rem; }
+        .markdown-toc-item.toc-level-3 { margin-left: 1.5rem; }
+        .markdown-toc-item.toc-level-4 { margin-left: 2.25rem; }
+        .markdown-toc-item.toc-level-5 { margin-left: 3rem; }
+        .markdown-toc-item.toc-level-6 { margin-left: 3.75rem; }
+
+        .markdown-footnotes {
+            margin-top: 2.5rem;
+            padding-top: 1rem;
+            border-top: 1px solid #d0d7de;
+            font-size: 0.95em;
+        }
+
+        .markdown-footnotes h2 {
+            margin-top: 0;
+            font-size: 1.25em;
+        }
+
+        .footnote-ref {
+            margin-left: 0.12em;
+            font-size: 0.8em;
+            vertical-align: super;
+        }
+
+        .footnote-backref {
+            margin-left: 0.35em;
+            white-space: nowrap;
+        }
+
         .markdown-body h2 {
             font-size: 1.5em;
             border-bottom: 1px solid #d0d7de;
@@ -18382,7 +18437,7 @@ window.lucide = {
             <div class="header-left">
                 <div class="logo">
                     <i data-lucide="pen-tool"></i>
-                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.6.2)</span>
+                    <h1>Markdown Editor <span style="font-size: 0.7em; color: var(--text-secondary);">(Ver.6.3)</span>
                     </h1>
                 </div>
                 <div class="status-indicator" id="save-status">
@@ -18615,6 +18670,9 @@ window.lucide = {
                     <button class="toolbar-btn" data-format="ul" title="無順序リスト"><i data-lucide="list"></i></button>
                     <button class="toolbar-btn" data-format="ol" title="順序付きリスト"><i data-lucide="list-ordered"></i></button>
                     <button class="toolbar-btn" data-format="quote" title="引用"><i data-lucide="text-quote"></i></button>
+                    <div class="toolbar-separator"></div>
+                    <button class="toolbar-btn" data-format="toc" title="自動目次を挿入（[TOC]）"><i data-lucide="list"></i></button>
+                    <button class="toolbar-btn" data-format="footnote" title="脚注を挿入（参照＋定義）"><i data-lucide="file-text"></i></button>
                     
                     <!-- テーブル操作補助ツール（テーブルにカーソルがある時のみ表示） -->
                     <div id="table-helper-tools" style="display: none; align-items: center; gap: 4px;">
@@ -31952,6 +32010,14 @@ module.exports = {
                             <td><code>### 見出しテキスト</code></td>
                         </tr>
                         <tr>
+                            <td>自動目次</td>
+                            <td><code>[TOC]</code> または <code>[[TOC]]</code></td>
+                        </tr>
+                        <tr>
+                            <td>脚注</td>
+                            <td><code>本文[^1]</code> と <code>[^1]: 説明</code></td>
+                        </tr>
+                        <tr>
                             <td>太字</td>
                             <td><code>**太字**</code></td>
                         </tr>
@@ -32240,7 +32306,7 @@ module.exports = {
 
 
     <script>
-/* Markdown Editor 6.2 source application. This file currently uses browser-compatible TypeScript/JavaScript syntax. */
+/* Markdown Editor 6.3 source application. This file currently uses browser-compatible TypeScript/JavaScript syntax. */
 // DOM Elements
         const editorTextarea = document.getElementById('markdown-editor');
         const previewContainer = document.getElementById('preview-content');
@@ -32555,6 +32621,301 @@ module.exports = {
             }
         }
 
+        // Markdownの拡張記法（目次・脚注）はmarkedのhooksで前処理・後処理する。
+        // これにより、画面内プレビューとHTML/Word/PDF出力で同じ変換結果を使える。
+        let activeMarkdownFeatureContext = null;
+        let lastPreviewSourceText = null;
+
+        function stripMarkdownHeadingText(text) {
+            return String(text || '')
+                .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+                .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+                .replace(/<[^>]*>/g, '')
+                .replace(/[\u0060*_~]/g, '')
+                .replace(/\\([\\\`*{}\[\]()#+.!_-])/g, '$1')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        function createMarkdownHeadingId(text, usedIds) {
+            const normalized = stripMarkdownHeadingText(text).normalize('NFKC').toLowerCase();
+            const base = normalized
+                .replace(/[^\p{L}\p{N}._:-]+/gu, '-')
+                .replace(/^-+|-+$/g, '') || 'section';
+            let id = base;
+            let duplicate = 1;
+            while (usedIds.has(id)) id = base + '-' + duplicate++;
+            usedIds.add(id);
+            return id;
+        }
+
+        function collectMarkdownHeadings(source) {
+            const headings = [];
+            const usedIds = new Set();
+            const lines = String(source || '').split('\n');
+            let fenceCharacter = '';
+            let fenceLength = 0;
+            let inComment = false;
+
+            lines.forEach((line, lineIndex) => {
+                const fenceMatch = line.match(/^\s{0,3}(\u0060{3,}|~{3,})/);
+                if (fenceCharacter) {
+                    if (
+                        fenceMatch &&
+                        fenceMatch[1][0] === fenceCharacter &&
+                        fenceMatch[1].length >= fenceLength
+                    ) {
+                        fenceCharacter = '';
+                        fenceLength = 0;
+                    }
+                    return;
+                }
+                if (fenceMatch) {
+                    fenceCharacter = fenceMatch[1][0];
+                    fenceLength = fenceMatch[1].length;
+                    return;
+                }
+
+                let lineText = line;
+                if (inComment) {
+                    const commentEnd = lineText.indexOf('-->');
+                    if (commentEnd < 0) return;
+                    inComment = false;
+                    lineText = lineText.slice(commentEnd + 3);
+                }
+                const commentStart = lineText.indexOf('<!--');
+                if (commentStart >= 0) {
+                    const commentEnd = lineText.indexOf('-->', commentStart + 4);
+                    if (commentEnd >= 0) {
+                        lineText = lineText.slice(0, commentStart) + lineText.slice(commentEnd + 3);
+                    } else {
+                        inComment = true;
+                        lineText = lineText.slice(0, commentStart);
+                    }
+                }
+
+                const match = lineText.match(/^ {0,3}(#{1,6})[ \t]+(.+?)[ \t]*$/);
+                if (!match) return;
+                const headingText = match[2].replace(/[ \t]+#+[ \t]*$/, '').trim();
+                headings.push({
+                    line: lineIndex,
+                    level: match[1].length,
+                    text: stripMarkdownHeadingText(headingText),
+                    id: createMarkdownHeadingId(headingText, usedIds)
+                });
+            });
+            return headings;
+        }
+
+        function transformOutsideMarkdownFences(source, transformLine) {
+            const lines = String(source || '').split('\n');
+            let fenceCharacter = '';
+            let fenceLength = 0;
+            const transformed = [];
+
+            lines.forEach(line => {
+                const fenceMatch = line.match(/^\s{0,3}(\u0060{3,}|~{3,})/);
+                if (fenceCharacter) {
+                    transformed.push(line);
+                    if (
+                        fenceMatch &&
+                        fenceMatch[1][0] === fenceCharacter &&
+                        fenceMatch[1].length >= fenceLength
+                    ) {
+                        fenceCharacter = '';
+                        fenceLength = 0;
+                    }
+                    return;
+                }
+                if (fenceMatch) {
+                    fenceCharacter = fenceMatch[1][0];
+                    fenceLength = fenceMatch[1].length;
+                    transformed.push(line);
+                    return;
+                }
+                transformed.push(transformLine(line));
+            });
+            return transformed.join('\n');
+        }
+
+        function replaceOutsideMarkdownInlineCode(line, replacer) {
+            return String(line || '')
+                .split(/(\u0060+[^\u0060]*\u0060+)/g)
+                .map((part, index) => index % 2 === 0 ? replacer(part) : part)
+                .join('');
+        }
+
+        function buildMarkdownTocHtml(headings) {
+            if (!headings.length) {
+                return '<nav class="markdown-toc" aria-label="目次"><div class="markdown-toc-title">目次</div><p>見出しが見つかりません。</p></nav>';
+            }
+            const items = headings.map(heading => (
+                '<li class="markdown-toc-item toc-level-' + heading.level + '">' +
+                '<a href="#' + escapeHtmlText(heading.id) + '">' +
+                escapeHtmlText(heading.text || '無題の見出し') +
+                '</a></li>'
+            )).join('');
+            return '<nav class="markdown-toc" aria-label="目次">' +
+                '<div class="markdown-toc-title">目次</div>' +
+                '<ul class="markdown-toc-list">' + items + '</ul>' +
+                '</nav>';
+        }
+
+        function buildMarkdownFootnotesHtml(context) {
+            const orderedLabels = [];
+            const seenLabels = new Set();
+            context.footnoteReferences.forEach(reference => {
+                if (!seenLabels.has(reference.label)) {
+                    seenLabels.add(reference.label);
+                    orderedLabels.push(reference.label);
+                }
+            });
+            context.definitionOrder.forEach(label => {
+                if (!seenLabels.has(label)) {
+                    seenLabels.add(label);
+                    orderedLabels.push(label);
+                }
+            });
+            if (!orderedLabels.length) return '';
+
+            const items = orderedLabels.map(label => {
+                const footnoteId = context.footnoteIdByLabel.get(label);
+                const description = escapeHtmlText(context.definitions.get(label) || '')
+                    .replace(/\n/g, '<br>\n');
+                const references = context.referencesByLabel.get(label) || [];
+                const backlinks = references.map((reference, index) => (
+                    '<a class="footnote-backref" href="#' + escapeHtmlText(reference.refId) +
+                    '" aria-label="本文へ戻る">↩' + (index > 0 ? '<sup>' + (index + 1) + '</sup>' : '') +
+                    '</a>'
+                )).join('');
+                return '<li id="' + escapeHtmlText(footnoteId) + '">' +
+                    description + (backlinks ? ' ' + backlinks : '') + '</li>';
+            }).join('');
+
+            return '<section class="markdown-footnotes" aria-labelledby="markdown-footnotes-title">' +
+                '<h2 id="markdown-footnotes-title">脚注</h2>' +
+                '<ol>' + items + '</ol>' +
+                '</section>';
+        }
+
+        function createMarkdownFeatureContext(source) {
+            const original = String(source || '');
+            const headings = collectMarkdownHeadings(original);
+            const lines = original.split('\n');
+            const bodyLines = [];
+            const definitions = new Map();
+            const definitionOrder = [];
+            let activeDefinition = null;
+            let fenceCharacter = '';
+            let fenceLength = 0;
+
+            lines.forEach(line => {
+                const fenceMatch = line.match(/^\s{0,3}(\u0060{3,}|~{3,})/);
+                if (fenceCharacter) {
+                    bodyLines.push(line);
+                    if (
+                        fenceMatch &&
+                        fenceMatch[1][0] === fenceCharacter &&
+                        fenceMatch[1].length >= fenceLength
+                    ) {
+                        fenceCharacter = '';
+                        fenceLength = 0;
+                    }
+                    return;
+                }
+                if (fenceMatch) {
+                    activeDefinition = null;
+                    fenceCharacter = fenceMatch[1][0];
+                    fenceLength = fenceMatch[1].length;
+                    bodyLines.push(line);
+                    return;
+                }
+
+                if (activeDefinition && (/^(?: {4}|\t)/.test(line) || line.trim() === '')) {
+                    if (line.trim() === '') {
+                        activeDefinition.value += '\n';
+                    } else {
+                        activeDefinition.value += '\n' + line.replace(/^(?: {4}|\t)/, '');
+                    }
+                    return;
+                }
+                activeDefinition = null;
+
+                const definitionMatch = line.match(/^ {0,3}\[\^([^\]\s]+)\]:[ \t]*(.*)$/);
+                if (definitionMatch) {
+                    const label = definitionMatch[1];
+                    const definition = { label, value: definitionMatch[2] || '' };
+                    definitions.set(label, definition);
+                    if (!definitionOrder.includes(label)) definitionOrder.push(label);
+                    activeDefinition = definition;
+                    return;
+                }
+                bodyLines.push(line);
+            });
+
+            const footnoteIdByLabel = new Map();
+            const usedFootnoteIds = new Set();
+            const getFootnoteId = label => {
+                if (footnoteIdByLabel.has(label)) return footnoteIdByLabel.get(label);
+                const normalized = String(label || '').normalize('NFKC').toLowerCase();
+                const base = 'fn-' + (
+                    normalized
+                        .replace(/[^\p{L}\p{N}._:-]+/gu, '-')
+                        .replace(/^-+|-+$/g, '') || 'note'
+                );
+                let id = base;
+                let duplicate = 1;
+                while (usedFootnoteIds.has(id)) id = base + '-' + duplicate++;
+                usedFootnoteIds.add(id);
+                footnoteIdByLabel.set(label, id);
+                return id;
+            };
+
+            const referencesByLabel = new Map();
+            const footnoteReferences = [];
+            const bodyWithoutDefinitions = bodyLines.join('\n');
+            const bodyWithFootnotes = transformOutsideMarkdownFences(
+                bodyWithoutDefinitions,
+                line => replaceOutsideMarkdownInlineCode(line, segment => segment.replace(/\[\^([^\]\s]+)\]/g, (referenceText, label) => {
+                    if (!definitions.has(label)) return referenceText;
+                    const references = referencesByLabel.get(label) || [];
+                    const footnoteId = getFootnoteId(label);
+                    const reference = {
+                        label,
+                        refId: 'fnref-' + footnoteId + '-' + (references.length + 1)
+                    };
+                    references.push(reference);
+                    referencesByLabel.set(label, references);
+                    footnoteReferences.push(reference);
+                    return '<sup id="' + escapeHtmlText(reference.refId) + '" class="footnote-ref">' +
+                        '<a href="#' + escapeHtmlText(footnoteId) + '" aria-label="脚注 ' +
+                        escapeHtmlText(label) + '">' + escapeHtmlText(label) + '</a></sup>';
+                }))
+            );
+
+            const tocHtml = buildMarkdownTocHtml(headings);
+            const transformedSource = transformOutsideMarkdownFences(
+                bodyWithFootnotes,
+                line => replaceOutsideMarkdownInlineCode(
+                    line,
+                    segment => segment.replace(/\[\[TOC\]\]|\[TOC\]/g, tocHtml)
+                )
+            );
+            definitionOrder.forEach(label => getFootnoteId(label));
+
+            return {
+                source: transformedSource,
+                headings,
+                definitions: new Map(Array.from(definitions, ([label, definition]) => [label, definition.value])),
+                definitionOrder,
+                footnoteIdByLabel,
+                referencesByLabel,
+                footnoteReferences,
+                renderedHeadingCount: 0,
+                renderedHeadingIds: new Set()
+            };
+        }
+
         // Initial setup
         function init() {
             // テーマの初期化と復元
@@ -32571,7 +32932,32 @@ module.exports = {
             marked.use({
                 breaks: true, // Allow line breaks
                 gfm: true, // GitHub Flavored Markdown
+                hooks: {
+                    preprocess(source) {
+                        activeMarkdownFeatureContext = createMarkdownFeatureContext(source);
+                        return activeMarkdownFeatureContext.source;
+                    },
+                    postprocess(html) {
+                        const context = activeMarkdownFeatureContext;
+                        activeMarkdownFeatureContext = null;
+                        if (!context) return html;
+                        return html + buildMarkdownFootnotesHtml(context);
+                    }
+                },
                 renderer: {
+                    heading({ tokens, depth, text }) {
+                        const innerHtml = tokens
+                            ? this.parser.parseInline(tokens)
+                            : escapeHtmlText(text || '');
+                        const context = activeMarkdownFeatureContext;
+                        const headingIndex = context ? context.renderedHeadingCount++ : 0;
+                        const headingData = context && context.headings[headingIndex];
+                        const headingId = headingData
+                            ? headingData.id
+                            : createMarkdownHeadingId(text || innerHtml, context ? context.renderedHeadingIds : new Set());
+                        return '<h' + depth + ' id="' + escapeHtmlText(headingId) + '">' +
+                            innerHtml + '</h' + depth + '>\n';
+                    },
                     code(token) {
                         const { text, lang } = token;
                         // Mermaid blocks should not be processed by highlight.js
@@ -33182,13 +33568,14 @@ module.exports = {
                 setTimeout(() => editor.refresh(), 10);
             });
 
-            document.getElementById('btn-popout-preview').addEventListener('click', () => {
+            document.getElementById('btn-popout-preview').addEventListener('click', async () => {
                 const newWin = openHtmlPreviewWindow();
                 if (!newWin) {
                     alert('ポップアップがブロックされました。ブラウザの設定を確認してください。');
                     return;
                 }
                 try {
+                    await updatePreview(editor.getValue(), { force: true });
                     writeHtmlPreviewWindow(newWin, generateHtmlExportContent());
                 } catch (error) {
                     console.error('Pop-out preview failed:', error);
@@ -33461,6 +33848,30 @@ module.exports = {
                         selectionOffsetStart = 3;
                         selectionOffsetEnd = newText.length - 1;
                         break;
+                    case 'toc':
+                        newText = '\n[TOC]\n';
+                        selectionOffsetStart = 1;
+                        selectionOffsetEnd = newText.length - 1;
+                        break;
+                    case 'footnote': {
+                        const usedFootnoteLabels = new Set(
+                            Array.from(doc.getValue().matchAll(/\[\^([^\]\s]+)\]/g), match => match[1])
+                        );
+                        let nextFootnoteNumber = 1;
+                        while (usedFootnoteLabels.has(String(nextFootnoteNumber))) nextFootnoteNumber++;
+                        const footnoteLabel = String(nextFootnoteNumber);
+                        const referenceText = '[^' + footnoteLabel + ']';
+                        doc.replaceSelection(referenceText);
+                        const lastLine = doc.lineCount() - 1;
+                        const lastCh = doc.getLine(lastLine).length;
+                        doc.replaceRange(
+                            '\n\n[^' + footnoteLabel + ']: 説明',
+                            { line: lastLine, ch: lastCh }
+                        );
+                        doc.setCursor({ line: cursor.line, ch: cursor.ch + referenceText.length });
+                        editor.focus();
+                        return;
+                    }
                 }
 
                 doc.replaceSelection(newText);
@@ -34271,12 +34682,29 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
             });
         }
 
-        async function updatePreview(markdownText) {
-            if (!isPreviewPaneVisible()) return;
+        function renderMarkdownDocument(markdownText, options = {}) {
+            const previewSource = prepareInlineSvgMarkupForPreview(markdownText);
+            const markdownForMarked = options.includeLineMarkers
+                ? injectLineMarkers(previewSource.markdownText)
+                : previewSource.markdownText;
+            let rawHtml = '';
+            try {
+                rawHtml = marked.parse(markdownForMarked);
+            } catch (error) {
+                activeMarkdownFeatureContext = null;
+                throw error;
+            }
+            const cleanHtml = stripUnsafeHtmlStyles(DOMPurify.sanitize(rawHtml, getPreviewSvgSanitizeOptions({
+                addTags: ['iframe', 'input', 'div'],
+                addAttrs: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'target', 'type', 'checked', 'disabled', 'start', 'data-line', 'data-inline-svg-id']
+            })));
+            return { cleanHtml, svgRecords: previewSource.svgRecords };
+        }
+
+        async function updatePreview(markdownText, options = {}) {
+            if (!options.force && !isPreviewPaneVisible()) return false;
             const savedScrollTop = previewContainer ? previewContainer.scrollTop : 0;
             try {
-                const previewSource = prepareInlineSvgMarkupForPreview(markdownText);
-                const previewMarkdownText = previewSource.markdownText;
                 // エディタ内のすべての Mermaid ブロックの位置をスキャンして記録し、パースエラーを検出する
                 if (window.mermaid && markdownText.includes('```mermaid')) {
                     // 既存のエラー行ハイライトをクリア
@@ -34340,14 +34768,9 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
                     window.activeErrorLines = [];
                 }
 
-                const markedTextWithMarkers = injectLineMarkers(previewMarkdownText);
-                const rawHtml = marked.parse(markedTextWithMarkers);
-                const cleanHtml = stripUnsafeHtmlStyles(DOMPurify.sanitize(rawHtml, getPreviewSvgSanitizeOptions({
-                    addTags: ['iframe', 'input', 'div'],
-                    addAttrs: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'target', 'type', 'checked', 'disabled', 'start', 'data-line', 'data-inline-svg-id']
-                })));
-                previewContainer.innerHTML = cleanHtml;
-                restoreInlineSvgMarkup(previewContainer, previewSource.svgRecords);
+                const renderedDocument = renderMarkdownDocument(markdownText, { includeLineMarkers: true });
+                previewContainer.innerHTML = renderedDocument.cleanHtml;
+                restoreInlineSvgMarkup(previewContainer, renderedDocument.svgRecords);
                 applyLineMarkers(previewContainer);
                 previewContainer.scrollTop = savedScrollTop;
                 previewContainer.classList.add('markdown-body');
@@ -34418,8 +34841,12 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
                         });
                     });
                 }
+                lastPreviewSourceText = String(markdownText || '');
+                return true;
             } catch (e) {
                 console.error("Preview rendering error:", e);
+                lastPreviewSourceText = null;
+                return false;
             }
         }
 
@@ -34907,7 +35334,7 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
         }
 
         // ── App Version ──
-        const APP_VERSION = '6.2';
+        const APP_VERSION = '6.3';
 
         // ══════════════════════════════════════
         // 🎨 Document Theme Engine
@@ -35632,7 +36059,7 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
         }
 
         async function createProofreaderSnapshot(source) {
-            await updatePreview(source);
+            await updatePreview(source, { force: true });
             await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
             if (!previewContainer) {
                 throw new Error('文書プレビューを生成できないため、校正URLを発行できません。');
@@ -36118,6 +36545,7 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
             try {
                 if (!confirmExport('Word')) return;
                 updateStatus('saving', 'Word出力生成中...');
+                await updatePreview(editor.getValue(), { force: true });
 
                 const exportContainer = document.createElement('div');
                 exportContainer.id = 'preview-content';
@@ -36224,6 +36652,7 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
         }
 
         async function exportDocumentModePdf(title) {
+            await updatePreview(editor.getValue(), { force: true });
             const iframe = document.createElement('iframe');
             iframe.title = title;
             iframe.setAttribute('aria-hidden', 'true');
@@ -36479,12 +36908,29 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
             return window.confirm(`${formatLabel}を出力します。\\n\\n${summary}\\n\n出力先を選択した後、Markdown原稿は別途保存してください。続行しますか？`);
         }
 
+        function getRenderedExportBodyHtml(source) {
+            const sourceText = String(source || '');
+            if (
+                previewContainer &&
+                lastPreviewSourceText === sourceText &&
+                previewContainer.innerHTML.trim()
+            ) {
+                return sanitizeExportHtml(previewContainer.innerHTML);
+            }
+
+            const renderedDocument = renderMarkdownDocument(sourceText);
+            const detachedContainer = document.createElement('div');
+            detachedContainer.innerHTML = renderedDocument.cleanHtml;
+            restoreInlineSvgMarkup(detachedContainer, renderedDocument.svgRecords);
+            return sanitizeExportHtml(detachedContainer.innerHTML);
+        }
+
         // HTML出力・プレビュー用の共通HTML生成関数
         function generateHtmlExportContent(options = {}) {
             const title = escapeHtmlText((document.getElementById('doc-title-input').value || '').trim() || 'Document');
             const forPrintPdf = !!options.forPrintPdf;
             const safeThemeCss = sanitizeExportCss(customThemeStyleTag && customThemeStyleTag.textContent);
-            const safePreviewHtml = sanitizeExportHtml(previewContainer.innerHTML);
+            const safePreviewHtml = getRenderedExportBodyHtml(editor ? editor.getValue() : '');
             return `<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -36509,6 +36955,19 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
         th { background: #fff; font-weight: 600; }
         tr:nth-child(2n) { background: #f6f8fa; }
         ${MERMAID_CSS_PROTECTION}
+        .markdown-toc { margin: 1.25rem 0 2rem; padding: 1rem 1.25rem; border: 1px solid #d0d7de; border-radius: 8px; background: #f6f8fa; }
+        .markdown-toc-title { margin-bottom: .5rem; color: #24292f; font-weight: 700; }
+        .markdown-toc-list, .markdown-body .markdown-toc-list { margin: 0; padding-left: 0; list-style: none; }
+        .markdown-toc-item { margin: .25rem 0; }
+        .markdown-toc-item.toc-level-2 { margin-left: .75rem; }
+        .markdown-toc-item.toc-level-3 { margin-left: 1.5rem; }
+        .markdown-toc-item.toc-level-4 { margin-left: 2.25rem; }
+        .markdown-toc-item.toc-level-5 { margin-left: 3rem; }
+        .markdown-toc-item.toc-level-6 { margin-left: 3.75rem; }
+        .markdown-footnotes { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid #d0d7de; font-size: .95em; }
+        .markdown-footnotes h2 { margin-top: 0; font-size: 1.25em; }
+        .footnote-ref { margin-left: .12em; font-size: .8em; vertical-align: super; }
+        .footnote-backref { margin-left: .35em; white-space: nowrap; }
         ${safeThemeCss}
         ${forPrintPdf ? PDF_PRINT_CSS : ''}
     </style>
@@ -36619,6 +37078,7 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
             try {
                 if (!confirmExport('HTML')) return;
                 updateStatus('saving', 'HTML出力生成中...');
+                await updatePreview(editor.getValue(), { force: true });
                 const content = generateHtmlExportContent();
                 const blob = new Blob([content], { type: 'text/html;charset=utf-8' });
                 triggerDownload(blob, getDocTitle() + '.html');
@@ -36643,6 +37103,7 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
                     console.warn('HTML preview tab could not be opened:', error);
                 }
                 updateStatus('saving', 'HTMLプレビュー生成中...');
+                await updatePreview(editor.getValue(), { force: true });
                 const content = generateHtmlExportContent();
 
                 if (newWin) {
@@ -36919,6 +37380,12 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
                     'ファイル書込の確定'
                 );
             }
+        }
+
+        // バックアップ・競合コピー用のファイル名に使う時刻文字列
+        function getTimestampForFilename(date = new Date()) {
+            const pad = (value, width = 2) => String(value).padStart(width, '0');
+            return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}${pad(date.getMilliseconds(), 3)}`;
         }
 
         async function createLocalFileBackup(dirHandle, fileName, existingText) {
