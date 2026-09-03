@@ -33011,8 +33011,8 @@ module.exports = {
             ];
 
             const SVG_SAFE_ID_PATTERN = /^[A-Za-z_][\w:.-]*$/;
-            const SVG_LOCAL_URL_PATTERN = /^url\(\s*#([A-Za-z_][\w:.-]*)\s*\)$/;
-            const SVG_URL_REFERENCE_ATTRS = ['filter', 'clip-path', 'mask', 'marker-start', 'marker-mid', 'marker-end'];
+            const SVG_LOCAL_URL_PATTERN = /^url\(\s*(["']?)#([A-Za-z_][\w:.-]*)\1\s*\)$/;
+            const SVG_URL_REFERENCE_ATTRS = ['filter', 'clip-path', 'mask', 'marker-start', 'marker-mid', 'marker-end', 'fill', 'stroke'];
 
             function keepSafeSvgReferences(svgElement) {
                 const ids = new Set();
@@ -33036,7 +33036,7 @@ module.exports = {
                         const value = (node.getAttribute(attribute) || '').trim();
                         if (!value.startsWith('url(')) return;
                         const match = value.match(SVG_LOCAL_URL_PATTERN);
-                        if (!match || !ids.has(match[1])) node.removeAttribute(attribute);
+                        if (!match || !ids.has(match[2])) node.removeAttribute(attribute);
                     });
                 });
 
@@ -33085,7 +33085,7 @@ module.exports = {
                 const safeColor = /^(?:#[0-9a-fA-F]{3,8}|(?:rgb|rgba|hsl|hsla)\([^)]*\)|[a-zA-Z]+)$/;
                 const safeTransform = /^[a-zA-Z0-9(),.\s+-]+$/;
                 const safeClass = /^[A-Za-z_][\w: .-]*$/;
-                const safePaint = /^(?:none|currentColor|context-fill|context-stroke|#[0-9a-fA-F]{3,8}|(?:rgb|rgba|hsl|hsla)\([^)]*\)|[a-zA-Z]+|url\(\s*#[A-Za-z_][\w:.-]*\s*\))$/;
+                const safePaint = /^(?:none|currentColor|context-fill|context-stroke|#[0-9a-fA-F]{3,8}|(?:rgb|rgba|hsl|hsla)\([^)]*\)|[a-zA-Z]+|url\(\s*(?:#[A-Za-z_][\w:.-]*|"#[A-Za-z_][\w:.-]*"|'#[A-Za-z_][\w:.-]*')\s*\))$/;
                 const useLengthAttrs = new Set(['x', 'y', 'width', 'height', 'stroke-width', 'stroke-dashoffset']);
                 const useNumberAttrs = new Set(['opacity', 'fill-opacity', 'stroke-opacity']);
                 const usePaintAttrs = new Set(['fill', 'stroke']);
@@ -33575,7 +33575,7 @@ module.exports = {
                     return;
                 }
                 try {
-                    await updatePreview(editor.getValue(), { force: true });
+                    await refreshPreviewForExport();
                     writeHtmlPreviewWindow(newWin, generateHtmlExportContent());
                 } catch (error) {
                     console.error('Pop-out preview failed:', error);
@@ -34307,8 +34307,9 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
         ];
 
         const PREVIEW_SVG_SAFE_ID_PATTERN = /^[A-Za-z_][\w:.-]*$/;
-        const PREVIEW_SVG_LOCAL_URL_PATTERN = /^url\(\s*#([A-Za-z_][\w:.-]*)\s*\)$/;
+        const PREVIEW_SVG_LOCAL_URL_PATTERN = /^url\(\s*(["']?)#([A-Za-z_][\w:.-]*)\1\s*\)$/;
         const PREVIEW_SVG_URL_REFERENCE_ATTRS = ['filter', 'clip-path', 'mask', 'marker-start', 'marker-mid', 'marker-end'];
+        const PREVIEW_SVG_PAINT_ATTRS = ['fill', 'stroke'];
 
         function keepSafePreviewSvgReferences(svgElement) {
             const ids = new Set();
@@ -34332,7 +34333,16 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
                     const value = (node.getAttribute(attribute) || '').trim();
                     if (!value.startsWith('url(')) return;
                     const match = value.match(PREVIEW_SVG_LOCAL_URL_PATTERN);
-                    if (!match || !ids.has(match[1])) node.removeAttribute(attribute);
+                    if (!match || !ids.has(match[2])) node.removeAttribute(attribute);
+                });
+            });
+
+            PREVIEW_SVG_PAINT_ATTRS.forEach((attribute) => {
+                svgElement.querySelectorAll('[' + attribute + ']').forEach((node) => {
+                    const value = (node.getAttribute(attribute) || '').trim();
+                    if (!value.startsWith('url(')) return;
+                    const match = value.match(PREVIEW_SVG_LOCAL_URL_PATTERN);
+                    if (!match || !ids.has(match[2])) node.removeAttribute(attribute);
                 });
             });
 
@@ -34381,7 +34391,7 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
             const safeColor = /^(?:#[0-9a-fA-F]{3,8}|(?:rgb|rgba|hsl|hsla)\([^)]*\)|[a-zA-Z]+)$/;
             const safeTransform = /^[a-zA-Z0-9(),.\s+-]+$/;
             const safeClass = /^[A-Za-z_][\w: .-]*$/;
-            const safePaint = /^(?:none|currentColor|context-fill|context-stroke|#[0-9a-fA-F]{3,8}|(?:rgb|rgba|hsl|hsla)\([^)]*\)|[a-zA-Z]+|url\(\s*#[A-Za-z_][\w:.-]*\s*\))$/;
+            const safePaint = /^(?:none|currentColor|context-fill|context-stroke|#[0-9a-fA-F]{3,8}|(?:rgb|rgba|hsl|hsla)\([^)]*\)|[a-zA-Z]+|url\(\s*(?:#[A-Za-z_][\w:.-]*|"#[A-Za-z_][\w:.-]*"|'#[A-Za-z_][\w:.-]*')\s*\))$/;
             const useLengthAttrs = new Set(['x', 'y', 'width', 'height', 'stroke-width', 'stroke-dashoffset']);
             const useNumberAttrs = new Set(['opacity', 'fill-opacity', 'stroke-opacity']);
             const usePaintAttrs = new Set(['fill', 'stroke']);
@@ -34553,8 +34563,8 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
         }
 
         function rewriteSvgLocalReferences(value, idMap) {
-            return String(value || '').replace(/url\(\s*#([A-Za-z_][\w:.-]*)\s*\)/g, (all, id) => {
-                return idMap.has(id) ? `url(#${idMap.get(id)})` : all;
+            return String(value || '').replace(/url\(\s*(["']?)#([A-Za-z_][\w:.-]*)\1\s*\)/g, (all, quote, id) => {
+                return idMap.has(id) ? `url(${quote}#${idMap.get(id)}${quote})` : all;
             });
         }
 
@@ -34848,6 +34858,15 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
                 lastPreviewSourceText = null;
                 return false;
             }
+        }
+
+        async function refreshPreviewForExport() {
+            const source = editor ? editor.getValue() : '';
+            const rendered = await updatePreview(source, { force: true });
+            if (!rendered || lastPreviewSourceText !== String(source || '')) {
+                throw new Error('最新の本文プレビューを生成できないため、古い内容の出力を停止しました。');
+            }
+            return source;
         }
 
         // ============================================================
@@ -35504,6 +35523,7 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
         };
 
         let currentDocTheme = 'github';
+        let activeCustomThemeCss = '';
         const customThemeStyleTag = document.getElementById('custom-theme-style');
 
         function excludeInlineSvgTarget(selector) {
@@ -35511,6 +35531,24 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
             if (!pseudoElement) return `${selector}:not(.inline-svg-host *)`;
             const index = pseudoElement.index;
             return `${selector.slice(0, index)}:not(.inline-svg-host *)${selector.slice(index)}`;
+        }
+
+        function scopeDocumentCssSelector(selector, prefix, excludeInlineSvg = false) {
+            const original = String(selector || '').trim();
+            if (!original) return '';
+
+            // 文書CSSでよく使われるルート指定は、出力HTMLの文書ルートへ対応付ける。
+            // それ以外のセレクターは、従来どおり文書ルートの子孫として隔離する。
+            const rootMatch = original.match(/^(?:html\s+body|html|body|:root)(?=$|[\s>+~])/i);
+            let scoped = original;
+            if (rootMatch) {
+                const remainder = original.slice(rootMatch[0].length).trim();
+                scoped = remainder ? `${prefix} ${remainder}` : prefix;
+            } else {
+                scoped = `${prefix} ${original}`;
+            }
+
+            return excludeInlineSvg ? excludeInlineSvgTarget(scoped) : scoped;
         }
 
         function prefixCssSelectors(rawCss, prefix, excludeInlineSvg = false) {
@@ -35572,14 +35610,12 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
                 }
                 const body = css.substring(i, j);
 
-                const scopedSelectors = selectorBlock.split(',').map(s => {
-                    s = s.trim();
-                    if (!s) return s;
-                    if (excludeInlineSvg) s = excludeInlineSvgTarget(s);
-                    return prefix + ' ' + s;
-                }).join(', ');
+                const scopedSelectors = splitSvgCssSelectors(selectorBlock)
+                    .map(selector => scopeDocumentCssSelector(selector, prefix, excludeInlineSvg))
+                    .filter(Boolean)
+                    .join(', ');
 
-                result += scopedSelectors + ' ' + body;
+                if (scopedSelectors) result += scopedSelectors + ' ' + body;
                 i = j;
             }
 
@@ -35590,6 +35626,13 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
             if (!rawCss || !rawCss.trim()) return '';
             const docCss = prefixCssSelectors(sanitizeExportCss(rawCss), '#preview-content.markdown-body', true);
             return docCss;
+        }
+
+        function getActiveDocumentThemeCss() {
+            const rawCss = currentDocTheme === 'custom'
+                ? activeCustomThemeCss
+                : PRESET_THEMES[currentDocTheme] || '';
+            return rawCss ? scopeCustomCss(rawCss) : '';
         }
 
         // ===== Mermaidテーマ初期化（テーマ連動対応） =====
@@ -35667,14 +35710,12 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
         }
 
         function applyDocTheme(themeName, customCss) {
-            currentDocTheme = themeName;
-
-            let cssToApply = '';
-            if (themeName === 'custom' && customCss) {
-                cssToApply = scopeCustomCss(customCss);
-            } else if (PRESET_THEMES[themeName]) {
-                cssToApply = scopeCustomCss(PRESET_THEMES[themeName]);
-            }
+            const normalizedThemeName = themeName === 'custom' || PRESET_THEMES[themeName]
+                ? themeName
+                : 'github';
+            currentDocTheme = normalizedThemeName;
+            activeCustomThemeCss = normalizedThemeName === 'custom' ? String(customCss || '') : '';
+            const cssToApply = getActiveDocumentThemeCss();
             
             if (customThemeStyleTag) {
                 customThemeStyleTag.textContent = cssToApply;
@@ -35703,9 +35744,9 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
                 }
             });
 
-            localStorage.setItem('lumina_doc_theme', themeName);
-            if (themeName === 'custom' && customCss) {
-                localStorage.setItem('lumina_custom_css', customCss);
+            localStorage.setItem('lumina_doc_theme', normalizedThemeName);
+            if (normalizedThemeName === 'custom' && customCss) {
+                localStorage.setItem('lumina_custom_css', String(customCss));
             }
         }
 
@@ -36059,7 +36100,7 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
         }
 
         async function createProofreaderSnapshot(source) {
-            await updatePreview(source, { force: true });
+            await refreshPreviewForExport();
             await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
             if (!previewContainer) {
                 throw new Error('文書プレビューを生成できないため、校正URLを発行できません。');
@@ -36545,16 +36586,17 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
             try {
                 if (!confirmExport('Word')) return;
                 updateStatus('saving', 'Word出力生成中...');
-                await updatePreview(editor.getValue(), { force: true });
+                await refreshPreviewForExport();
 
                 const exportContainer = document.createElement('div');
                 exportContainer.id = 'preview-content';
                 exportContainer.style.colorScheme = 'light';
-                exportContainer.innerHTML = sanitizeExportHtml(previewContainer.innerHTML);
+                exportContainer.innerHTML = serializeSafeExportBody(editor.getValue());
 
-                if (customThemeStyleTag && customThemeStyleTag.textContent) {
+                const activeThemeCss = getActiveDocumentThemeCss();
+                if (activeThemeCss) {
                     const themeStyle = document.createElement('style');
-                    themeStyle.textContent = sanitizeExportCss(customThemeStyleTag.textContent);
+                    themeStyle.textContent = sanitizeExportCss(activeThemeCss);
                     exportContainer.prepend(themeStyle);
                 }
 
@@ -36652,7 +36694,7 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
         }
 
         async function exportDocumentModePdf(title) {
-            await updatePreview(editor.getValue(), { force: true });
+            await refreshPreviewForExport();
             const iframe = document.createElement('iframe');
             iframe.title = title;
             iframe.setAttribute('aria-hidden', 'true');
@@ -36829,15 +36871,6 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
             return css.replace(/<\/style/gi, '<\\u003c/style');
         }
 
-        function sanitizeExportHtml(html) {
-            if (!window.DOMPurify) return escapeHtmlText(html);
-            return stripUnsafeHtmlStyles(DOMPurify.sanitize(String(html || ''), {
-                USE_PROFILES: { html: true, svg: true, svgFilters: true },
-                FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'base', 'form'],
-                FORBID_ATTR: ['srcdoc', 'onerror', 'onload', 'onclick', 'onmouseover']
-            }));
-        }
-
         // Markdownの生HTMLに含まれるCSSは、SVG内の表示用styleだけを残す。
         // 外部読込・式評価・動的バインディングを含むstyle属性も削除する。
         function stripUnsafeHtmlStyles(html) {
@@ -36853,6 +36886,68 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
                 }
             });
             return parsed.body.innerHTML;
+        }
+
+        const EXPORT_FORBIDDEN_TAGS = 'script, iframe, object, embed, base, form, meta, link, foreignObject, image, animate, animateMotion, animateTransform, set, audio, video';
+        const EXPORT_REFERENCE_ATTRS = new Set(['fill', 'stroke', 'filter', 'clip-path', 'mask', 'marker-start', 'marker-mid', 'marker-end']);
+
+        // ここへ渡るHTMLは、本文描画時のサニタイズとSVG専用復元を通過済みである。
+        // 再度DOMPurifyへ渡すとSVGの名前空間（SVGとして扱うためのDOM上の所属）や
+        // defs/styleが欠落するため、復元後は破壊的な再サニタイズを行わず監査だけ行う。
+        function assertSafeExportContainer(container) {
+            if (!container) throw new Error('出力用の文書コンテナを作成できません。');
+            if (container.querySelector(EXPORT_FORBIDDEN_TAGS)) {
+                throw new Error('安全でない要素が出力内容に残っているため、HTMLを出力できません。');
+            }
+
+            container.querySelectorAll('*').forEach((element) => {
+                Array.from(element.attributes).forEach((attribute) => {
+                    const name = attribute.name.toLowerCase();
+                    const value = attribute.value.trim();
+                    if (name.startsWith('on') || name === 'srcdoc') {
+                        throw new Error('イベント属性またはsrcdoc属性が出力内容に残っています。');
+                    }
+                    if (name === 'style') sanitizeExportCss(value);
+                    if ((name === 'href' || name === 'src' || name === 'xlink:href') && /^javascript\s*:/i.test(value)) {
+                        throw new Error('javascript URLが出力内容に残っています。');
+                    }
+                    if (element.namespaceURI === 'http://www.w3.org/2000/svg' && EXPORT_REFERENCE_ATTRS.has(name) && value.startsWith('url(')) {
+                        const match = value.match(PREVIEW_SVG_LOCAL_URL_PATTERN);
+                        if (!match) throw new Error('外部または不正なSVG参照が出力内容に残っています。');
+                    }
+                });
+            });
+
+            container.querySelectorAll('style').forEach((style) => {
+                if (!style.closest('svg')) throw new Error('本文由来のstyle要素が出力内容に残っています。');
+                sanitizeExportCss(style.textContent || '');
+            });
+            return container;
+        }
+
+        function createSafeExportContainer(source) {
+            const sourceText = String(source || '');
+            const container = document.createElement('div');
+
+            if (
+                previewContainer &&
+                lastPreviewSourceText === sourceText &&
+                previewContainer.innerHTML.trim()
+            ) {
+                Array.from(previewContainer.childNodes).forEach((node) => {
+                    container.appendChild(node.cloneNode(true));
+                });
+            } else {
+                const renderedDocument = renderMarkdownDocument(sourceText);
+                container.innerHTML = renderedDocument.cleanHtml;
+                restoreInlineSvgMarkup(container, renderedDocument.svgRecords);
+            }
+
+            return assertSafeExportContainer(container);
+        }
+
+        function serializeSafeExportBody(source) {
+            return createSafeExportContainer(source).innerHTML;
         }
 
         function runDocumentDiagnostics() {
@@ -36880,7 +36975,7 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
             if (dataImageBytes > 5 * 1024 * 1024) issues.push({ severity: 'warning', message: `埋め込み画像の合計が約${Math.ceil(dataImageBytes / 1024 / 1024)}MBあります。` });
             if (/```mermaid\s*```/i.test(source)) issues.push({ severity: 'error', message: 'Mermaidブロックが空です。' });
             try {
-                sanitizeExportCss(customThemeStyleTag && customThemeStyleTag.textContent);
+                sanitizeExportCss(getActiveDocumentThemeCss());
             } catch (error) {
                 issues.push({ severity: 'error', message: error.message });
             }
@@ -36908,29 +37003,12 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
             return window.confirm(`${formatLabel}を出力します。\\n\\n${summary}\\n\n出力先を選択した後、Markdown原稿は別途保存してください。続行しますか？`);
         }
 
-        function getRenderedExportBodyHtml(source) {
-            const sourceText = String(source || '');
-            if (
-                previewContainer &&
-                lastPreviewSourceText === sourceText &&
-                previewContainer.innerHTML.trim()
-            ) {
-                return sanitizeExportHtml(previewContainer.innerHTML);
-            }
-
-            const renderedDocument = renderMarkdownDocument(sourceText);
-            const detachedContainer = document.createElement('div');
-            detachedContainer.innerHTML = renderedDocument.cleanHtml;
-            restoreInlineSvgMarkup(detachedContainer, renderedDocument.svgRecords);
-            return sanitizeExportHtml(detachedContainer.innerHTML);
-        }
-
         // HTML出力・プレビュー用の共通HTML生成関数
         function generateHtmlExportContent(options = {}) {
             const title = escapeHtmlText((document.getElementById('doc-title-input').value || '').trim() || 'Document');
             const forPrintPdf = !!options.forPrintPdf;
-            const safeThemeCss = sanitizeExportCss(customThemeStyleTag && customThemeStyleTag.textContent);
-            const safePreviewHtml = getRenderedExportBodyHtml(editor ? editor.getValue() : '');
+            const safeThemeCss = sanitizeExportCss(getActiveDocumentThemeCss());
+            const safePreviewHtml = serializeSafeExportBody(editor ? editor.getValue() : '');
             return `<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -37078,7 +37156,7 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
             try {
                 if (!confirmExport('HTML')) return;
                 updateStatus('saving', 'HTML出力生成中...');
-                await updatePreview(editor.getValue(), { force: true });
+                await refreshPreviewForExport();
                 const content = generateHtmlExportContent();
                 const blob = new Blob([content], { type: 'text/html;charset=utf-8' });
                 triggerDownload(blob, getDocTitle() + '.html');
@@ -37103,7 +37181,7 @@ ng(0, nthPipePos + 1) + insertStr + lineText.substring(nthPipePos + 1);
                     console.warn('HTML preview tab could not be opened:', error);
                 }
                 updateStatus('saving', 'HTMLプレビュー生成中...');
-                await updatePreview(editor.getValue(), { force: true });
+                await refreshPreviewForExport();
                 const content = generateHtmlExportContent();
 
                 if (newWin) {
